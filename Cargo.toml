@@ -1,0 +1,10 @@
+[package]
+name = "a2ui"
+version = "0.1.0"
+edition = "2024"
+authors = ["Liangdi <wu@liangdi.me>"]
+description = "A2UI For rust"
+repository = "https://github.com/liangdi/a2ui"
+keywords = ["a2ui", "agent","agent-ui", "rust"]
+
+[dependencies]
