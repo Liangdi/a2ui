@@ -1,3 +1,4 @@
+pub mod basic_functions;
 pub mod component_api;
 pub mod function_api;
 pub mod catalog;

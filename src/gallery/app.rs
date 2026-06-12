@@ -20,14 +20,19 @@ use crate::core::catalog::Catalog;
 use crate::core::message_processor::MessageProcessor;
 use crate::core::protocol::server_to_client::A2uiMessage;
 use crate::gallery::sample_loader::{self, Sample};
-use crate::tui::catalogs::minimal::{build_minimal_catalog, build_minimal_registry};
+use crate::tui::catalogs::basic::{build_basic_catalog, build_basic_registry};
+use crate::tui::catalogs::minimal::build_minimal_catalog;
 use crate::tui::component_impl::ComponentRegistry;
 use crate::tui::focus_manager::FocusManager;
 use crate::tui::surface::SurfaceRenderer;
 
-/// Path to the sample JSON files.
-const SAMPLE_DIR: &str =
+/// Path to the minimal catalog sample JSON files.
+const MINIMAL_SAMPLE_DIR: &str =
     "/home/liangdi/workspace/ai/a2ui/specification/v1_0/catalogs/minimal/examples";
+
+/// Path to the basic catalog sample JSON files.
+const BASIC_SAMPLE_DIR: &str =
+    "/home/liangdi/workspace/ai/a2ui/specification/v1_0/catalogs/basic/examples";
 
 /// Application mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -85,10 +90,15 @@ impl GalleryApp {
         let backend = CrosstermBackend::new(io::stderr());
         let terminal = Terminal::new(backend)?;
 
-        let catalog = build_minimal_catalog();
-        let registry = build_minimal_registry();
-        let processor = MessageProcessor::new(vec![]);
-        let samples = sample_loader::load_samples_from_dir(SAMPLE_DIR);
+        let basic_catalog = build_basic_catalog();
+        let minimal_catalog = build_minimal_catalog();
+        let catalog = Catalog::new(""); // placeholder; rendering uses basic_catalog
+        let registry = build_basic_registry();
+        let processor = MessageProcessor::new(vec![basic_catalog, minimal_catalog]);
+
+        // Load samples from both minimal and basic directories.
+        let mut samples = sample_loader::load_samples_from_dir(MINIMAL_SAMPLE_DIR);
+        samples.extend(sample_loader::load_samples_from_dir(BASIC_SAMPLE_DIR));
 
         let mut list_state = ListState::default();
         if !samples.is_empty() {
