@@ -390,4 +390,111 @@ mod tests {
         assert_eq!(submit.component_type, "Button");
         assert!(submit.action().is_some());
     }
+
+    #[test]
+    fn test_e2e_simple_text_render_pipeline() {
+        // Full pipeline: load sample → process messages → verify component tree
+        use crate::tui::catalogs::minimal::{build_minimal_catalog, build_minimal_registry};
+
+        let catalog = build_minimal_catalog();
+        let _registry = build_minimal_registry();
+
+        // Load the actual spec example
+        let spec_path = "/home/liangdi/workspace/ai/a2ui/specification/v1_0/catalogs/minimal/examples/1_simple_text.json";
+        let content = std::fs::read_to_string(spec_path).expect("spec file should exist");
+        let (_name, _desc, messages) = MessageProcessor::load_sample(&content).unwrap();
+
+        let mut proc = MessageProcessor::new(vec![]);
+        let results = proc.process_messages(messages);
+        for r in &results {
+            assert!(r.is_ok(), "message processing failed: {:?}", r);
+        }
+
+        // Verify the surface and component tree
+        let surface = proc.model.get_surface("example_1").unwrap();
+        assert!(surface.has_root());
+
+        let components = surface.components.borrow();
+        let root = components.get("root").unwrap();
+        assert_eq!(root.component_type, "Text");
+        assert_eq!(root.get_raw("text").unwrap(), "Hello, Minimal Catalog!");
+        assert_eq!(root.get_raw("variant").unwrap(), "h1");
+    }
+
+    #[test]
+    fn test_e2e_login_form_render_pipeline() {
+        use crate::tui::catalogs::minimal::{build_minimal_catalog, build_minimal_registry};
+
+        let _catalog = build_minimal_catalog();
+        let _registry = build_minimal_registry();
+
+        let spec_path = "/home/liangdi/workspace/ai/a2ui/specification/v1_0/catalogs/minimal/examples/4_login_form.json";
+        let content = std::fs::read_to_string(spec_path).expect("spec file should exist");
+        let (_name, _desc, messages) = MessageProcessor::load_sample(&content).unwrap();
+
+        let mut proc = MessageProcessor::new(vec![]);
+        let results = proc.process_messages(messages);
+        for r in &results {
+            assert!(r.is_ok(), "message processing failed: {:?}", r);
+        }
+
+        let surface = proc.model.get_surface("example_4").unwrap();
+        assert!(surface.send_data_model);
+
+        let components = surface.components.borrow();
+        assert_eq!(components.len(), 6);
+
+        // Verify the tree structure: root → Column with 4 children
+        let root = components.get("root").unwrap();
+        assert_eq!(root.component_type, "Column");
+        let children = root.children().unwrap();
+        match children {
+            crate::core::protocol::common_types::ChildList::Static(ids) => {
+                assert_eq!(ids, vec!["form_title", "username_field", "password_field", "submit_button"]);
+            }
+            _ => panic!("expected static children"),
+        }
+
+        // Verify Button → Text child
+        let submit = components.get("submit_button").unwrap();
+        assert_eq!(submit.child(), Some("submit_label".to_string()));
+        let label = components.get("submit_label").unwrap();
+        assert_eq!(label.get_raw("text").unwrap(), "Sign In");
+
+        // Verify TextField has dynamic binding
+        let username = components.get("username_field").unwrap();
+        let value_binding: crate::core::protocol::common_types::DynamicString =
+            username.get_property("value").unwrap();
+        match value_binding {
+            crate::core::protocol::common_types::DynamicString::Binding(b) => {
+                assert_eq!(b.path, "/username");
+            }
+            _ => panic!("expected binding for username value"),
+        }
+    }
+
+    #[test]
+    fn test_e2e_all_minimal_samples_load_and_parse() {
+        use crate::gallery::sample_loader;
+
+        let samples = sample_loader::load_samples_from_dir(
+            "/home/liangdi/workspace/ai/a2ui/specification/v1_0/catalogs/minimal/examples",
+        );
+
+        assert!(samples.len() >= 7, "should load at least 7 minimal samples, got {}", samples.len());
+
+        // Each sample should have at least one message
+        for sample in &samples {
+            assert!(!sample.messages.is_empty(), "sample '{}' has no messages", sample.name);
+        }
+
+        // All should process without errors
+        for sample in &samples {
+            let mut proc = MessageProcessor::new(vec![]);
+            let results = proc.process_messages(sample.messages.clone());
+            for r in &results {
+                assert!(r.is_ok(), "sample '{}' failed: {:?}", sample.name, r);
+            }
+        }
+    }
 }

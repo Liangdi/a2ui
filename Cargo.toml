@@ -9,7 +9,7 @@ repository = "https://github.com/Liangdi/a2ui"
 
 [dependencies]
 ratatui = "0.30.1"
-crossterm = "0.28"
+crossterm = "0.29"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
