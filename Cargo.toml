@@ -2,6 +2,10 @@
 name = "a2ui"
 version = "0.1.0"
 edition = "2024"
+authors = ["Liangdi <wu@liangdi.me>"]
+description = "A TUI component library built on top of ratatui"
+license = "MIT"
+repository = "https://github.com/Liangdi/a2ui"
 
 [dependencies]
 ratatui = "0.30.1"
