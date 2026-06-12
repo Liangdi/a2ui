@@ -227,6 +227,20 @@ impl GalleryApp {
             KeyCode::Char('q') | KeyCode::Esc => {
                 self.mode = AppMode::SampleList;
             }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.selected_sample > 0 {
+                    self.selected_sample -= 1;
+                    self.list_state.select(Some(self.selected_sample));
+                    self.select_sample(self.selected_sample);
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if !self.samples.is_empty() && self.selected_sample < self.samples.len() - 1 {
+                    self.selected_sample += 1;
+                    self.list_state.select(Some(self.selected_sample));
+                    self.select_sample(self.selected_sample);
+                }
+            }
             KeyCode::Char('n') => {
                 // Process next message (stepper).
                 if self.messages_processed < self.current_messages.len() {
@@ -460,7 +474,7 @@ fn render_help_bar(frame: &mut ratatui::Frame, area: Rect, fd: &FrameData) {
                 format!(" [{}/{}]", fd.messages_processed, fd.total_messages)
             };
             format!(
-                " n: step  a: all  r: replay  Tab: focus  Esc: back{} ",
+                " ↑/k: up  ↓/j: down  n: step  a: all  r: replay  Tab: focus  Esc: back{} ",
                 step_info
             )
         }

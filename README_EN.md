@@ -16,6 +16,16 @@ A2UI is a JSON-based streaming UI protocol that allows AI Agents to dynamically 
 - ✅ Gallery App sample browser with progressive message rendering
 - ✅ 81 unit/integration tests, including end-to-end tests with A2UI specification examples
 
+## Screenshots
+
+**Gallery Sample Browser**
+
+![Gallery](screenshot/gallery.png)
+
+**Login Form**
+
+![Login Form](screenshot/login-form.png)
+
 ## Quick Start
 
 ```bash
