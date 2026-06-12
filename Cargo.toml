@@ -1,6 +1,6 @@
 [package]
 name = "a2ui"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 authors = ["Liangdi <wu@liangdi.me>"]
 description = "A TUI component library built on top of ratatui"
