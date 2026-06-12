@@ -55,6 +55,11 @@ impl SurfaceGroupModel {
         self.surfaces.values()
     }
 
+    /// Iterate mutably over all surfaces.
+    pub fn surfaces_mut(&mut self) -> impl Iterator<Item = &mut SurfaceModel> {
+        self.surfaces.values_mut()
+    }
+
     /// Number of active surfaces.
     #[allow(dead_code)]
     pub fn len(&self) -> usize {

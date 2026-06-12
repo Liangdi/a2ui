@@ -14,7 +14,7 @@ A2UI is a JSON-based streaming UI protocol that allows AI Agents to dynamically 
 - ✅ Modular layered architecture (Core Layer + TUI Layer)
 - ✅ JSON Pointer data binding with reactive state management
 - ✅ Gallery App sample browser with progressive message rendering
-- ✅ 81 unit/integration tests, including end-to-end tests with A2UI specification examples
+- ✅ 89 unit/integration tests, including end-to-end tests with A2UI specification examples
 
 ## Screenshots
 
@@ -106,6 +106,18 @@ A2UI uses a JSON streaming message format to drive UI rendering:
 {"version":"v1.0","updateDataModel":{"surfaceId":"main","path":"/user/name","value":"Alice"}}
 {"version":"v1.0","deleteSurface":{"surfaceId":"main"}}
 ```
+
+## Examples
+
+| Example | Description | Run |
+|---------|-------------|-----|
+| `01_hello_world` | Simplest A2UI program | `cargo run --example 01_hello_world` |
+| `02_jsonl_stream` | JSONL stream processing & progressive rendering | `cargo run --example 02_jsonl_stream` |
+| `03_data_binding` | JSON Pointer reactive data binding | `cargo run --example 03_data_binding` |
+| `04_login_form` | Full form: inputs, validation, focus, actions | `cargo run --example 04_login_form` |
+| `05_custom_function` | Custom catalog function implementation | `cargo run --example 05_custom_function` |
+| `06_call_function` | Server-initiated `callFunction` & `functionResponse` | `cargo run --example 06_call_function` |
+| `07_action_response` | `actionResponse` with `responsePath` reactive updates | `cargo run --example 07_action_response` |
 
 ## Using as a Library
 

@@ -4,11 +4,16 @@ use std::collections::HashMap;
 
 use crate::core::catalog::Catalog;
 use crate::core::error::{A2uiError, Result};
+use crate::core::model::data_model::DataModel;
 use crate::core::model::surface_model::SurfaceModel;
 use crate::core::model::surface_group_model::SurfaceGroupModel;
+use crate::core::protocol::client_to_server::{
+    ClientMessage, ClientPayload, ErrorData, ErrorPayload, FunctionResponseData,
+    FunctionResponsePayload,
+};
 use crate::core::protocol::server_to_client::{
-    A2uiMessage, A2uiPayload, CreateSurfaceData, DeleteSurfaceData, UpdateComponentsData,
-    UpdateDataModelData,
+    A2uiMessage, A2uiPayload, CallFunctionPayload, CreateSurfaceData, DeleteSurfaceData,
+    UpdateComponentsData, UpdateDataModelData,
 };
 
 /// Parses A2UI JSON messages and applies them to the state models.
@@ -18,6 +23,8 @@ pub struct MessageProcessor {
     /// Registered catalogs keyed by catalog ID.
     #[allow(dead_code)]
     catalogs: HashMap<String, Catalog>,
+    /// Outgoing client-to-server messages produced during processing.
+    outgoing_messages: Vec<ClientMessage>,
 }
 
 impl MessageProcessor {
@@ -30,6 +37,7 @@ impl MessageProcessor {
         Self {
             model: SurfaceGroupModel::new(),
             catalogs: catalog_map,
+            outgoing_messages: Vec::new(),
         }
     }
 
@@ -62,13 +70,11 @@ impl MessageProcessor {
             A2uiPayload::DeleteSurface(payload) => {
                 self.handle_delete_surface(&payload.delete_surface)
             }
-            A2uiPayload::CallFunction(_) => {
-                // TODO: handle callFunction
-                Ok(())
+            A2uiPayload::CallFunction(payload) => {
+                self.handle_call_function(payload)
             }
-            A2uiPayload::ActionResponse(_) => {
-                // TODO: handle actionResponse
-                Ok(())
+            A2uiPayload::ActionResponse(payload) => {
+                self.handle_action_response(payload)
             }
         }
     }
@@ -76,6 +82,43 @@ impl MessageProcessor {
     /// Process multiple messages sequentially.
     pub fn process_messages(&mut self, messages: Vec<A2uiMessage>) -> Vec<Result<()>> {
         messages.into_iter().map(|m| self.process_message(m)).collect()
+    }
+
+    /// Drain outgoing client-to-server messages produced during processing.
+    ///
+    /// Call this after `process_message` / `process_messages` to retrieve
+    /// any `functionResponse`, `error`, or other client messages that should
+    /// be sent back to the server.
+    pub fn drain_outgoing(&mut self) -> Vec<ClientMessage> {
+        std::mem::take(&mut self.outgoing_messages)
+    }
+
+    /// Register a pending action that expects a server response.
+    ///
+    /// Call this when the caller sends an `action` message with
+    /// `wantResponse: true`. The `response_path` (if any) tells the
+    /// processor where to store the server's response value in the data model.
+    pub fn register_action(
+        &mut self,
+        surface_id: &str,
+        action_id: &str,
+        response_path: Option<String>,
+    ) -> Result<()> {
+        let surface = self
+            .model
+            .get_surface_mut(surface_id)
+            .ok_or_else(|| A2uiError::SurfaceNotFound(surface_id.to_string()))?;
+        surface
+            .pending_actions
+            .borrow_mut()
+            .insert(
+                action_id.to_string(),
+                crate::core::model::surface_model::PendingAction {
+                    action_id: action_id.to_string(),
+                    response_path,
+                },
+            );
+        Ok(())
     }
 
     /// Load a sample file (wrapping messages in {name, description, messages}).
@@ -156,6 +199,131 @@ impl MessageProcessor {
 
     fn handle_delete_surface(&mut self, data: &DeleteSurfaceData) -> Result<()> {
         self.model.delete_surface(&data.surface_id)
+    }
+
+    fn handle_call_function(&mut self, payload: &CallFunctionPayload) -> Result<()> {
+        let fc = &payload.call_function;
+        let call_id = &payload.function_call_id;
+
+        // 1. Find the function across all catalogs
+        let mut found_func: Option<&dyn crate::core::catalog::function_api::FunctionImplementation> = None;
+        let mut found_functions_map: Option<&std::collections::HashMap<String, Box<dyn crate::core::catalog::function_api::FunctionImplementation>>> = None;
+
+        for catalog in self.catalogs.values() {
+            if let Some(f) = catalog.get_function(&fc.call) {
+                found_func = Some(f);
+                found_functions_map = Some(&catalog.functions);
+                break;
+            }
+        }
+
+        // 2. Function not found → reject with error
+        let Some(func) = found_func else {
+            self.queue_outgoing(ClientMessage {
+                version: "v1.0".to_string(),
+                payload: ClientPayload::Error(ErrorPayload {
+                    error: ErrorData {
+                        code: "INVALID_FUNCTION_CALL".to_string(),
+                        message: format!("function not found: {}", fc.call),
+                        surface_id: None,
+                        function_call_id: Some(call_id.clone()),
+                    },
+                }),
+            });
+            return Ok(());
+        };
+
+        // 3. Build a DataContext using the first available surface's DataModel.
+        //    We execute and collect results in a block so the borrows are dropped
+        //    before we call queue_outgoing (which needs &mut self).
+        let execution_result: std::result::Result<serde_json::Value, A2uiError> = {
+            let empty_dm;
+            let data_model: &DataModel = match self.model.surfaces().next() {
+                Some(surface) => &surface.data_model.borrow(),
+                None => {
+                    empty_dm = DataModel::new();
+                    &empty_dm
+                }
+            };
+            let functions_map = found_functions_map.unwrap();
+            let ctx = crate::core::model::data_context::DataContext::new(data_model, functions_map);
+
+            // 4. Resolve args (may contain path bindings or nested function calls)
+            let mut resolved_args = HashMap::new();
+            for (key, val) in &fc.args {
+                let resolved = ctx.resolve_dynamic_value(
+                    &serde_json::from_value::<crate::core::protocol::common_types::DynamicValue>(val.clone())
+                        .unwrap_or(crate::core::protocol::common_types::DynamicValue::String(val.to_string())),
+                );
+                resolved_args.insert(key.clone(), resolved);
+            }
+
+            // 5. Execute the function
+            func.execute(&resolved_args, &ctx)
+        };
+        // borrows on self.model and self.catalogs are released here
+
+        // 6. Queue outgoing messages based on result
+        match execution_result {
+            Ok(result) => {
+                if payload.want_response {
+                    self.queue_outgoing(ClientMessage {
+                        version: "v1.0".to_string(),
+                        payload: ClientPayload::FunctionResponse(FunctionResponsePayload {
+                            function_response: FunctionResponseData {
+                                function_call_id: call_id.clone(),
+                                call: fc.call.clone(),
+                                value: result,
+                            },
+                        }),
+                    });
+                }
+            }
+            Err(e) => {
+                self.queue_outgoing(ClientMessage {
+                    version: "v1.0".to_string(),
+                    payload: ClientPayload::Error(ErrorPayload {
+                        error: ErrorData {
+                            code: "INVALID_FUNCTION_CALL".to_string(),
+                            message: e.to_string(),
+                            surface_id: None,
+                            function_call_id: Some(call_id.clone()),
+                        },
+                    }),
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    fn handle_action_response(
+        &mut self,
+        payload: &crate::core::protocol::server_to_client::ActionResponsePayload,
+    ) -> Result<()> {
+        let action_id = &payload.action_id;
+
+        // Search all surfaces for the pending action
+        for surface in self.model.surfaces_mut() {
+            let pending = surface.pending_actions.borrow_mut().remove(action_id);
+            if let Some(pa) = pending {
+                if let Some(ref path) = pa.response_path {
+                    if let Some(ref value) = payload.action_response.value {
+                        surface.data_model.borrow_mut().set(path, value.clone());
+                    }
+                }
+                return Ok(());
+            }
+        }
+
+        // No pending action found for this action_id — silently ignore
+        // (the action may not have had wantResponse, or was already handled)
+        Ok(())
+    }
+
+    /// Queue an outgoing client-to-server message.
+    fn queue_outgoing(&mut self, msg: ClientMessage) {
+        self.outgoing_messages.push(msg);
     }
 }
 
@@ -818,5 +986,278 @@ mod tests {
             surface.data_model.borrow().get("/name"),
             Some(&serde_json::json!("Bob"))
         );
+    }
+
+    // ===================================================================
+    // callFunction / actionResponse tests
+    // ===================================================================
+
+    #[test]
+    fn test_call_function_basic() {
+        // callFunction with no wantResponse → no outgoing messages
+        let mut proc = make_basic_processor();
+
+        // Create a surface first so callFunction has a DataModel
+        let create = serde_json::json!({
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "s1",
+                "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
+
+        let msg = serde_json::json!({
+            "version": "v1.0",
+            "functionCallId": "call_1",
+            "wantResponse": false,
+            "callFunction": {
+                "call": "required",
+                "args": {"value": "hello"}
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&msg.to_string()).unwrap())
+            .unwrap();
+
+        // No outgoing messages expected
+        assert!(proc.drain_outgoing().is_empty());
+    }
+
+    #[test]
+    fn test_call_function_with_want_response() {
+        let mut proc = make_basic_processor();
+
+        let create = serde_json::json!({
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "s1",
+                "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
+
+        let msg = serde_json::json!({
+            "version": "v1.0",
+            "functionCallId": "call_2",
+            "wantResponse": true,
+            "callFunction": {
+                "call": "required",
+                "args": {"value": "hello"}
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&msg.to_string()).unwrap())
+            .unwrap();
+
+        let outgoing = proc.drain_outgoing();
+        assert_eq!(outgoing.len(), 1);
+
+        // Verify it's a functionResponse
+        match &outgoing[0].payload {
+            ClientPayload::FunctionResponse(fr) => {
+                assert_eq!(fr.function_response.function_call_id, "call_2");
+                assert_eq!(fr.function_response.call, "required");
+                assert_eq!(fr.function_response.value, serde_json::json!(true));
+            }
+            other => panic!("expected FunctionResponse, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_call_function_not_found() {
+        let mut proc = make_basic_processor();
+
+        let msg = serde_json::json!({
+            "version": "v1.0",
+            "functionCallId": "call_3",
+            "wantResponse": true,
+            "callFunction": {
+                "call": "nonexistentFunction",
+                "args": {}
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&msg.to_string()).unwrap())
+            .unwrap();
+
+        let outgoing = proc.drain_outgoing();
+        assert_eq!(outgoing.len(), 1);
+
+        // Should be an error message
+        match &outgoing[0].payload {
+            ClientPayload::Error(err) => {
+                assert_eq!(err.error.code, "INVALID_FUNCTION_CALL");
+                assert!(err.error.function_call_id.is_some());
+                assert_eq!(err.error.function_call_id.as_deref(), Some("call_3"));
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_call_function_execution_error() {
+        let mut proc = make_basic_processor();
+
+        // Call 'regex' without required 'pattern' arg → should produce error
+        let msg = serde_json::json!({
+            "version": "v1.0",
+            "functionCallId": "call_err",
+            "wantResponse": true,
+            "callFunction": {
+                "call": "regex",
+                "args": {"value": "test"}
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&msg.to_string()).unwrap())
+            .unwrap();
+
+        let outgoing = proc.drain_outgoing();
+        assert_eq!(outgoing.len(), 1);
+
+        match &outgoing[0].payload {
+            ClientPayload::Error(err) => {
+                assert_eq!(err.error.code, "INVALID_FUNCTION_CALL");
+            }
+            other => panic!("expected Error, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_action_response_updates_data_model() {
+        let mut proc = make_basic_processor();
+
+        // Create surface
+        let create = serde_json::json!({
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "s1",
+                "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                "sendDataModel": true
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
+
+        // Register a pending action with a responsePath
+        proc.register_action("s1", "action_1", Some("/serverResult".to_string())).unwrap();
+
+        // Process actionResponse
+        let response = serde_json::json!({
+            "version": "v1.0",
+            "actionId": "action_1",
+            "actionResponse": {
+                "value": {"suggestions": ["apple", "application"]}
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&response.to_string()).unwrap())
+            .unwrap();
+
+        // Verify the data model was updated
+        let surface = proc.model.get_surface("s1").unwrap();
+        assert_eq!(
+            surface.data_model.borrow().get("/serverResult"),
+            Some(&serde_json::json!({"suggestions": ["apple", "application"]}))
+        );
+    }
+
+    #[test]
+    fn test_action_response_error_no_data_change() {
+        let mut proc = make_basic_processor();
+
+        let create = serde_json::json!({
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "s1",
+                "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
+
+        proc.register_action("s1", "action_2", Some("/result".to_string())).unwrap();
+
+        // Send error response — should NOT update data model
+        let response = serde_json::json!({
+            "version": "v1.0",
+            "actionId": "action_2",
+            "actionResponse": {
+                "error": {
+                    "code": "SERVER_ERROR",
+                    "message": "Something went wrong"
+                }
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&response.to_string()).unwrap())
+            .unwrap();
+
+        let surface = proc.model.get_surface("s1").unwrap();
+        assert_eq!(surface.data_model.borrow().get("/result"), None);
+    }
+
+    #[test]
+    fn test_outgoing_messages_drain() {
+        let mut proc = make_basic_processor();
+
+        // Drain on empty processor returns empty
+        assert!(proc.drain_outgoing().is_empty());
+
+        // callFunction for nonexistent function queues an error
+        let msg = serde_json::json!({
+            "version": "v1.0",
+            "functionCallId": "c1",
+            "wantResponse": true,
+            "callFunction": {
+                "call": "nonexistent",
+                "args": {}
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&msg.to_string()).unwrap())
+            .unwrap();
+
+        let first = proc.drain_outgoing();
+        assert_eq!(first.len(), 1);
+
+        // Second drain is empty
+        assert!(proc.drain_outgoing().is_empty());
+    }
+
+    #[test]
+    fn test_call_function_with_format_string() {
+        let mut proc = make_basic_processor();
+
+        // Create surface with data model
+        let create = serde_json::json!({
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "s1",
+                "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                "dataModel": {"user": {"name": "Alice"}}
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
+
+        // Call formatString with a data binding in args
+        let msg = serde_json::json!({
+            "version": "v1.0",
+            "functionCallId": "call_fmt",
+            "wantResponse": true,
+            "callFunction": {
+                "call": "formatString",
+                "args": {"value": "Hello, ${/user/name}!"}
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&msg.to_string()).unwrap())
+            .unwrap();
+
+        let outgoing = proc.drain_outgoing();
+        assert_eq!(outgoing.len(), 1);
+
+        match &outgoing[0].payload {
+            ClientPayload::FunctionResponse(fr) => {
+                assert_eq!(fr.function_response.value, serde_json::json!("Hello, Alice!"));
+            }
+            other => panic!("expected FunctionResponse, got {:?}", other),
+        }
     }
 }
