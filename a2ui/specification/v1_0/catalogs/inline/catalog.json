@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://a2ui.org/specification/v1_0/catalogs/inline/catalog.json",
+  "title": "A2UI Inline Catalog Sample",
+  "description": "A small inline catalog used to exercise the generic fallback renderer and schema-only function registration. Components declared here have no native renderer; functions have no native implementation.",
+  "catalogId": "https://a2ui.org/specification/v1_0/catalogs/inline/catalog.json",
+  "components": {
+    "Greeting": {
+      "type": "object",
+      "description": "A custom greeting component rendered by the generic fallback.",
+      "properties": {
+        "component": {"const": "Greeting"},
+        "text": {
+          "type": "string",
+          "description": "The greeting message."
+        }
+      },
+      "required": ["component", "text"]
+    }
+  },
+  "functions": {
+    "shout": {
+      "type": "object",
+      "description": "Upper-cases the input string. Schema-only: no native client implementation.",
+      "returnType": "string",
+      "properties": {
+        "call": {"const": "shout"},
+        "args": {
+          "type": "object",
+          "properties": {
+            "value": {
+              "type": "string",
+              "description": "The string to shout."
+            }
+          },
+          "required": ["value"],
+          "additionalProperties": false
+        }
+      },
+      "required": ["call", "args"],
+      "additionalProperties": false
+    }
+  }
+}
