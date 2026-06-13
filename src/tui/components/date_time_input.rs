@@ -1,5 +1,6 @@
 //! DateTimeInput component — renders a date/time input display.
 
+use chrono::{Datelike, Duration, NaiveDateTime, NaiveTime, Timelike};
 use ratatui::{
     Frame,
     layout::Rect,
@@ -8,6 +9,7 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 
+use crate::core::event::{EventResult, InputEvent, InputKey};
 use crate::core::model::component_context::ComponentContext;
 use crate::core::protocol::common_types::DynamicString;
 use crate::tui::component_impl::TuiComponent;
@@ -108,5 +110,338 @@ impl TuiComponent for DateTimeInputComponent {
             Style::default().fg(Color::White),
         )));
         frame.render_widget(paragraph, content_area);
+    }
+
+    fn handle_event(
+        &self,
+        ctx: &ComponentContext,
+        event: &crate::core::event::InputEvent,
+    ) -> Option<crate::core::event::EventResult> {
+        let comp_model = ctx.components.get(&ctx.component_id)?;
+
+        // The value must be a data binding — otherwise there is no path in the
+        // data model to write the new datetime back to (mirrors slider.rs).
+        let value_ds = comp_model.get_property::<DynamicString>("value")?;
+        let binding = match value_ds {
+            DynamicString::Binding(b) => b,
+            _ => return None,
+        };
+
+        // Resolve flags (default both enabled, matching render()).
+        let enable_date: bool = comp_model.get_property("enableDate").unwrap_or(true);
+        let enable_time: bool = comp_model.get_property("enableTime").unwrap_or(true);
+
+        // Read + parse the current value. On empty/unparseable input, seed with now.
+        let current_str =
+            ctx.data_context.resolve_dynamic_string(&DynamicString::Binding(binding.clone()));
+        let dt = parse_value(&current_str).unwrap_or_else(|| chrono::Local::now().naive_local());
+
+        // Only the four arrow keys are handled; everything else bubbles up.
+        let direction = match event {
+            InputEvent::KeyPress { key: InputKey::Up } => Direction::Forward,
+            InputEvent::KeyPress { key: InputKey::Right } => Direction::Forward,
+            InputEvent::KeyPress { key: InputKey::Down } => Direction::Backward,
+            InputEvent::KeyPress { key: InputKey::Left } => Direction::Backward,
+            _ => return None,
+        };
+        let axis = match event {
+            InputEvent::KeyPress { key: InputKey::Up } | InputEvent::KeyPress { key: InputKey::Down } => Axis::Primary,
+            InputEvent::KeyPress { key: InputKey::Left } | InputEvent::KeyPress { key: InputKey::Right } => Axis::Secondary,
+            _ => return None,
+        };
+
+        let new_dt = apply_delta(dt, enable_date, enable_time, axis, direction);
+        let formatted = format_value(&new_dt, enable_date, enable_time);
+
+        Some(EventResult::DataUpdate {
+            path: binding.path.clone(),
+            value: serde_json::json!(formatted),
+        })
+    }
+}
+
+/// Which axis an arrow key maps to (Up/Down = primary, Left/Right = secondary).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Axis {
+    Primary,
+    Secondary,
+}
+
+/// Whether the increment should be positive or negative.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Direction {
+    Forward,
+    Backward,
+}
+
+/// Parse an ISO datetime string into a [`NaiveDateTime`].
+///
+/// Accepts full datetime (`YYYY-MM-DDTHH:MM:SS`), date-only (`YYYY-MM-DD`),
+/// and time-only (`HH:MM:SS`) shapes.
+fn parse_value(value: &str) -> Option<NaiveDateTime> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    // Full ISO datetime (optionally with fractional seconds / space separator).
+    NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%dT%H:%M:%S")
+        .or_else(|_| NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%dT%H:%M:%S%.f"))
+        .or_else(|_| NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%d %H:%M:%S"))
+        .ok()
+        // Date-only: anchor to midnight.
+        .or_else(|| {
+            chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d")
+                .ok()
+                .and_then(|d| d.and_hms_opt(0, 0, 0))
+        })
+        // Time-only: anchor to today's date.
+        .or_else(|| {
+            NaiveTime::parse_from_str(trimmed, "%H:%M:%S")
+                .ok()
+                .map(|t| chrono::Local::now().naive_local().date().and_time(t))
+        })
+}
+
+/// Apply an increment to a datetime based on the enabled modes and the key axis.
+///
+/// Increment rules:
+/// - `enableDate && enableTime`: primary(Up/Down) = ±1 day, secondary(Left/Right) = ±1 hour
+/// - `enableDate` only: primary = ±1 day, secondary = ±1 month
+/// - `enableTime` only: primary = ±1 minute, secondary = ±1 hour
+///
+/// Month arithmetic is clamped to the last valid day of the target month
+/// (chrono's behavior on `with_month` overflow would otherwise return `None`).
+fn apply_delta(
+    dt: NaiveDateTime,
+    enable_date: bool,
+    enable_time: bool,
+    axis: Axis,
+    direction: Direction,
+) -> NaiveDateTime {
+    let sign: i64 = if direction == Direction::Forward { 1 } else { -1 };
+
+    let duration_step = |days: i64, secs: i64| -> NaiveDateTime {
+        dt + Duration::days(days) + Duration::seconds(secs)
+    };
+
+    match (enable_date, enable_time) {
+        (true, true) => match axis {
+            Axis::Primary => duration_step(sign, 0),            // ±1 day
+            Axis::Secondary => duration_step(0, sign * 3600),   // ±1 hour
+        },
+        (true, false) => match axis {
+            Axis::Primary => duration_step(sign, 0),            // ±1 day
+            Axis::Secondary => add_months(dt, sign),            // ±1 month
+        },
+        (false, true) => match axis {
+            Axis::Primary => duration_step(0, sign * 60),       // ±1 minute
+            Axis::Secondary => duration_step(0, sign * 3600),   // ±1 hour
+        },
+        // Neither enabled is a degenerate config; fall back to day stepping so the
+        // key still does *something* rather than silently swallowing the event.
+        (false, false) => duration_step(sign, 0),
+    }
+}
+
+/// Add (or subtract) `n` months from a datetime, clamping the day to the
+/// last valid day of the resulting month (e.g. Jan 31 -> Feb 28/29).
+fn add_months(dt: NaiveDateTime, n: i64) -> NaiveDateTime {
+    let date = dt.date();
+    let year = date.year() as i64;
+    let month = date.month() as i64;
+    let day = date.day();
+
+    let total = year * 12 + (month - 1) + n;
+    let new_year = total.div_euclid(12) as i32;
+    let new_month = total.rem_euclid(12) as u32 + 1;
+
+    let last_day = days_in_month(new_year, new_month);
+    let clamped_day = day.min(last_day);
+
+    match chrono::NaiveDate::from_ymd_opt(new_year, new_month, clamped_day) {
+        Some(d) => d.and_hms_opt(dt.hour(), dt.minute(), dt.second())
+            .unwrap_or(dt),
+        None => dt,
+    }
+}
+
+/// Number of days in a given month, accounting for leap years.
+fn days_in_month(year: i32, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            if is_leap_year(year) {
+                29
+            } else {
+                28
+            }
+        }
+        _ => 30,
+    }
+}
+
+/// Whether `year` is a leap year under the Gregorian calendar.
+fn is_leap_year(year: i32) -> bool {
+    (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+}
+
+/// Format a datetime back to the ISO shape appropriate for the enabled modes.
+///
+/// - `!enable_time`: `YYYY-MM-DD` (date-only)
+/// - `!enable_date`: `HH:MM:SS` (time-only)
+/// - both: `YYYY-MM-DDTHH:MM:SS`
+fn format_value(dt: &NaiveDateTime, enable_date: bool, enable_time: bool) -> String {
+    match (enable_date, enable_time) {
+        (true, true) => dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
+        (true, false) => dt.format("%Y-%m-%d").to_string(),
+        (false, true) => dt.format("%H:%M:%S").to_string(),
+        (false, false) => dt.format("%Y-%m-%dT%H:%M:%S").to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dt(year: i32, month: u32, day: u32, h: u32, m: u32, s: u32) -> NaiveDateTime {
+        chrono::NaiveDate::from_ymd_opt(year, month, day)
+            .unwrap()
+            .and_hms_opt(h, m, s)
+            .unwrap()
+    }
+
+    #[test]
+    fn parse_full_iso_datetime() {
+        let parsed = parse_value("2026-06-13T14:30:00").unwrap();
+        assert_eq!(parsed, dt(2026, 6, 13, 14, 30, 0));
+    }
+
+    #[test]
+    fn parse_date_only_anchors_midnight() {
+        let parsed = parse_value("2026-01-15").unwrap();
+        assert_eq!(parsed, dt(2026, 1, 15, 0, 0, 0));
+    }
+
+    #[test]
+    fn parse_empty_returns_none() {
+        assert!(parse_value("").is_none());
+        assert!(parse_value("   ").is_none());
+        assert!(parse_value("not-a-date").is_none());
+    }
+
+    #[test]
+    fn date_and_time_mode_day_increment() {
+        let start = dt(2026, 6, 13, 14, 30, 0);
+        // Up -> +1 day
+        let after = apply_delta(start, true, true, Axis::Primary, Direction::Forward);
+        assert_eq!(after, dt(2026, 6, 14, 14, 30, 0));
+        // Down -> -1 day (back to start)
+        let back = apply_delta(after, true, true, Axis::Primary, Direction::Backward);
+        assert_eq!(back, start);
+    }
+
+    #[test]
+    fn date_and_time_mode_hour_increment() {
+        let start = dt(2026, 6, 13, 14, 30, 0);
+        // Right -> +1 hour
+        let after = apply_delta(start, true, true, Axis::Secondary, Direction::Forward);
+        assert_eq!(after, dt(2026, 6, 13, 15, 30, 0));
+        // Left -> -1 hour
+        let back = apply_delta(after, true, true, Axis::Secondary, Direction::Backward);
+        assert_eq!(back, start);
+    }
+
+    #[test]
+    fn date_and_time_hour_wraps_across_day() {
+        let start = dt(2026, 6, 13, 23, 30, 0);
+        let after = apply_delta(start, true, true, Axis::Secondary, Direction::Forward);
+        assert_eq!(after, dt(2026, 6, 14, 0, 30, 0));
+    }
+
+    #[test]
+    fn date_only_mode_month_increment() {
+        let start = dt(2026, 1, 15, 0, 0, 0);
+        // Right -> +1 month
+        let after = apply_delta(start, true, false, Axis::Secondary, Direction::Forward);
+        assert_eq!(after, dt(2026, 2, 15, 0, 0, 0));
+        // Left -> -1 month
+        let back = apply_delta(after, true, false, Axis::Secondary, Direction::Backward);
+        assert_eq!(back, start);
+    }
+
+    #[test]
+    fn date_only_month_clamps_jan31_to_feb() {
+        let start = dt(2026, 1, 31, 0, 0, 0);
+        let after = apply_delta(start, true, false, Axis::Secondary, Direction::Forward);
+        // 2026 is not a leap year, so Feb has 28 days.
+        assert_eq!(after, dt(2026, 2, 28, 0, 0, 0));
+    }
+
+    #[test]
+    fn date_only_month_clamps_to_leap_feb() {
+        // 2024 is a leap year.
+        let start = dt(2024, 1, 31, 0, 0, 0);
+        let after = apply_delta(start, true, false, Axis::Secondary, Direction::Forward);
+        assert_eq!(after, dt(2024, 2, 29, 0, 0, 0));
+    }
+
+    #[test]
+    fn date_only_month_wraps_across_year() {
+        let start = dt(2026, 12, 15, 0, 0, 0);
+        let after = apply_delta(start, true, false, Axis::Secondary, Direction::Forward);
+        assert_eq!(after, dt(2027, 1, 15, 0, 0, 0));
+        // Backward one month from December 2026 is November 2026 (same year).
+        let back = apply_delta(start, true, false, Axis::Secondary, Direction::Backward);
+        assert_eq!(back, dt(2026, 11, 15, 0, 0, 0));
+        // A genuine year-wrap backward: January minus one month.
+        let jan = dt(2026, 1, 15, 0, 0, 0);
+        let prev_year = apply_delta(jan, true, false, Axis::Secondary, Direction::Backward);
+        assert_eq!(prev_year, dt(2025, 12, 15, 0, 0, 0));
+    }
+
+    #[test]
+    fn time_only_mode_minute_increment() {
+        let start = dt(2026, 6, 13, 14, 30, 0);
+        // Up -> +1 minute
+        let after = apply_delta(start, false, true, Axis::Primary, Direction::Forward);
+        assert_eq!(after, dt(2026, 6, 13, 14, 31, 0));
+        // Down -> -1 minute
+        let back = apply_delta(after, false, true, Axis::Primary, Direction::Backward);
+        assert_eq!(back, start);
+    }
+
+    #[test]
+    fn time_only_mode_hour_increment() {
+        let start = dt(2026, 6, 13, 14, 30, 0);
+        // Right -> +1 hour
+        let after = apply_delta(start, false, true, Axis::Secondary, Direction::Forward);
+        assert_eq!(after, dt(2026, 6, 13, 15, 30, 0));
+    }
+
+    #[test]
+    fn format_full_datetime() {
+        let value = dt(2026, 6, 13, 14, 30, 5);
+        assert_eq!(format_value(&value, true, true), "2026-06-13T14:30:05");
+    }
+
+    #[test]
+    fn format_date_only() {
+        let value = dt(2026, 6, 13, 14, 30, 5);
+        assert_eq!(format_value(&value, true, false), "2026-06-13");
+    }
+
+    #[test]
+    fn format_time_only() {
+        let value = dt(2026, 6, 13, 14, 30, 5);
+        assert_eq!(format_value(&value, false, true), "14:30:05");
+    }
+
+    #[test]
+    fn leap_year_detection() {
+        assert!(is_leap_year(2024));
+        assert!(!is_leap_year(2026));
+        assert!(!is_leap_year(1900)); // divisible by 100 but not 400
+        assert!(is_leap_year(2000)); // divisible by 400
     }
 }

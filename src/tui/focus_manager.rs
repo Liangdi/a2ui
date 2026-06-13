@@ -16,6 +16,10 @@ const FOCUSABLE_TYPES: &[&str] = &[
     "Slider",
     "ChoicePicker",
     "DateTimeInput",
+    // Interactive only under the `audio` feature, but listing it always is
+    // harmless: without the feature its handle_event is the trait default
+    // (no-op), so focusing it simply does nothing.
+    "AudioPlayer",
 ];
 
 /// Manages keyboard focus across interactive components.
