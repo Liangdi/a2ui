@@ -93,6 +93,12 @@ impl MessageProcessor {
         std::mem::take(&mut self.outgoing_messages)
     }
 
+    /// Check if a component type exists in any registered catalog.
+    pub fn catalog_type_exists(&self, component_type: &str) -> bool {
+        self.catalogs.values()
+            .any(|cat| cat.components.contains_key(component_type))
+    }
+
     /// Register a pending action that expects a server response.
     ///
     /// Call this when the caller sends an `action` message with
@@ -171,6 +177,16 @@ impl MessageProcessor {
     }
 
     fn handle_update_components(&mut self, data: &UpdateComponentsData) -> Result<()> {
+        // Validate component types against catalogs (before mutable borrow of surface)
+        for comp_value in &data.components {
+            if let Some(comp_type) = comp_value.get("component").and_then(|v| v.as_str()) {
+                if !self.catalog_type_exists(comp_type) {
+                    // Log a warning but don't fail — graceful degradation
+                    eprintln!("[A2UI Warning] Unknown component type: {}", comp_type);
+                }
+            }
+        }
+
         let surface = self.model.get_surface_mut(&data.surface_id)
             .ok_or_else(|| A2uiError::SurfaceNotFound(data.surface_id.clone()))?;
 
@@ -675,6 +691,15 @@ mod tests {
         use crate::tui::catalogs::basic::build_basic_catalog;
         use crate::tui::catalogs::minimal::build_minimal_catalog;
         MessageProcessor::new(vec![build_minimal_catalog(), build_basic_catalog()])
+    }
+
+    #[test]
+    fn test_catalog_type_exists() {
+        let proc = make_basic_processor();
+        assert!(proc.catalog_type_exists("Text"));
+        assert!(proc.catalog_type_exists("Button"));
+        assert!(proc.catalog_type_exists("Slider"));
+        assert!(!proc.catalog_type_exists("NonExistentComponent"));
     }
 
     #[test]
@@ -1259,5 +1284,51 @@ mod tests {
             }
             other => panic!("expected FunctionResponse, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_accessibility_parsing() {
+        use crate::core::protocol::common_types::DynamicString;
+
+        let mut proc = make_basic_processor();
+
+        let create = serde_json::json!({
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "a11y_test",
+                "catalogId": "test"
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
+
+        let update = serde_json::json!({
+            "version": "v1.0",
+            "updateComponents": {
+                "surfaceId": "a11y_test",
+                "components": [
+                    {
+                        "id": "root",
+                        "component": "Button",
+                        "child": "label",
+                        "accessibility": {
+                            "label": "Submit form",
+                            "description": "Click to submit the login form"
+                        }
+                    },
+                    {"id": "label", "component": "Text", "text": "Submit"}
+                ]
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&update.to_string()).unwrap())
+            .unwrap();
+
+        let surface = proc.model.get_surface("a11y_test").unwrap();
+        let components = surface.components.borrow();
+        let root = components.get("root").unwrap();
+
+        let a11y = root.accessibility().expect("should have accessibility");
+        assert_eq!(a11y.label, Some(DynamicString::Literal("Submit form".to_string())));
+        assert_eq!(a11y.description, Some(DynamicString::Literal("Click to submit the login form".to_string())));
     }
 }

@@ -54,8 +54,17 @@ impl TuiComponent for AudioPlayerComponent {
             None => String::new(),
         };
 
+        // Resolve description.
+        let description = comp_model.get_property::<DynamicString>("description")
+            .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
+            .unwrap_or_default();
+
         let display_text = if !url.is_empty() { url } else { "audio".to_string() };
-        let placeholder = format!("[\u{266B} {}]", display_text);
+        let placeholder = if description.is_empty() {
+            format!("[\u{266B} {}]", display_text)
+        } else {
+            format!("[\u{266B} {} \u{2014} {}]", description, display_text)
+        };
 
         let paragraph = Paragraph::new(Line::from(Span::styled(
             placeholder,

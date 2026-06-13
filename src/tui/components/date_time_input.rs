@@ -60,8 +60,24 @@ impl TuiComponent for DateTimeInputComponent {
             None => String::new(),
         };
 
-        // Build display text with calendar icon.
-        let display_text = format!("\u{1F4C5} {}", value);
+        // Resolve enableDate and enableTime flags.
+        let enable_date: bool = comp_model.get_property("enableDate").unwrap_or(true);
+        let enable_time: bool = comp_model.get_property("enableTime").unwrap_or(true);
+        let _min = comp_model.get_property::<DynamicString>("min")
+            .map(|ds| ctx.data_context.resolve_dynamic_string(&ds));
+        let _max = comp_model.get_property::<DynamicString>("max")
+            .map(|ds| ctx.data_context.resolve_dynamic_string(&ds));
+
+        // Choose icon based on enabled modes.
+        let icon = match (enable_date, enable_time) {
+            (true, true) => "\u{1F4C5}",   // calendar
+            (true, false) => "\u{1F4C5}",   // calendar only
+            (false, true) => "\u{23F0}",    // clock only
+            (false, false) => "\u{1F4C5}",  // default
+        };
+
+        // Build display text with appropriate icon.
+        let display_text = format!("{} {}", icon, value);
 
         // Determine if this date-time input has keyboard focus.
         let is_focused = ctx.focused_id.as_deref() == Some(ctx.component_id.as_str());

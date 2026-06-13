@@ -103,6 +103,17 @@ impl TuiComponent for ButtonComponent {
             if child_area.width > 0 && child_area.height > 0 {
                 render_child(&child_id, child_area, frame, "");
             }
+        } else if let Some(a11y) = comp_model.accessibility() {
+            // When no child is present, use the accessibility label as visible text.
+            let a11y_text = a11y.label
+                .as_ref()
+                .map(|ds| ctx.data_context.resolve_dynamic_string(ds))
+                .unwrap_or_default();
+            if !a11y_text.is_empty() && child_area.width > 0 && child_area.height > 0 {
+                let text = ratatui::text::Line::from(a11y_text);
+                let widget = ratatui::widgets::Paragraph::new(text).style(final_style);
+                frame.render_widget(widget, child_area);
+            }
         }
     }
 

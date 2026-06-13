@@ -155,6 +155,24 @@ impl<'a> DataContext<'a> {
             .unwrap_or_default()
     }
 
+    /// Call a function by name with pre-resolved arguments.
+    ///
+    /// Returns `None` if the function is not found or execution fails.
+    pub fn call_function_by_name(
+        &self,
+        name: &str,
+        args: &HashMap<String, Value>,
+    ) -> Option<Value> {
+        let func = self.functions.get(name)?;
+        // Resolve each argument value (may contain bindings or nested calls).
+        let mut resolved_args = HashMap::new();
+        for (key, val) in args {
+            let resolved = self.resolve_arg_value(val);
+            resolved_args.insert(key.clone(), resolved);
+        }
+        func.execute(&resolved_args, self).ok()
+    }
+
     /// Execute a function call.
     fn execute_function(&self, fc: &FunctionCall) -> Value {
         let Some(func) = self.functions.get(&fc.call) else {

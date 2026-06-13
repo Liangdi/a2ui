@@ -106,6 +106,11 @@ impl TuiComponent for ChoicePickerComponent {
         let variant: Option<String> = comp_model.get_property("variant");
         let is_exclusive = variant.as_deref() == Some("mutuallyExclusive");
 
+        // Determine display style and filterable flag.
+        let display_style: Option<String> = comp_model.get_property("displayStyle");
+        let _filterable: bool = comp_model.get_property("filterable").unwrap_or(false);
+        let is_chips = display_style.as_deref() == Some("chips");
+
         // Determine if this choice picker has keyboard focus.
         let is_focused = ctx.focused_id.as_deref() == Some(ctx.component_id.as_str());
 
@@ -123,33 +128,57 @@ impl TuiComponent for ChoicePickerComponent {
         }
 
         // Add option lines.
-        for option in &options {
-            let is_selected = selected_values.iter().any(|v| v == &option.value);
-
-            let indicator = if is_exclusive {
-                if is_selected {
-                    "\u{25cf} " // ● filled circle
+        if is_chips {
+            // Render as inline chips: [✓ Email] [○ Phone] [○ SMS]
+            let mut spans = Vec::new();
+            for (i, option) in options.iter().enumerate() {
+                let is_selected = selected_values.iter().any(|v| v == &option.value);
+                let indicator = if is_exclusive {
+                    if is_selected { "◉ " } else { "○ " }
                 } else {
-                    "\u{25cb} " // ○ empty circle
-                }
-            } else {
-                if is_selected {
-                    "\u{2611} " // ☑ checked box
+                    if is_selected { "☑ " } else { "☐ " }
+                };
+                let style = if is_selected {
+                    Style::default().fg(Color::Cyan)
                 } else {
-                    "\u{2610} " // ☐ empty box
+                    Style::default().fg(Color::DarkGray)
+                };
+                if i > 0 {
+                    spans.push(Span::raw(" "));
                 }
-            };
+                spans.push(Span::styled(format!("{}{}", indicator, option.label), style));
+            }
+            lines.push(Line::from(spans));
+        } else {
+            // Default stacked layout
+            for option in &options {
+                let is_selected = selected_values.iter().any(|v| v == &option.value);
 
-            let style = if is_selected {
-                Style::default().fg(Color::Cyan)
-            } else {
-                Style::default().fg(Color::DarkGray)
-            };
+                let indicator = if is_exclusive {
+                    if is_selected {
+                        "\u{25cf} " // ● filled circle
+                    } else {
+                        "\u{25cb} " // ○ empty circle
+                    }
+                } else {
+                    if is_selected {
+                        "\u{2611} " // ☑ checked box
+                    } else {
+                        "\u{2610} " // ☐ empty box
+                    }
+                };
 
-            lines.push(Line::from(vec![
-                Span::styled(indicator.to_string(), style),
-                Span::styled(option.label.clone(), style),
-            ]));
+                let style = if is_selected {
+                    Style::default().fg(Color::Cyan)
+                } else {
+                    Style::default().fg(Color::DarkGray)
+                };
+
+                lines.push(Line::from(vec![
+                    Span::styled(indicator.to_string(), style),
+                    Span::styled(option.label.clone(), style),
+                ]));
+            }
         }
 
         let paragraph = Paragraph::new(lines);

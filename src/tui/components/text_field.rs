@@ -4,7 +4,7 @@ use ratatui::{
     Frame,
     layout::Rect,
     style::{Color, Style},
-    text::Line,
+    text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
 
@@ -72,11 +72,24 @@ impl TuiComponent for TextFieldComponent {
         let variant: Option<String> = comp_model.get_property("variant");
         let display_value = match variant.as_deref() {
             Some("obscured") => obscure_value(&raw_value),
-            _ => raw_value,
+            _ => raw_value.clone(),
         };
 
+        // Resolve placeholder.
+        let placeholder = comp_model
+            .get_property::<DynamicString>("placeholder")
+            .map(|ds| ctx.data_context.resolve_dynamic_string(&ds));
+
         // Build the display text: value followed by a cursor block character.
-        let display_text = format!("{}\u{2588}", display_value);
+        // When value is empty and placeholder is set, show placeholder in dim color.
+        let (display_text, is_placeholder) = if raw_value.is_empty() {
+            match &placeholder {
+                Some(p) if !p.is_empty() => (p.clone(), true),
+                _ => ("\u{2588}".to_string(), false), // cursor block only
+            }
+        } else {
+            (format!("{}\u{2588}", display_value), false)
+        };
 
         // Determine if this text field has keyboard focus.
         let is_focused = ctx.focused_id.as_deref() == Some(ctx.component_id.as_str());
@@ -103,7 +116,12 @@ impl TuiComponent for TextFieldComponent {
         }
 
         // Render the paragraph with the display text.
-        let paragraph = Paragraph::new(Line::from(display_text));
+        let paragraph_style = if is_placeholder {
+            Style::default().fg(Color::DarkGray)
+        } else {
+            Style::default()
+        };
+        let paragraph = Paragraph::new(Line::from(Span::styled(display_text, paragraph_style)));
         frame.render_widget(paragraph, content_area);
     }
 

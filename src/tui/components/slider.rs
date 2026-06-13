@@ -97,10 +97,39 @@ impl TuiComponent for SliderComponent {
         let is_focused = ctx.focused_id.as_deref() == Some(ctx.component_id.as_str());
         let bar_color = if is_focused { Color::Yellow } else { Color::Cyan };
 
+        // Resolve steps for discrete step markers.
+        let steps = comp_model
+            .get_property::<DynamicNumber>("steps")
+            .map(|dn| ctx.data_context.resolve_dynamic_number(&dn) as usize);
+
         let bar_str = if bar_width > 0 {
-            let filled_str: String = "━".repeat(filled);
-            let unfilled_str: String = "─".repeat(unfilled);
-            format!("[{}{}]", filled_str, unfilled_str)
+            if let Some(step_count) = steps {
+                if step_count > 0 && step_count <= bar_width {
+                    // Draw slider with step markers
+                    let mut bar: Vec<char> = vec!['─'; bar_width];
+                    for i in 0..=step_count {
+                        let pos = (bar_width as f64 * i as f64 / step_count as f64).round() as usize;
+                        if pos < bar_width {
+                            bar[pos] = '┬';
+                        }
+                    }
+                    // Fill portion
+                    for j in 0..filled {
+                        if j < bar.len() {
+                            bar[j] = '━';
+                        }
+                    }
+                    format!("[{}]", bar.into_iter().collect::<String>())
+                } else {
+                    let filled_str: String = "━".repeat(filled);
+                    let unfilled_str: String = "─".repeat(unfilled);
+                    format!("[{}{}]", filled_str, unfilled_str)
+                }
+            } else {
+                let filled_str: String = "━".repeat(filled);
+                let unfilled_str: String = "─".repeat(unfilled);
+                format!("[{}{}]", filled_str, unfilled_str)
+            }
         } else {
             String::new()
         };

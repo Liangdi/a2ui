@@ -45,6 +45,14 @@ pub trait TuiComponent: Send + Sync + 'static {
     }
 }
 
+// Blanket impl: any TuiComponent automatically satisfies ComponentApi.
+// This must live in the tui layer (not core) because it depends on both traits.
+impl<T: TuiComponent> crate::core::catalog::component_api::ComponentApi for T {
+    fn name(&self) -> &'static str {
+        <Self as TuiComponent>::name(self)
+    }
+}
+
 /// Registry that maps component type names to their [`TuiComponent`] implementations.
 pub type ComponentRegistry = HashMap<String, Box<dyn TuiComponent>>;
 

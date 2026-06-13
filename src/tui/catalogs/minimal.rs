@@ -54,10 +54,15 @@ fn capitalize_string(s: &str) -> String {
     }
 }
 
-/// Build the minimal catalog with the `capitalize` function.
+/// Build the minimal catalog with the `capitalize` function and standard components.
 pub fn build_minimal_catalog() -> Catalog {
     Catalog::new("https://a2ui.org/specification/v1_0/catalogs/minimal/catalog.json")
         .with_function(Box::new(CapitalizeFunction))
+        .with_component(Box::new(TextComponent))
+        .with_component(Box::new(RowComponent))
+        .with_component(Box::new(ColumnComponent))
+        .with_component(Box::new(ButtonComponent))
+        .with_component(Box::new(TextFieldComponent))
 }
 
 /// Build the component registry for the minimal catalog components.

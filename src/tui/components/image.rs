@@ -58,8 +58,13 @@ impl TuiComponent for ImageComponent {
             None => String::new(),
         };
 
+        // Resolve fit and variant properties.
+        let _fit: Option<String> = comp_model.get_property("fit");
+        let variant: Option<String> = comp_model.get_property("variant");
+        let variant_str = variant.as_deref().map(|v| format!(" ({})", v)).unwrap_or_default();
+
         // Use description if available, otherwise fall back to URL.
-        let display_text = if !description.is_empty() {
+        let content = if !description.is_empty() {
             description
         } else if !url.is_empty() {
             url
@@ -67,7 +72,7 @@ impl TuiComponent for ImageComponent {
             "image".to_string()
         };
 
-        let placeholder = format!("[\u{1F5BC} {}]", display_text);
+        let placeholder = format!("[\u{1F5BC}{} {}]", variant_str, content);
 
         let paragraph = Paragraph::new(Line::from(Span::styled(
             placeholder,

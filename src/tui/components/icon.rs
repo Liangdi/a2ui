@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 use crate::core::model::component_context::ComponentContext;
+use crate::core::protocol::common_types::DynamicString;
 use crate::tui::component_impl::TuiComponent;
 
 /// Icon component implementation.
@@ -46,12 +47,12 @@ impl TuiComponent for IconComponent {
             return;
         }
 
-        // Resolve the icon name.
-        let name: Option<String> = comp_model.get_property("name");
-        let symbol = match name.as_deref() {
-            Some(n) => map_icon(n),
-            None => String::from("[?]"),
+        // Resolve the icon name via DynamicString (handles literals and {path: ...} bindings).
+        let name = match comp_model.get_property::<DynamicString>("name") {
+            Some(ds) => ctx.data_context.resolve_dynamic_string(&ds),
+            None => return,
         };
+        let symbol = map_icon(&name);
 
         let paragraph = Paragraph::new(symbol);
         frame.render_widget(paragraph, inner);

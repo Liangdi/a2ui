@@ -582,6 +582,20 @@ fn apply_date_format(dt: &NaiveDateTime, fmt: &str) -> String {
                 // chrono::Weekday: Mon=0 .. Sun=6
                 result.push_str(weekdays[dt.weekday().num_days_from_monday() as usize]);
             }
+            'h' => {
+                // 12-hour clock: 1-12 (no leading zero for single 'h', leading zero for 'hh')
+                let hour_12 = dt.hour() % 12;
+                let hour_12 = if hour_12 == 0 { 12 } else { hour_12 };
+                match count {
+                    2 => result.push_str(&format!("{hour_12:02}")),
+                    _ => result.push_str(&hour_12.to_string()),
+                }
+            }
+            'a' => {
+                // AM/PM marker
+                let ampm = if dt.hour() < 12 { "AM" } else { "PM" };
+                result.push_str(ampm);
+            }
             '\'' => {
                 // Escaped literal between single quotes.
                 // Find the closing quote.
@@ -636,6 +650,7 @@ impl FunctionImplementation for FormatStringFunction {
 /// Supported expressions:
 /// - `${/absolute/path}` — resolve absolute data path
 /// - `${relative/path}` — resolve relative data path (via context)
+/// - `${functionName(key:value,...)}` — call a registered function
 /// - `\${` — escaped literal `${`
 fn interpolate_string(template: &str, context: &DataContext) -> String {
     let mut result = String::with_capacity(template.len());
@@ -692,8 +707,37 @@ fn interpolate_string(template: &str, context: &DataContext) -> String {
 }
 
 /// Resolve a single expression inside `${...}`.
+///
+/// Supported forms:
+/// - `/absolute/path` or `relative/path` — data interpolation
+/// - `functionName(key1:value1,key2:value2)` — function call with arguments
+///
+/// Function call argument values can be:
+/// - A data path: `/path/to/data` or `relative/path`
+/// - A quoted string: `'text'`
+/// - A number: `42` or `3.14`
 fn resolve_expression(expr: &str, context: &DataContext) -> String {
     let trimmed = expr.trim();
+
+    // Check for function call syntax: identifier followed by '('
+    if let Some(paren_pos) = trimmed.find('(') {
+        let func_name = &trimmed[..paren_pos];
+        // Validate that func_name looks like an identifier (letters, digits, underscore).
+        if is_identifier(func_name)
+            && trimmed.ends_with(')')
+            && func_name.chars().next().map_or(false, |c| c.is_alphabetic() || c == '_')
+        {
+            let args_str = &trimmed[paren_pos + 1..trimmed.len() - 1];
+            let args = match parse_function_args(args_str, context) {
+                Ok(a) => a,
+                Err(_) => return String::new(),
+            };
+            return context
+                .call_function_by_name(func_name, &args)
+                .map(|v| crate::core::model::data_context::value_to_string(&v))
+                .unwrap_or_default();
+        }
+    }
 
     // Absolute data path.
     if trimmed.starts_with('/') {
@@ -708,6 +752,138 @@ fn resolve_expression(expr: &str, context: &DataContext) -> String {
         .get(trimmed)
         .map(|v| crate::core::model::data_context::value_to_string(&v))
         .unwrap_or_default()
+}
+
+/// Check if a string is a valid identifier (alphanumeric + underscore).
+fn is_identifier(s: &str) -> bool {
+    !s.is_empty() && s.chars().all(|c| c.is_alphanumeric() || c == '_')
+}
+
+/// Parse function arguments from a comma-separated `key:value` string.
+///
+/// Values can be:
+/// - Single-quoted strings: `'hello'`
+/// - Data paths: `/path` or `relative`
+/// - Numbers: `42`, `3.14`
+/// - Booleans: `true`, `false`
+fn parse_function_args(
+    args_str: &str,
+    context: &DataContext,
+) -> Result<HashMap<String, Value>, A2uiError> {
+    let mut args = HashMap::new();
+    if args_str.trim().is_empty() {
+        return Ok(args);
+    }
+
+    let mut i = 0;
+    let chars: Vec<char> = args_str.chars().collect();
+
+    while i < chars.len() {
+        // Skip whitespace and commas between args.
+        while i < chars.len() && (chars[i].is_whitespace() || chars[i] == ',') {
+            i += 1;
+        }
+        if i >= chars.len() {
+            break;
+        }
+
+        // Parse key (identifier).
+        let key_start = i;
+        while i < chars.len() && chars[i] != ':' && chars[i] != '=' {
+            i += 1;
+        }
+        if i >= chars.len() || (chars[i] != ':' && chars[i] != '=') {
+            return Err(A2uiError::InvalidFunctionCall(format!(
+                "formatString: expected ':' or '=' in function args at position {i}"
+            )));
+        }
+        let key: String = chars[key_start..i].iter().collect();
+        let key = key.trim().to_string();
+        i += 1; // skip ':' or '='
+
+        // Skip whitespace after separator.
+        while i < chars.len() && chars[i].is_whitespace() {
+            i += 1;
+        }
+
+        // Parse value.
+        let val;
+        if i + 1 < chars.len() && chars[i] == '$' && chars[i + 1] == '{' {
+            // Nested ${...} expression — resolve recursively.
+            i += 2; // skip '${'
+            let mut depth = 1u32;
+            let inner_start = i;
+            while i < chars.len() && depth > 0 {
+                if chars[i] == '{' {
+                    depth += 1;
+                } else if chars[i] == '}' {
+                    depth -= 1;
+                }
+                if depth > 0 {
+                    i += 1;
+                }
+            }
+            let inner: String = chars[inner_start..i].iter().collect();
+            if i < chars.len() {
+                i += 1; // skip closing '}'
+            }
+            // Resolve the inner expression as a data path.
+            val = context
+                .get(inner.trim())
+                .unwrap_or(Value::String(String::new()));
+        } else if i < chars.len() && chars[i] == '\'' {
+            // Single-quoted string.
+            i += 1; // skip opening quote
+            let val_start = i;
+            while i < chars.len() && chars[i] != '\'' {
+                i += 1;
+            }
+            let s: String = chars[val_start..i].iter().collect();
+            if i < chars.len() {
+                i += 1; // skip closing quote
+            }
+            val = Value::String(s);
+        } else if i < chars.len() && (chars[i] == '-' || chars[i].is_ascii_digit()) {
+            // Number (possibly negative).
+            let val_start = i;
+            if chars[i] == '-' {
+                i += 1;
+            }
+            while i < chars.len() && (chars[i].is_ascii_digit() || chars[i] == '.') {
+                i += 1;
+            }
+            let num_str: String = chars[val_start..i].iter().collect();
+            val = num_str
+                .parse::<f64>()
+                .map(|n| serde_json::json!(n))
+                .unwrap_or(Value::String(num_str));
+        } else {
+            // Otherwise treat as a data path or boolean literal.
+            let val_start = i;
+            while i < chars.len() && chars[i] != ',' && chars[i] != ')' && !chars[i].is_whitespace()
+            {
+                i += 1;
+            }
+            let token: String = chars[val_start..i].iter().collect();
+            let token = token.trim();
+
+            // Check for boolean literals.
+            if token == "true" {
+                val = Value::Bool(true);
+            } else if token == "false" {
+                val = Value::Bool(false);
+            } else {
+                // Resolve as data path. If not found, use the raw token as a string.
+                val = context
+                    .get(token)
+                    .unwrap_or_else(|| Value::String(token.to_string()));
+            }
+        };
+
+        args.insert(key, val);
+    }
+
+    Ok(args)
 }
 
 // ===========================================================================
@@ -834,6 +1010,18 @@ mod tests {
     fn context_with_data(data: Value) -> DataContext<'static> {
         let dm = Box::leak(Box::new(DataModel::from_value(data)));
         let fns = Box::leak(Box::new(HashMap::new()));
+        DataContext::new(dm, fns)
+    }
+
+    /// Build a DataContext with basic functions registered (for formatString function call tests).
+    fn context_with_functions(data: Value) -> DataContext<'static> {
+        use crate::core::catalog::function_api::FunctionImplementation;
+        let dm = Box::leak(Box::new(DataModel::from_value(data)));
+        let fns_map: HashMap<String, Box<dyn FunctionImplementation>> = build_basic_functions()
+            .into_iter()
+            .map(|f| (f.name().to_string(), f))
+            .collect();
+        let fns = Box::leak(Box::new(fns_map));
         DataContext::new(dm, fns)
     }
 
@@ -1147,6 +1335,95 @@ mod tests {
         assert_eq!(f.execute(&args, &ctx).unwrap(), json!("09:05:03"));
     }
 
+    // ---- formatDate 12-hour and AM/PM ----
+
+    #[test]
+    fn test_format_date_12h_midnight() {
+        // Midnight (00:00) should show 12 AM
+        let ctx = empty_context();
+        let f = FormatDateFunction;
+
+        let mut args = HashMap::new();
+        args.insert("value".into(), json!("2024-01-01T00:00:00"));
+        args.insert("format".into(), json!("h:mm a"));
+        assert_eq!(f.execute(&args, &ctx).unwrap(), json!("12:00 AM"));
+    }
+
+    #[test]
+    fn test_format_date_12h_noon() {
+        // Noon (12:00) should show 12 PM
+        let ctx = empty_context();
+        let f = FormatDateFunction;
+
+        let mut args = HashMap::new();
+        args.insert("value".into(), json!("2024-06-15T12:00:00"));
+        args.insert("format".into(), json!("h:mm a"));
+        assert_eq!(f.execute(&args, &ctx).unwrap(), json!("12:00 PM"));
+    }
+
+    #[test]
+    fn test_format_date_12h_afternoon() {
+        // 15:30 (3:30 PM)
+        let ctx = empty_context();
+        let f = FormatDateFunction;
+
+        let mut args = HashMap::new();
+        args.insert("value".into(), json!("2024-03-15T15:30:00"));
+        args.insert("format".into(), json!("h:mm a"));
+        assert_eq!(f.execute(&args, &ctx).unwrap(), json!("3:30 PM"));
+    }
+
+    #[test]
+    fn test_format_date_12h_morning() {
+        // 09:05 (9:05 AM)
+        let ctx = empty_context();
+        let f = FormatDateFunction;
+
+        let mut args = HashMap::new();
+        args.insert("value".into(), json!("2024-03-15T09:05:00"));
+        args.insert("format".into(), json!("h:mm a"));
+        assert_eq!(f.execute(&args, &ctx).unwrap(), json!("9:05 AM"));
+    }
+
+    #[test]
+    fn test_format_date_hh_leading_zero() {
+        // 09:00 should show 09 with 'hh'
+        let ctx = empty_context();
+        let f = FormatDateFunction;
+
+        let mut args = HashMap::new();
+        args.insert("value".into(), json!("2024-03-15T09:00:00"));
+        args.insert("format".into(), json!("hh:mm a"));
+        assert_eq!(f.execute(&args, &ctx).unwrap(), json!("09:00 AM"));
+    }
+
+    #[test]
+    fn test_format_date_hh_midnight_leading_zero() {
+        // Midnight should show 12 with 'hh'
+        let ctx = empty_context();
+        let f = FormatDateFunction;
+
+        let mut args = HashMap::new();
+        args.insert("value".into(), json!("2024-01-01T00:30:00"));
+        args.insert("format".into(), json!("hh:mm a"));
+        assert_eq!(f.execute(&args, &ctx).unwrap(), json!("12:30 AM"));
+    }
+
+    #[test]
+    fn test_format_date_12h_full_format() {
+        // Full format combining 12-hour with date
+        let ctx = empty_context();
+        let f = FormatDateFunction;
+
+        let mut args = HashMap::new();
+        args.insert("value".into(), json!("2024-12-25T14:30:00"));
+        args.insert("format".into(), json!("MMM dd, yyyy hh:mm a"));
+        assert_eq!(
+            f.execute(&args, &ctx).unwrap(),
+            json!("Dec 25, 2024 02:30 PM")
+        );
+    }
+
     // ---- formatString ----
 
     #[test]
@@ -1177,6 +1454,67 @@ mod tests {
         let mut args = HashMap::new();
         args.insert("value".into(), json!("${/greeting}, ${/target}!"));
         assert_eq!(f.execute(&args, &ctx).unwrap(), json!("Hello, World!"));
+    }
+
+    // ---- formatString with nested function calls ----
+
+    #[test]
+    fn test_format_string_function_call_format_date() {
+        // Call formatDate inside formatString with string literal args
+        let ctx = context_with_functions(json!({"event": {"date": "2024-03-15T15:30:00"}}));
+        let f = FormatStringFunction;
+
+        let mut args = HashMap::new();
+        args.insert(
+            "value".into(),
+            json!("The event is at ${formatDate(value:${/event/date}, format:'h:mm a')}"),
+        );
+        assert_eq!(
+            f.execute(&args, &ctx).unwrap(),
+            json!("The event is at 3:30 PM")
+        );
+    }
+
+    #[test]
+    fn test_format_string_function_call_format_number() {
+        // Call formatNumber inside formatString
+        let ctx = context_with_functions(json!({"price": 1234.5}));
+        let f = FormatStringFunction;
+
+        let mut args = HashMap::new();
+        args.insert(
+            "value".into(),
+            json!("Price: ${formatNumber(value:${/price}, grouping:false)}"),
+        );
+        assert_eq!(
+            f.execute(&args, &ctx).unwrap(),
+            json!("Price: 1234.5")
+        );
+    }
+
+    #[test]
+    fn test_format_string_function_call_pluralize() {
+        // Call pluralize inside formatString
+        let ctx = context_with_functions(json!({"count": 5}));
+        let f = FormatStringFunction;
+
+        let mut args = HashMap::new();
+        args.insert(
+            "value".into(),
+            json!("${pluralize(value:${/count}, one:'item', other:'items')}"),
+        );
+        assert_eq!(f.execute(&args, &ctx).unwrap(), json!("items"));
+    }
+
+    #[test]
+    fn test_format_string_unknown_function() {
+        // Unknown function should resolve to empty string
+        let ctx = context_with_functions(json!({}));
+        let f = FormatStringFunction;
+
+        let mut args = HashMap::new();
+        args.insert("value".into(), json!("result: ${unknownFunc()}"));
+        assert_eq!(f.execute(&args, &ctx).unwrap(), json!("result: "));
     }
 
     // ---- pluralize ----

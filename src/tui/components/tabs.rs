@@ -8,8 +8,9 @@ use ratatui::{
     widgets::Paragraph,
 };
 
+use crate::core::event::{EventResult, InputEvent, InputKey};
 use crate::core::model::component_context::ComponentContext;
-use crate::core::protocol::common_types::DynamicString;
+use crate::core::protocol::common_types::{DynamicNumber, DynamicString};
 use crate::tui::component_impl::TuiComponent;
 
 /// Tab entry deserialized from the `tabs` property.
@@ -24,7 +25,8 @@ struct TabEntry {
 /// Renders a horizontal row of tab titles with the active tab highlighted,
 /// and the active tab's child content below the tab bar.
 ///
-/// Since `TuiComponent::render` is stateless, the active tab is always index 0.
+/// The active tab index is read from the `activeTab` property (a `DynamicNumber`).
+/// Arrow keys cycle through tabs and write the new index back via `EventResult::DataUpdate`.
 pub struct TabsComponent;
 
 impl TuiComponent for TabsComponent {
@@ -53,6 +55,13 @@ impl TuiComponent for TabsComponent {
             return;
         }
 
+        // Resolve active tab index from the `activeTab` property.
+        let active_tab: usize = comp_model
+            .get_property::<DynamicNumber>("activeTab")
+            .map(|dn| ctx.data_context.resolve_dynamic_number(&dn) as usize)
+            .unwrap_or(0)
+            .min(tabs.len() - 1);
+
         // Split area: 3 rows for tab bar, rest for content.
         let chunks = Layout::vertical([
             Constraint::Length(3),
@@ -69,7 +78,7 @@ impl TuiComponent for TabsComponent {
             .enumerate()
             .flat_map(|(i, tab)| {
                 let title = ctx.data_context.resolve_dynamic_string(&tab.title);
-                let style = if i == 0 {
+                let style = if i == active_tab {
                     Style::default()
                         .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD)
@@ -89,9 +98,53 @@ impl TuiComponent for TabsComponent {
         let tab_bar = Paragraph::new(Line::from(spans));
         frame.render_widget(tab_bar, tab_bar_area);
 
-        // Render the active tab's child (always index 0).
+        // Render the active tab's child.
         if content_area.width > 0 && content_area.height > 0 {
-            render_child(&tabs[0].child, content_area, frame, "");
+            render_child(&tabs[active_tab].child, content_area, frame, "");
         }
+    }
+
+    fn handle_event(
+        &self,
+        ctx: &ComponentContext,
+        event: &crate::core::event::InputEvent,
+    ) -> Option<crate::core::event::EventResult> {
+        let comp_model = ctx.components.get(&ctx.component_id)?;
+        let tabs: Vec<TabEntry> = comp_model.get_property("tabs")?;
+        if tabs.is_empty() {
+            return None;
+        }
+
+        let active_tab_dn = comp_model.get_property::<DynamicNumber>("activeTab")?;
+        let binding = match &active_tab_dn {
+            DynamicNumber::Binding(b) => b.clone(),
+            _ => return None,
+        };
+
+        let current = ctx
+            .data_context
+            .resolve_dynamic_number(&active_tab_dn) as usize;
+        let current = current.min(tabs.len() - 1);
+
+        let new_idx = match event {
+            InputEvent::KeyPress {
+                key: InputKey::Right,
+            } => (current + 1) % tabs.len(),
+            InputEvent::KeyPress {
+                key: InputKey::Left,
+            } => {
+                if current == 0 {
+                    tabs.len() - 1
+                } else {
+                    current - 1
+                }
+            }
+            _ => return None,
+        };
+
+        Some(EventResult::DataUpdate {
+            path: binding.path.clone(),
+            value: serde_json::json!(new_idx),
+        })
     }
 }

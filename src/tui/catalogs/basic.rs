@@ -22,7 +22,7 @@ use crate::tui::components::text::TextComponent;
 use crate::tui::components::text_field::TextFieldComponent;
 use crate::tui::components::video::VideoComponent;
 
-/// Build the basic catalog with all 14 functions.
+/// Build the basic catalog with all 14 functions and 18 components.
 pub fn build_basic_catalog() -> Catalog {
     let mut catalog =
         Catalog::new("https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json");
@@ -30,6 +30,24 @@ pub fn build_basic_catalog() -> Catalog {
         catalog = catalog.with_function(func);
     }
     catalog
+        .with_component(Box::new(TextComponent))
+        .with_component(Box::new(RowComponent))
+        .with_component(Box::new(ColumnComponent))
+        .with_component(Box::new(ButtonComponent))
+        .with_component(Box::new(TextFieldComponent))
+        .with_component(Box::new(CardComponent))
+        .with_component(Box::new(DividerComponent))
+        .with_component(Box::new(ListComponent))
+        .with_component(Box::new(CheckBoxComponent))
+        .with_component(Box::new(IconComponent))
+        .with_component(Box::new(TabsComponent))
+        .with_component(Box::new(ModalComponent))
+        .with_component(Box::new(SliderComponent))
+        .with_component(Box::new(ChoicePickerComponent))
+        .with_component(Box::new(DateTimeInputComponent))
+        .with_component(Box::new(ImageComponent))
+        .with_component(Box::new(VideoComponent))
+        .with_component(Box::new(AudioPlayerComponent))
 }
 
 /// Build the component registry with all 18 basic catalog components.

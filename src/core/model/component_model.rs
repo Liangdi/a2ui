@@ -87,6 +87,13 @@ impl ComponentModel {
             .get("checks")
             .and_then(|v| serde_json::from_value(v.clone()).ok())
     }
+
+    /// Get the accessibility attributes for this component.
+    pub fn accessibility(&self) -> Option<crate::core::protocol::common_types::AccessibilityAttributes> {
+        self.properties
+            .get("accessibility")
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+    }
 }
 
 #[cfg(test)]
