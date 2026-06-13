@@ -24,6 +24,7 @@ impl TuiComponent for ModalComponent {
         area: Rect,
         frame: &mut Frame,
         render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
@@ -51,5 +52,20 @@ impl TuiComponent for ModalComponent {
                 }
             }
         }
+    }
+
+    fn natural_height(
+        &self,
+        ctx: &ComponentContext,
+        available_width: u16,
+        measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
+    ) -> Option<u16> {
+        let comp_model = ctx.components.get(&ctx.component_id)?;
+        let is_open = comp_model
+            .get_property::<DynamicBoolean>("isOpen")
+            .map(|db| ctx.data_context.resolve_dynamic_boolean(&db))
+            .unwrap_or(false);
+        let child_id = comp_model.get_property::<String>(if is_open { "content" } else { "trigger" })?;
+        measure_child(&child_id, "", available_width)
     }
 }

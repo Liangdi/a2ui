@@ -31,19 +31,15 @@ impl TuiComponent for ButtonComponent {
         area: Rect,
         frame: &mut Frame,
         render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
             None => return,
         };
 
-        // Apply default 1-cell margin on all sides.
-        let inner = Rect {
-            x: area.x + 1,
-            y: area.y + 1,
-            width: area.width.saturating_sub(2),
-            height: area.height.saturating_sub(2),
-        };
+        // Apply default 1-cell margin on all sides (never collapses to zero).
+        let inner = crate::tui::layout_engine::padded_content(area);
 
         if inner.width == 0 || inner.height == 0 {
             return;
@@ -114,6 +110,27 @@ impl TuiComponent for ButtonComponent {
                 let widget = ratatui::widgets::Paragraph::new(text).style(final_style);
                 frame.render_widget(widget, child_area);
             }
+        }
+    }
+
+    fn natural_height(
+        &self,
+        ctx: &ComponentContext,
+        _available_width: u16,
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
+    ) -> Option<u16> {
+        // The render does `inner = area.shrink(1)` (2-cell margin). The default
+        // variant additionally draws `Block::bordered()` (2-cell border), so its
+        // single content line needs area.height - 4 >= 1 → 5. The primary /
+        // borderless variants use `Borders::NONE`, so they only need margin → 3.
+        let comp_model = match ctx.components.get(&ctx.component_id) {
+            Some(m) => m,
+            None => return Some(3),
+        };
+        let variant: Option<String> = comp_model.get_property("variant");
+        match variant.as_deref() {
+            Some("primary") | Some("borderless") => Some(3),
+            _ => Some(5),
         }
     }
 

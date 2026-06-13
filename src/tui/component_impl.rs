@@ -22,13 +22,41 @@ pub trait TuiComponent: Send + Sync + 'static {
     /// - `area` is the allocated area for this component.
     /// - `frame` is the ratatui frame to render into.
     /// - `render_child` is a closure to recursively render a child component by ID.
+    /// - `measure_child` is a closure to ask a child for its natural content height
+    ///   given an available width, mirroring `render_child`'s `(id, base_path, …)`
+    ///   shape so template children measure against their own data path.
     fn render(
         &self,
         ctx: &ComponentContext,
         area: Rect,
         frame: &mut Frame,
         render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
+        measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
     );
+
+    /// The intrinsic content height of this component **including its own chrome**
+    /// (margins/borders), given `available_width` cells.
+    ///
+    /// `measure_child` lets container components measure their own children to sum
+    /// (Column/vertical-List) or max (Row) their natural heights. Leaf components
+    /// ignore it.
+    ///
+    /// Returning `None` means "no opinion" — containers treat the component as a
+    /// legacy fill participant (it gets an equal/weighted share of the available
+    /// space, exactly as before this measure pass existed). Leaf/content components
+    /// override this to return a content-driven height so containers can reserve
+    /// only as much vertical space as the content actually needs.
+    ///
+    /// The default `None` keeps unconverted components behaving exactly as today,
+    /// so migration is gradual and regression-free.
+    fn natural_height(
+        &self,
+        _ctx: &ComponentContext,
+        _available_width: u16,
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
+    ) -> Option<u16> {
+        None
+    }
 
     /// Handle an input event directed at this component.
     ///
@@ -100,6 +128,7 @@ mod tests {
             _area: Rect,
             _frame: &mut Frame,
             _render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
+            _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
         ) {
         }
     }

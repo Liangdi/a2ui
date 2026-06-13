@@ -74,6 +74,7 @@ impl TuiComponent for ProgressMeterComponent {
         area: ratatui::layout::Rect,
         frame: &mut Frame,
         _render_child: &mut dyn FnMut(&str, ratatui::layout::Rect, &mut Frame, &str),
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
     ) {
         let Some(comp_model) = ctx.components.get(&ctx.component_id) else {
             return;

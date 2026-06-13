@@ -36,6 +36,7 @@ impl TuiComponent for GenericComponent {
         area: Rect,
         frame: &mut Frame,
         render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
@@ -110,6 +111,23 @@ impl TuiComponent for GenericComponent {
                 }
             }
         }
+    }
+
+    fn natural_height(
+        &self,
+        ctx: &ComponentContext,
+        _available_width: u16,
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
+    ) -> Option<u16> {
+        let comp_model = ctx.components.get(&ctx.component_id)?;
+        let prop_count = comp_model.properties.len().max(1) as u16;
+        let has_children = comp_model.child().is_some()
+            || matches!(comp_model.children(), Some(crate::core::protocol::common_types::ChildList::Static(v)) if !v.is_empty());
+        let mut h = prop_count.saturating_add(2);
+        if has_children {
+            h = h.saturating_add(1);
+        }
+        Some(h)
     }
 }
 

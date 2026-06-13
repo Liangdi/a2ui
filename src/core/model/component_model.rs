@@ -81,6 +81,18 @@ impl ComponentModel {
         self.properties.get("weight").and_then(|v| v.as_f64())
     }
 
+    /// Get the `minHeight` property — a total-footprint height floor (incl. margins/borders).
+    ///
+    /// Used by the measure pass to enforce a minimum vertical size regardless of the
+    /// component's natural content height. CamelCase key matches the existing protocol
+    /// convention (`activeTab`, `enableDate`, `displayStyle`).
+    pub fn min_height(&self) -> Option<u16> {
+        self.properties
+            .get("minHeight")
+            .and_then(|v| v.as_f64())
+            .map(|f| f.round().max(0.0) as u16)
+    }
+
     /// Get the `checks` property.
     pub fn checks(&self) -> Option<Vec<crate::core::protocol::common_types::CheckRule>> {
         self.properties

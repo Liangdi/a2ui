@@ -30,6 +30,7 @@ impl TuiComponent for VideoComponent {
         area: Rect,
         frame: &mut Frame,
         _render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
@@ -74,5 +75,16 @@ impl TuiComponent for VideoComponent {
             Style::default().fg(Color::DarkGray),
         )));
         frame.render_widget(paragraph, inner);
+    }
+
+    fn natural_height(
+        &self,
+        _ctx: &ComponentContext,
+        _available_width: u16,
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
+    ) -> Option<u16> {
+        // Video scales to fit its area; no intrinsic height — authors grow it
+        // with `weight`.
+        None
     }
 }

@@ -40,19 +40,15 @@ impl TuiComponent for ChoicePickerComponent {
         area: Rect,
         frame: &mut Frame,
         _render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
             None => return,
         };
 
-        // Apply default 1-cell margin on all sides.
-        let inner = Rect {
-            x: area.x + 1,
-            y: area.y + 1,
-            width: area.width.saturating_sub(2),
-            height: area.height.saturating_sub(2),
-        };
+        // Apply default 1-cell margin on all sides (never collapses to zero).
+        let inner = crate::tui::layout_engine::padded_content(area);
 
         if inner.width == 0 || inner.height == 0 {
             return;
@@ -194,6 +190,35 @@ impl TuiComponent for ChoicePickerComponent {
         } else {
             frame.render_widget(paragraph, inner);
         }
+    }
+
+    fn natural_height(
+        &self,
+        ctx: &ComponentContext,
+        _available_width: u16,
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
+    ) -> Option<u16> {
+        let comp_model = ctx.components.get(&ctx.component_id)?;
+
+        // Resolve label.
+        let label = match comp_model.get_property::<DynamicString>("label") {
+            Some(ds) => ctx.data_context.resolve_dynamic_string(&ds),
+            None => String::new(),
+        };
+
+        // Resolve options.
+        let options: Vec<ChoiceOption> = comp_model.get_property("options")?;
+
+        // Determine display style.
+        let display_style: Option<String> = comp_model.get_property("displayStyle");
+        let is_chips = display_style.as_deref() == Some("chips");
+
+        let lines = (if !label.is_empty() { 1 } else { 0 })
+            + (if is_chips { 1 } else { options.len() });
+
+        let is_focused = ctx.focused_id.as_deref() == Some(ctx.component_id.as_str());
+
+        Some((lines as u16).saturating_add(2).saturating_add(if is_focused { 2 } else { 0 }))
     }
 
     fn handle_event(

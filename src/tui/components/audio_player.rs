@@ -74,6 +74,7 @@ impl TuiComponent for AudioPlayerComponent {
         area: Rect,
         frame: &mut Frame,
         _render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
@@ -124,6 +125,17 @@ impl TuiComponent for AudioPlayerComponent {
         }
 
         render_placeholder(&description, &display, inner, frame);
+    }
+
+    fn natural_height(
+        &self,
+        _ctx: &ComponentContext,
+        _available_width: u16,
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
+    ) -> Option<u16> {
+        // Deterministic floor; the full player UI only draws >=4 rows when
+        // there is room, so 3 is a safe intrinsic floor.
+        Some(3)
     }
 
     /// Keyboard control of the live player (feature-gated). Without the

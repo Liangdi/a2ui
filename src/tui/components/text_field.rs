@@ -38,19 +38,15 @@ impl TuiComponent for TextFieldComponent {
         area: Rect,
         frame: &mut Frame,
         _render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
             None => return,
         };
 
-        // Apply default 1-cell margin on all sides.
-        let inner = Rect {
-            x: area.x + 1,
-            y: area.y + 1,
-            width: area.width.saturating_sub(2),
-            height: area.height.saturating_sub(2),
-        };
+        // Apply default 1-cell margin on all sides (never collapses to zero).
+        let inner = crate::tui::layout_engine::padded_content(area);
 
         if inner.width == 0 || inner.height == 0 {
             return;
@@ -123,6 +119,18 @@ impl TuiComponent for TextFieldComponent {
         };
         let paragraph = Paragraph::new(Line::from(Span::styled(display_text, paragraph_style)));
         frame.render_widget(paragraph, content_area);
+    }
+
+    fn natural_height(
+        &self,
+        _ctx: &ComponentContext,
+        _available_width: u16,
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
+    ) -> Option<u16> {
+        // 1 input line + 2-cell margin + 2-cell border = 5. The render does
+        // `inner = area.shrink(1)` (margin) then `Block::bordered()` (border), so a
+        // single content line needs area.height - 4 >= 1 → minimum 5 rows.
+        Some(5)
     }
 
     fn handle_event(

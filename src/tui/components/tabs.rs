@@ -40,6 +40,7 @@ impl TuiComponent for TabsComponent {
         area: Rect,
         frame: &mut Frame,
         render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
@@ -102,6 +103,29 @@ impl TuiComponent for TabsComponent {
         if content_area.width > 0 && content_area.height > 0 {
             render_child(&tabs[active_tab].child, content_area, frame, "");
         }
+    }
+
+    fn natural_height(
+        &self,
+        ctx: &ComponentContext,
+        available_width: u16,
+        measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
+    ) -> Option<u16> {
+        let comp_model = ctx.components.get(&ctx.component_id)?;
+        let tabs: Vec<TabEntry> = comp_model.get_property("tabs")?;
+        if tabs.is_empty() {
+            return None;
+        }
+
+        // Resolve active tab index from the `activeTab` property.
+        let active_tab: usize = comp_model
+            .get_property::<DynamicNumber>("activeTab")
+            .map(|dn| ctx.data_context.resolve_dynamic_number(&dn) as usize)
+            .unwrap_or(0)
+            .min(tabs.len() - 1);
+
+        let child_h = measure_child(&tabs[active_tab].child, "", available_width)?;
+        Some(child_h.saturating_add(3))
     }
 
     fn handle_event(

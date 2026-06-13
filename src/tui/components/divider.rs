@@ -28,19 +28,15 @@ impl TuiComponent for DividerComponent {
         area: Rect,
         frame: &mut Frame,
         _render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
             None => return,
         };
 
-        // Apply default 1-cell margin on all sides.
-        let inner = Rect {
-            x: area.x + 1,
-            y: area.y + 1,
-            width: area.width.saturating_sub(2),
-            height: area.height.saturating_sub(2),
-        };
+        // Apply default 1-cell margin on all sides (never collapses to zero).
+        let inner = crate::tui::layout_engine::padded_content(area);
 
         if inner.width == 0 || inner.height == 0 {
             return;
@@ -62,6 +58,23 @@ impl TuiComponent for DividerComponent {
                 let paragraph = Paragraph::new(line).style(dim_style);
                 frame.render_widget(paragraph, inner);
             }
+        }
+    }
+
+    fn natural_height(
+        &self,
+        ctx: &ComponentContext,
+        _available_width: u16,
+        _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
+    ) -> Option<u16> {
+        // Read the axis property: a vertical divider fills its column (no
+        // intrinsic height); a horizontal divider is a single line + 2-cell
+        // margin.
+        let comp_model = ctx.components.get(&ctx.component_id)?;
+        let axis: Option<String> = comp_model.get_property("axis");
+        match axis.as_deref() {
+            Some("vertical") => None,
+            _ => Some(3),
         }
     }
 }

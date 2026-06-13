@@ -51,11 +51,47 @@ impl<'a> SurfaceRenderer<'a> {
             return;
         }
 
+        // Root sizing: layout containers (Column/Row/List) fill the viewport so a
+        // full-screen app just uses one of them as root; every other (content)
+        // component — Card, Text, TextField, … — shrink-wraps to its natural height
+        // and centers vertically. Full width is kept (natural width is not measured).
+        let root_is_container = matches!(
+            components.get("root").map(|m| m.component_type.as_str()),
+            Some("Column") | Some("Row") | Some("List")
+        );
+        let root_area = if root_is_container {
+            area
+        } else {
+            match measure_node(
+                "root",
+                surface_id,
+                "",
+                area.width,
+                &data_model,
+                &components,
+                self.registry,
+                &self.catalog.functions,
+                focused_id,
+            ) {
+                Some(h) => {
+                    let h = h.min(area.height);
+                    let y = area.y + area.height.saturating_sub(h) / 2;
+                    Rect {
+                        x: area.x,
+                        y,
+                        width: area.width,
+                        height: h,
+                    }
+                }
+                None => area,
+            }
+        };
+
         render_node(
             "root",
             surface_id,
             "",
-            area,
+            root_area,
             frame,
             &data_model,
             &components,
@@ -155,16 +191,252 @@ fn render_node(
         );
     };
 
+    // The measure_child closure re-enters measure_node so containers can query a
+    // child's natural height while laying out (render) and while measuring self.
+    let mut measure_child = |child_id: &str, child_base_path: &str, available_width: u16| -> Option<u16> {
+        measure_node(
+            child_id,
+            surface_id,
+            child_base_path,
+            available_width,
+            data_model,
+            components,
+            registry,
+            functions,
+            focused_id,
+        )
+    };
+
     let tui_comp = match registry.get(&comp_model.component_type) {
         Some(c) => c,
         None => {
             // No native renderer for this component type (e.g. a component
             // declared in an inline catalog). Fall back to the generic renderer
             // so the tree is still visible instead of a static "unknown" stub.
-            super::components::GenericComponent.render(&ctx, area, frame, &mut render_child);
+            super::components::GenericComponent.render(
+                &ctx,
+                area,
+                frame,
+                &mut render_child,
+                &mut measure_child,
+            );
             return;
         }
     };
 
-    tui_comp.render(&ctx, area, frame, &mut render_child);
+    tui_comp.render(&ctx, area, frame, &mut render_child, &mut measure_child);
+}
+
+/// Measure a single component node's natural height (measure pass counterpart of
+/// [`render_node`]). Builds a child context, dispatches to the registered
+/// [`TuiComponent`](super::component_impl::TuiComponent)'s `natural_height`, and
+/// applies the component's optional `minHeight` floor centrally. Returns `None`
+/// for unknown component types (treated as legacy fill by callers).
+fn measure_node(
+    component_id: &str,
+    surface_id: &str,
+    base_path: &str,
+    available_width: u16,
+    data_model: &DataModel,
+    components: &SurfaceComponentsModel,
+    registry: &ComponentRegistry,
+    functions: &HashMap<String, Box<dyn FunctionImplementation>>,
+    focused_id: Option<&str>,
+) -> Option<u16> {
+    let comp_model = components.get(component_id)?;
+    let ctx = ComponentContext::new(
+        component_id.to_string(),
+        surface_id.to_string(),
+        data_model,
+        components,
+        functions,
+        base_path,
+        focused_id.map(|s| s.to_string()),
+    );
+
+    let tui_comp = match registry.get(&comp_model.component_type) {
+        Some(c) => c,
+        None => return None,
+    };
+
+    let mut measure_child = |child_id: &str, child_base_path: &str, width: u16| -> Option<u16> {
+        measure_node(
+            child_id,
+            surface_id,
+            child_base_path,
+            width,
+            data_model,
+            components,
+            registry,
+            functions,
+            focused_id,
+        )
+    };
+
+    let mut height = tui_comp.natural_height(&ctx, available_width, &mut measure_child);
+
+    // Central minHeight floor (total footprint, incl. margins/borders).
+    if let Some(min) = comp_model.min_height() {
+        height = Some(height.unwrap_or(0).max(min));
+    }
+    height
+}
+
+#[cfg(test)]
+mod render_tests {
+    use super::*;
+    use crate::core::message_processor::MessageProcessor;
+    use crate::tui::catalogs::basic::{build_basic_catalog, build_basic_registry};
+    use ratatui::backend::TestBackend;
+
+    /// Build a surface whose `root` is described by `components_json` (an array of
+    /// component objects), then render it into a fresh `cols x rows` TestBackend
+    /// buffer and return the buffer.
+    fn render_to_buffer(components_json: serde_json::Value, cols: u16, rows: u16) -> ratatui::buffer::Buffer {
+        let registry = build_basic_registry();
+        let mut processor = MessageProcessor::new(vec![build_basic_catalog()]);
+
+        let create = serde_json::json!({
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "test",
+                "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                "dataModel": {}
+            }
+        });
+        processor
+            .process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
+        let update = serde_json::json!({
+            "version": "v1.0",
+            "updateComponents": { "surfaceId": "test", "components": components_json }
+        });
+        processor
+            .process_message(MessageProcessor::parse_message(&update.to_string()).unwrap())
+            .unwrap();
+
+        let surface = processor.model.get_surface("test").expect("surface exists");
+        let backend = TestBackend::new(cols, rows);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        let render_catalog = Catalog::new("placeholder");
+        terminal
+            .draw(|frame| {
+                let renderer = SurfaceRenderer::new(surface, &registry, &render_catalog);
+                renderer.render(frame, frame.area(), None);
+            })
+            .unwrap();
+        terminal.backend().buffer().clone()
+    }
+
+    /// True if every cell in row `y` (across `width` columns) is a blank/space.
+    fn row_is_blank(buf: &ratatui::buffer::Buffer, y: u16, width: u16) -> bool {
+        (0..width).all(|x| buf[(x, y)].symbol() == " ")
+    }
+
+    /// Count rows that contain any non-blank content.
+    fn non_blank_row_count(buf: &ratatui::buffer::Buffer, cols: u16, rows: u16) -> u16 {
+        (0..rows).filter(|&y| !row_is_blank(buf, y, cols)).count() as u16
+    }
+
+    #[test]
+    fn card_root_does_not_fill_screen() {
+        // Card > Column > [Text, Text]. Natural height = 6 (two texts) + 4 (card chrome) = 10.
+        // In a 24-tall area it shrink-wraps to ~10 and centers → top and bottom edges blank.
+        let components = serde_json::json!([
+            { "id": "root", "component": "Card", "child": "inner" },
+            { "id": "inner", "component": "Column", "children": ["a", "b"] },
+            { "id": "a", "component": "Text", "text": "Title" },
+            { "id": "b", "component": "Text", "text": "Body" }
+        ]);
+        let buf = render_to_buffer(components, 40, 24);
+
+        // Before the measure pass the Card filled all 24 rows; now the top and bottom
+        // edge rows must be blank (card is centered & content-sized).
+        assert!(row_is_blank(&buf, 0, 40), "top edge should be blank — card shrink-wrapped");
+        assert!(row_is_blank(&buf, 23, 40), "bottom edge should be blank — card shrink-wrapped");
+        // And the content occupies only a fraction of the screen.
+        let used = non_blank_row_count(&buf, 40, 24);
+        assert!(used <= 12, "card content should occupy <=12 rows, used {used}");
+    }
+
+    #[test]
+    fn textfield_in_column_renders_a_proper_box() {
+        // Column > [TextField]. The TextField draws a margin + a bordered block, so it
+        // needs ≥5 rows to show its top border, content, and bottom border.
+        // Before the height fix it collapsed to 1-2 lines (border only); now it must
+        // render a real 3-line box (top border / content / bottom border).
+        let components = serde_json::json!([
+            { "id": "root", "component": "Column", "children": ["field"] },
+            { "id": "field", "component": "TextField", "label": "Username", "value": "alice" }
+        ]);
+        let buf = render_to_buffer(components, 40, 24);
+
+        let used = non_blank_row_count(&buf, 40, 24);
+        assert!(
+            (3..=6).contains(&used),
+            "TextField should render a ~3-line box (border/content/border), used {used} rows"
+        );
+        // The box must show both a top and bottom horizontal border (`─`).
+        let border_rows: Vec<u16> = (0..24)
+            .filter(|&y| (0..40).any(|x| buf[(x, y)].symbol() == "─"))
+            .collect();
+        assert!(
+            border_rows.len() >= 2,
+            "TextField box should have ≥2 border rows, found {border_rows:?}"
+        );
+    }
+
+    #[test]
+    fn column_root_fills_viewport_vertically() {
+        // A Column root fills the viewport (unlike a Card root). With justify=stretch,
+        // two Text children are spread across the full height: one near the top, one
+        // near the bottom — proving the column did not compact to the center.
+        let components = serde_json::json!([
+            { "id": "root", "component": "Column", "children": ["top", "bottom"], "justify": "stretch" },
+            { "id": "top", "component": "Text", "text": "TOP" },
+            { "id": "bottom", "component": "Text", "text": "BOTTOM" }
+        ]);
+        let buf = render_to_buffer(components, 40, 24);
+
+        let top_filled = (0..6u16).any(|y| !row_is_blank(&buf, y, 40));
+        let bottom_filled = (12..24u16).any(|y| !row_is_blank(&buf, y, 40));
+        assert!(top_filled, "first child should render near the top of a filling column");
+        assert!(bottom_filled, "second child should render near the bottom of a filling column");
+    }
+
+    #[test]
+    fn login_form_inputs_render_as_full_boxes() {
+        // Mirrors examples/04_login_form.rs: Card > Column > [Text, TextField, TextField,
+        // Button]. Before the height fix the inputs collapsed to 1-2 lines; now each
+        // bordered input/button must render a real box (top + bottom border rows).
+        let components = serde_json::json!([
+            { "id": "root", "component": "Card", "child": "form" },
+            { "id": "form", "component": "Column", "children": ["title", "user", "pass", "submit"] },
+            { "id": "title", "component": "Text", "text": "Welcome Back" },
+            { "id": "user", "component": "TextField", "label": "Username", "value": "" },
+            { "id": "pass", "component": "TextField", "label": "Password", "value": "" },
+            { "id": "submit", "component": "Button", "child": "submit_label" },
+            { "id": "submit_label", "component": "Text", "text": "Sign In" }
+        ]);
+        let buf = render_to_buffer(components, 80, 24);
+
+        // The Button's child text "Sign In" must be visible — it only renders when the
+        // Button gets enough height (≥5) to show border + content. Before the
+        // nested-margin fix the label vanished.
+        let mut screen = String::new();
+        for y in 0..24u16 {
+            for x in 0..80u16 {
+                screen.push(buf[(x, y)].symbol().chars().next().unwrap_or(' '));
+            }
+        }
+        assert!(screen.contains("Sign In"), "Button label 'Sign In' should render");
+
+        let border_rows = (0..24u16)
+            .filter(|&y| (0..80u16).any(|x| buf[(x, y)].symbol() == "─"))
+            .count();
+        assert!(
+            border_rows >= 8,
+            "2 TextFields + Button + Card ⇒ ≥8 border rows, found {border_rows}"
+        );
+    }
 }
