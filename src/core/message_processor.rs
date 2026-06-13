@@ -697,9 +697,7 @@ mod tests {
     fn test_e2e_all_minimal_samples_load_and_parse() {
         use crate::gallery::sample_loader;
 
-        let samples = sample_loader::load_samples_from_dir(
-            "/home/liangdi/workspace/ai/a2ui/specification/v1_0/catalogs/minimal/examples",
-        );
+        let samples = sample_loader::load_samples("v1_0/catalogs/minimal/examples");
 
         assert!(samples.len() >= 7, "should load at least 7 minimal samples, got {}", samples.len());
 
@@ -771,9 +769,7 @@ mod tests {
     fn test_e2e_all_basic_samples_load_and_parse() {
         use crate::gallery::sample_loader;
 
-        let samples = sample_loader::load_samples_from_dir(
-            "/home/liangdi/workspace/ai/a2ui/specification/v1_0/catalogs/basic/examples",
-        );
+        let samples = sample_loader::load_samples("v1_0/catalogs/basic/examples");
 
         assert!(
             samples.len() >= 30,

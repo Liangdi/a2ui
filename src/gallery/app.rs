@@ -28,44 +28,19 @@ use crate::tui::component_impl::ComponentRegistry;
 use crate::tui::focus_manager::FocusManager;
 use crate::tui::surface::SurfaceRenderer;
 
-/// Fallback specification root if neither `A2UI_SPEC_DIR` nor
-/// `CARGO_MANIFEST_DIR`-relative resolution applies.
-const FALLBACK_SPEC_DIR: &str = "/home/liangdi/workspace/ai/a2ui/specification";
-
-/// Resolve the specification root directory.
+/// Load the sample examples for a catalog (e.g. `"minimal"`, `"basic"`).
 ///
-/// Resolution order:
-/// 1. `A2UI_SPEC_DIR` environment variable, if set.
-/// 2. The in-repo nested spec at `{manifest_dir}/a2ui/specification`, if it exists.
-/// 3. A sibling-layout spec at `{manifest_dir}/../specification`, if it exists.
-/// 4. The `FALLBACK_SPEC_DIR` constant above.
-///
-/// Several candidate locations are probed because the spec directory is not
-/// tracked at a single canonical path; [`sample_dir`] consumers tolerate a
-/// missing directory, so probing is harmless.
-fn spec_root_dir() -> String {
-    if let Ok(dir) = std::env::var("A2UI_SPEC_DIR") {
-        return dir;
+/// Uses the embedded spec tree ([`sample_loader::load_samples`]) by default so
+/// the binary is self-contained. If `A2UI_SPEC_DIR` is set, reads from that
+/// on-disk directory instead — a dev override for testing spec changes without
+/// recompiling.
+fn load_catalog_samples(catalog: &str) -> Vec<Sample> {
+    let subpath = format!("v1_0/catalogs/{catalog}/examples");
+    if let Ok(root) = std::env::var("A2UI_SPEC_DIR") {
+        sample_loader::load_samples_from_dir(&format!("{root}/{subpath}"))
+    } else {
+        sample_loader::load_samples(&subpath)
     }
-    let manifest_dir = env!("CARGO_MANIFEST_DIR");
-    for candidate in [
-        format!("{manifest_dir}/a2ui/specification"),
-        format!("{manifest_dir}/../specification"),
-    ] {
-        if std::path::Path::new(&candidate).is_dir() {
-            return candidate;
-        }
-    }
-    FALLBACK_SPEC_DIR.to_string()
-}
-
-/// Resolve the sample examples directory for a catalog (e.g. `"minimal"`, `"basic"`).
-fn sample_dir(catalog: &str) -> String {
-    format!(
-        "{}/v1_0/catalogs/{}/examples",
-        spec_root_dir(),
-        catalog
-    )
 }
 
 /// Application mode.
@@ -132,8 +107,8 @@ impl GalleryApp {
         let processor = MessageProcessor::new(vec![basic_catalog, minimal_catalog]);
 
         // Load samples from both minimal and basic directories.
-        let mut samples = sample_loader::load_samples_from_dir(&sample_dir("minimal"));
-        samples.extend(sample_loader::load_samples_from_dir(&sample_dir("basic")));
+        let mut samples = load_catalog_samples("minimal");
+        samples.extend(load_catalog_samples("basic"));
 
         let mut list_state = ListState::default();
         if !samples.is_empty() {

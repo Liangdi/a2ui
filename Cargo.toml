@@ -28,6 +28,9 @@ regex = "1"
 unicode-width = "0.2"
 ratatui-image = "11"
 image = "0.25"
+# Embed the A2UI specification tree into the binary at compile time so the
+# gallery is self-contained and distributable (no on-disk spec dir needed).
+include_dir = "0.7"
 rodio = { version = "0.22", optional = true }
 
 # The audio example is only built when its feature is enabled, so the default
@@ -40,3 +43,20 @@ name = "13_image"
 [[example]]
 name = "14_audio"
 required-features = ["audio"]
+
+# --- Release profile: optimize for binary size --------------------------------
+# The gallery embeds the full spec tree, so we trim the distributed binary.
+# `cargo build --release` applies these. Trade slower compile for a smaller,
+# self-contained executable.
+[profile.release]
+# "z" optimizes purely for size (smaller than "s", which keeps some speed).
+opt-level = "z"
+# Whole-program link-time optimization: eliminates dead code across crates.
+lto = true
+# One codegen unit → more inlining/dead-code elimination (slower compile).
+codegen-units = 1
+# Abort instead of unwind on panic: drops unwinding machinery. NOTE: panics no
+# longer unwind, so Drop destructors don't run during a panic.
+panic = "abort"
+# Strip debug symbols from the binary.
+strip = true
