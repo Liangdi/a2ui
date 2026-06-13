@@ -42,9 +42,7 @@ use ratatui::{
 };
 
 use a2ui::core::catalog::Catalog;
-use a2ui::core::event::{InputEvent, InputKey};
 use a2ui::core::message_processor::MessageProcessor;
-use a2ui::core::model::component_context::ComponentContext;
 use a2ui::tui::catalogs::basic::{build_basic_catalog, build_basic_registry};
 use a2ui::tui::focus_manager::FocusManager;
 
@@ -135,7 +133,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     KeyCode::Char('q') | KeyCode::Esc => break,
                     KeyCode::Tab => focus.focus_next(),
                     KeyCode::BackTab => focus.focus_prev(),
-                    code => dispatch_to_focused(&processor, &registry, &render_catalog, &focus, code),
+                    code => {
+                        a2ui::tui::interaction::handle_key(
+                            &mut processor,
+                            &registry,
+                            &render_catalog,
+                            &focus,
+                            code,
+                        );
+                    }
                 }
             }
         }
@@ -146,60 +152,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     execute!(stdout, LeaveAlternateScreen)?;
     println!("Goodbye! (played via the interactive AudioPlayer component)");
     Ok(())
-}
-
-/// Map a crossterm key to an A2UI `InputKey` and route it to the focused
-/// component's `handle_event` (mirrors the gallery app's dispatch). For the
-/// AudioPlayer this drives play/pause/seek/volume; the result is `Consumed`,
-/// which needs no further processing here.
-#[allow(clippy::too_many_arguments)]
-fn dispatch_to_focused(
-    processor: &MessageProcessor,
-    registry: &a2ui::tui::component_impl::ComponentRegistry,
-    render_catalog: &Catalog,
-    focus: &FocusManager,
-    code: KeyCode,
-) {
-    let input_key = match code {
-        KeyCode::Up => InputKey::Up,
-        KeyCode::Down => InputKey::Down,
-        KeyCode::Left => InputKey::Left,
-        KeyCode::Right => InputKey::Right,
-        KeyCode::Enter => InputKey::Enter,
-        KeyCode::Char(' ') => InputKey::Space,
-        KeyCode::Char(c) => InputKey::Char(c),
-        _ => return,
-    };
-    let event = InputEvent::KeyPress { key: input_key };
-
-    let Some(focused_id) = focus.focused_id().map(|s| s.to_string()) else {
-        return;
-    };
-    let Some(surface) = processor.model.surfaces().next() else {
-        return;
-    };
-
-    let comp_type = {
-        let components = surface.components.borrow();
-        match components.get(&focused_id) {
-            Some(m) => m.component_type.clone(),
-            None => return,
-        }
-    };
-    let Some(tui_comp) = registry.get(&comp_type) else {
-        return;
-    };
-
-    let data_model = surface.data_model.borrow();
-    let components = surface.components.borrow();
-    let ctx = ComponentContext::new(
-        focused_id.clone(),
-        surface.id.clone(),
-        &data_model,
-        &components,
-        &render_catalog.functions,
-        "",
-        Some(focused_id.clone()),
-    );
-    let _ = tui_comp.handle_event(&ctx, &event);
 }

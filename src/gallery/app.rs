@@ -28,13 +28,45 @@ use crate::tui::component_impl::ComponentRegistry;
 use crate::tui::focus_manager::FocusManager;
 use crate::tui::surface::SurfaceRenderer;
 
-/// Path to the minimal catalog sample JSON files.
-const MINIMAL_SAMPLE_DIR: &str =
-    "/home/liangdi/workspace/ai/a2ui/specification/v1_0/catalogs/minimal/examples";
+/// Fallback specification root if neither `A2UI_SPEC_DIR` nor
+/// `CARGO_MANIFEST_DIR`-relative resolution applies.
+const FALLBACK_SPEC_DIR: &str = "/home/liangdi/workspace/ai/a2ui/specification";
 
-/// Path to the basic catalog sample JSON files.
-const BASIC_SAMPLE_DIR: &str =
-    "/home/liangdi/workspace/ai/a2ui/specification/v1_0/catalogs/basic/examples";
+/// Resolve the specification root directory.
+///
+/// Resolution order:
+/// 1. `A2UI_SPEC_DIR` environment variable, if set.
+/// 2. The in-repo nested spec at `{manifest_dir}/a2ui/specification`, if it exists.
+/// 3. A sibling-layout spec at `{manifest_dir}/../specification`, if it exists.
+/// 4. The `FALLBACK_SPEC_DIR` constant above.
+///
+/// Several candidate locations are probed because the spec directory is not
+/// tracked at a single canonical path; [`sample_dir`] consumers tolerate a
+/// missing directory, so probing is harmless.
+fn spec_root_dir() -> String {
+    if let Ok(dir) = std::env::var("A2UI_SPEC_DIR") {
+        return dir;
+    }
+    let manifest_dir = env!("CARGO_MANIFEST_DIR");
+    for candidate in [
+        format!("{manifest_dir}/a2ui/specification"),
+        format!("{manifest_dir}/../specification"),
+    ] {
+        if std::path::Path::new(&candidate).is_dir() {
+            return candidate;
+        }
+    }
+    FALLBACK_SPEC_DIR.to_string()
+}
+
+/// Resolve the sample examples directory for a catalog (e.g. `"minimal"`, `"basic"`).
+fn sample_dir(catalog: &str) -> String {
+    format!(
+        "{}/v1_0/catalogs/{}/examples",
+        spec_root_dir(),
+        catalog
+    )
+}
 
 /// Application mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -100,8 +132,8 @@ impl GalleryApp {
         let processor = MessageProcessor::new(vec![basic_catalog, minimal_catalog]);
 
         // Load samples from both minimal and basic directories.
-        let mut samples = sample_loader::load_samples_from_dir(MINIMAL_SAMPLE_DIR);
-        samples.extend(sample_loader::load_samples_from_dir(BASIC_SAMPLE_DIR));
+        let mut samples = sample_loader::load_samples_from_dir(&sample_dir("minimal"));
+        samples.extend(sample_loader::load_samples_from_dir(&sample_dir("basic")));
 
         let mut list_state = ListState::default();
         if !samples.is_empty() {
@@ -238,20 +270,6 @@ impl GalleryApp {
         match code {
             KeyCode::Char('q') | KeyCode::Esc => {
                 self.mode = AppMode::SampleList;
-            }
-            KeyCode::Up | KeyCode::Char('k') => {
-                if self.selected_sample > 0 {
-                    self.selected_sample -= 1;
-                    self.list_state.select(Some(self.selected_sample));
-                    self.select_sample(self.selected_sample);
-                }
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                if !self.samples.is_empty() && self.selected_sample < self.samples.len() - 1 {
-                    self.selected_sample += 1;
-                    self.list_state.select(Some(self.selected_sample));
-                    self.select_sample(self.selected_sample);
-                }
             }
             KeyCode::Char('n') => {
                 // Process next message (stepper).

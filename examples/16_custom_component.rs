@@ -54,6 +54,7 @@ use a2ui::core::message_processor::MessageProcessor;
 use a2ui::core::model::component_context::ComponentContext;
 use a2ui::tui::catalogs::basic::{build_basic_catalog, build_basic_registry};
 use a2ui::tui::component_impl::{ComponentRegistry, TuiComponent};
+use a2ui::tui::interaction;
 
 // ─── The custom component ───────────────────────────────────────────────────
 
@@ -165,32 +166,19 @@ fn random_step() -> f64 {
     3.0 + (nanos % 10) as f64
 }
 
-/// Map a crossterm `KeyCode` to the framework-agnostic `InputKey`.
-fn map_key(code: KeyCode) -> Option<InputKey> {
-    match code {
-        KeyCode::Enter => Some(InputKey::Enter),
-        KeyCode::Tab => Some(InputKey::Tab),
-        KeyCode::Up => Some(InputKey::Up),
-        KeyCode::Down => Some(InputKey::Down),
-        KeyCode::Left => Some(InputKey::Left),
-        KeyCode::Right => Some(InputKey::Right),
-        KeyCode::Esc => Some(InputKey::Escape),
-        KeyCode::Char(' ') => Some(InputKey::Space),
-        KeyCode::Char(c) => Some(InputKey::Char(c)),
-        _ => None,
-    }
-}
-
 /// Dispatch a key directly to the `ProgressMeter` component, returning its
-/// result. This shows how to build a `ComponentContext` by hand and drive any
-/// component — the same path `SurfaceRenderer` uses internally.
+/// result. Unlike the focus-driven helpers in `interaction`, this targets a
+/// fixed component id by hand — there is no `FocusManager` here — so it builds
+/// the `ComponentContext` itself (the same path `SurfaceRenderer` uses
+/// internally). The `KeyCode → InputKey` mapping is shared via
+/// [`interaction::map_key_code`].
 fn dispatch_to_meter(
     code: KeyCode,
     surface: &a2ui::core::model::surface_model::SurfaceModel,
     registry: &ComponentRegistry,
     catalog: &Catalog,
 ) -> Option<EventResult> {
-    let key = map_key(code)?;
+    let key = interaction::map_key_code(code)?;
     let data_model = surface.data_model.borrow();
     let components = surface.components.borrow();
     let comp_model = components.get("meter")?;
@@ -325,21 +313,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     KeyCode::Char('q') => break,
                     other => {
                         // Dispatch to the ProgressMeter, then apply its
-                        // DataUpdate back through the processor.
+                        // DataUpdate back onto the data model via the shared
+                        // helper.
                         let result = processor
                             .model
                             .get_surface("demo")
                             .and_then(|s| dispatch_to_meter(other, s, &registry, &render_catalog));
-                        if let Some(EventResult::DataUpdate { path, value }) = result {
-                            let msg = serde_json::json!({
-                                "version": "v1.0",
-                                "updateDataModel": {
-                                    "surfaceId": "demo", "path": path, "value": value
-                                }
-                            });
-                            let _ = processor.process_message(
-                                MessageProcessor::parse_message(&msg.to_string()).unwrap(),
-                            );
+                        if let Some(result) = result {
+                            interaction::apply_event_result(&mut processor, result);
                         }
                     }
                 }

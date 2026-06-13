@@ -32,62 +32,10 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use a2ui::core::catalog::Catalog;
-use a2ui::core::event::{EventResult, InputEvent, InputKey};
 use a2ui::core::message_processor::MessageProcessor;
-use a2ui::core::model::component_context::ComponentContext;
 use a2ui::tui::catalogs::basic::{build_basic_catalog, build_basic_registry};
 use a2ui::tui::focus_manager::FocusManager;
-
-/// Map a crossterm `KeyCode` to the framework-agnostic `InputKey`.
-fn map_key(code: KeyCode) -> Option<InputKey> {
-    match code {
-        KeyCode::Enter => Some(InputKey::Enter),
-        KeyCode::Tab => Some(InputKey::Tab),
-        KeyCode::BackTab => Some(InputKey::BackTab),
-        KeyCode::Up => Some(InputKey::Up),
-        KeyCode::Down => Some(InputKey::Down),
-        KeyCode::Left => Some(InputKey::Left),
-        KeyCode::Right => Some(InputKey::Right),
-        KeyCode::Backspace => Some(InputKey::Backspace),
-        KeyCode::Delete => Some(InputKey::Delete),
-        KeyCode::Esc => Some(InputKey::Escape),
-        KeyCode::Char(' ') => Some(InputKey::Space),
-        KeyCode::Char(c) => Some(InputKey::Char(c)),
-        _ => None,
-    }
-}
-
-/// Dispatch a keyboard event to the focused component, returning its result.
-fn dispatch_to_focused(
-    code: KeyCode,
-    surface: &a2ui::core::model::surface_model::SurfaceModel,
-    registry: &a2ui::tui::component_impl::ComponentRegistry,
-    catalog: &Catalog,
-    focus_manager: &FocusManager,
-) -> Option<EventResult> {
-    let input_key = map_key(code)?;
-    if matches!(input_key, InputKey::Tab | InputKey::BackTab) {
-        return None;
-    }
-    let focused_id = focus_manager.focused_id()?.to_string();
-    let input_event = InputEvent::KeyPress { key: input_key };
-
-    let data_model = surface.data_model.borrow();
-    let components = surface.components.borrow();
-    let comp_model = components.get(&focused_id)?;
-    let tui_comp = registry.get(&comp_model.component_type)?;
-    let ctx = ComponentContext::new(
-        focused_id.clone(),
-        surface.id.clone(),
-        &data_model,
-        &components,
-        &catalog.functions,
-        "",
-        Some(focused_id.clone()),
-    );
-    tui_comp.handle_event(&ctx, &input_event)
-}
+use a2ui::tui::interaction;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let registry = build_basic_registry();
@@ -185,22 +133,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     KeyCode::Tab => focus_manager.focus_next(),
                     KeyCode::BackTab => focus_manager.focus_prev(),
                     other => {
-                        // Dispatch to the focused component, then apply its
-                        // DataUpdate back through the processor.
-                        let result = processor.model.get_surface("dt").and_then(|surface| {
-                            dispatch_to_focused(other, surface, &registry, &render_catalog, &focus_manager)
-                        });
-                        if let Some(EventResult::DataUpdate { path, value }) = result {
-                            let msg = serde_json::json!({
-                                "version": "v1.0",
-                                "updateDataModel": {
-                                    "surfaceId": "dt", "path": path, "value": value
-                                }
-                            });
-                            let _ = processor.process_message(
-                                MessageProcessor::parse_message(&msg.to_string()).unwrap(),
-                            );
-                        }
+                        // Map → dispatch to the focused component → apply its
+                        // DataUpdate back onto the data model, all in one call.
+                        interaction::handle_key(
+                            &mut processor,
+                            &registry,
+                            &render_catalog,
+                            &focus_manager,
+                            other,
+                        );
                     }
                 }
             }

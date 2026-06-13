@@ -1260,7 +1260,7 @@ mod tests {
         let f = FormatNumberFunction;
 
         let mut args = HashMap::new();
-        args.insert("value".into(), json!(3.14159));
+        args.insert("value".into(), json!(std::f64::consts::PI));
         args.insert("decimals".into(), json!(2));
         assert_eq!(f.execute(&args, &ctx).unwrap(), json!("3.14"));
     }

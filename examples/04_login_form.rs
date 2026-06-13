@@ -166,6 +166,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── 4. Interactive loop with keyboard focus navigation ───────────────
     loop {
+        // Snapshot the focused id so the renderer can highlight it (e.g. the
+        // TextField's yellow border). Bound before draw() to keep the borrow
+        // of focus_manager out of the closure's scope.
+        let focused = focus_manager.focused_id();
         terminal.draw(|frame| {
             let area = frame.area();
             let chunks = Layout::default()
@@ -177,7 +181,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let renderer = a2ui::tui::surface::SurfaceRenderer::new(
                     surface, &registry, &render_catalog,
                 );
-                renderer.render(frame, chunks[0], None);
+                renderer.render(frame, chunks[0], focused);
             }
 
             let help = " Tab: next field  Shift+Tab: prev field  q: quit ";
@@ -192,7 +196,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     KeyCode::Char('q') => break,
                     KeyCode::Tab => focus_manager.focus_next(),
                     KeyCode::BackTab => focus_manager.focus_prev(),
-                    _ => {}
+                    other => {
+                        a2ui::tui::interaction::handle_key(
+                            &mut processor,
+                            &registry,
+                            &render_catalog,
+                            &focus_manager,
+                            other,
+                        );
+                    }
                 }
             }
         }

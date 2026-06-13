@@ -262,30 +262,6 @@ fn scenario_default(sid: &str) -> Vec<serde_json::Value> {
 }
 
 // ---------------------------------------------------------------------------
-// Estimate how many terminal rows a surface needs
-// ---------------------------------------------------------------------------
-
-fn estimate_surface_height(processor: &MessageProcessor, surface_id: &str) -> u16 {
-    let surface = match processor.model.get_surface(surface_id) {
-        Some(s) => s,
-        None => return 2,
-    };
-    if !surface.has_root() {
-        return 2;
-    }
-    let components = surface.components.borrow();
-    let count = components.len() as u16;
-
-    // Count visual rows: leaf components (Text, Divider) = 1 row each.
-    // Cards add 2 border rows + 2 margin rows = 4 overhead.
-    // Container components (Column, Row) = 0 rows (layout only).
-    // We can't iterate individual component types, so use a heuristic:
-    // ~2 rows per component is reasonable (leaves=1, cards=4, containers=0).
-    // Weighted cards with many children need more, so add buffer.
-    (count * 2).max(4)
-}
-
-// ---------------------------------------------------------------------------
 // Rendering helpers
 // ---------------------------------------------------------------------------
 
@@ -446,7 +422,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .iter()
                 .map(|e| match e.role.as_str() {
                     "user" => 1,
-                    "ai" => estimate_surface_height(&processor, &e.surface_id) as usize,
+                    "ai" => {
+                        let w = chat_area.width.saturating_sub(1);
+                        match processor.model.get_surface(&e.surface_id) {
+                            Some(surface) if surface.has_root() => {
+                                a2ui::tui::surface::SurfaceRenderer::new(
+                                    surface,
+                                    &registry,
+                                    &render_catalog,
+                                )
+                                .measure(w)
+                                .unwrap_or(4) as usize
+                            }
+                            _ => 2,
+                        }
+                    }
                     _ => 0,
                 })
                 .collect();

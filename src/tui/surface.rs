@@ -73,9 +73,15 @@ impl<'a> SurfaceRenderer<'a> {
                 &self.catalog.functions,
                 focused_id,
             ) {
-                Some(h) => {
-                    let h = h.min(area.height);
-                    let y = area.y + area.height.saturating_sub(h) / 2;
+                Some(natural) => {
+                    let h = natural.min(area.height);
+                    // Top-anchor when content overflows (natural > panel height) so the
+                    // top of the content stays visible; otherwise center vertically.
+                    let y = if natural > area.height {
+                        area.y
+                    } else {
+                        area.y + area.height.saturating_sub(h) / 2
+                    };
                     Rect {
                         x: area.x,
                         y,
@@ -99,6 +105,33 @@ impl<'a> SurfaceRenderer<'a> {
             &self.catalog.functions,
             focused_id,
         );
+    }
+
+    /// Measure the root component's natural content height (including its own
+    /// chrome: margins/borders), given `available_width` cells.
+    ///
+    /// Layout-container roots (Column/Row/List) return the sum/max of their
+    /// children's natural heights; unknown/unmeasurable roots return `None`.
+    /// This is the public counterpart of the internal measure pass, so callers
+    /// that stack surfaces (e.g. a chat UI) can size each surface to its content.
+    pub fn measure(&self, available_width: u16) -> Option<u16> {
+        let data_model = self.surface.data_model.borrow();
+        let components = self.surface.components.borrow();
+        let surface_id = &self.surface.id;
+        if !components.contains("root") {
+            return None;
+        }
+        measure_node(
+            "root",
+            surface_id,
+            "",
+            available_width,
+            &data_model,
+            &components,
+            self.registry,
+            &self.catalog.functions,
+            None,
+        )
     }
 
     /// Convenience method to render a child by ID with an explicit base path.
@@ -328,9 +361,80 @@ mod render_tests {
         terminal.backend().buffer().clone()
     }
 
+    /// Like [`render_to_buffer`], but passes a `focused_id` so focus-driven
+    /// styling (e.g. a TextField's yellow border) can be asserted in tests.
+    fn render_to_buffer_focused(
+        components_json: serde_json::Value,
+        cols: u16,
+        rows: u16,
+        focused_id: Option<&str>,
+    ) -> ratatui::buffer::Buffer {
+        let registry = build_basic_registry();
+        let mut processor = MessageProcessor::new(vec![build_basic_catalog()]);
+        let create = serde_json::json!({
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "test",
+                "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                "dataModel": {}
+            }
+        });
+        processor
+            .process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
+        let update = serde_json::json!({
+            "version": "v1.0",
+            "updateComponents": { "surfaceId": "test", "components": components_json }
+        });
+        processor
+            .process_message(MessageProcessor::parse_message(&update.to_string()).unwrap())
+            .unwrap();
+        let surface = processor.model.get_surface("test").expect("surface exists");
+        let backend = TestBackend::new(cols, rows);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        let render_catalog = Catalog::new("placeholder");
+        terminal
+            .draw(|frame| {
+                let renderer = SurfaceRenderer::new(surface, &registry, &render_catalog);
+                renderer.render(frame, frame.area(), focused_id);
+            })
+            .unwrap();
+        terminal.backend().buffer().clone()
+    }
+
     /// True if every cell in row `y` (across `width` columns) is a blank/space.
     fn row_is_blank(buf: &ratatui::buffer::Buffer, y: u16, width: u16) -> bool {
         (0..width).all(|x| buf[(x, y)].symbol() == " ")
+    }
+
+    /// Build a surface whose `root` is described by `components_json` and return
+    /// its measured natural height via the public `SurfaceRenderer::measure` API.
+    fn measure_root(components_json: serde_json::Value, width: u16) -> Option<u16> {
+        let registry = build_basic_registry();
+        let mut processor = MessageProcessor::new(vec![build_basic_catalog()]);
+
+        let create = serde_json::json!({
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "test",
+                "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                "dataModel": {}
+            }
+        });
+        processor
+            .process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
+        let update = serde_json::json!({
+            "version": "v1.0",
+            "updateComponents": { "surfaceId": "test", "components": components_json }
+        });
+        processor
+            .process_message(MessageProcessor::parse_message(&update.to_string()).unwrap())
+            .unwrap();
+
+        let surface = processor.model.get_surface("test").expect("surface exists");
+        let render_catalog = Catalog::new("placeholder");
+        SurfaceRenderer::new(surface, &registry, &render_catalog).measure(width)
     }
 
     /// Count rows that contain any non-blank content.
@@ -357,6 +461,73 @@ mod render_tests {
         // And the content occupies only a fraction of the screen.
         let used = non_blank_row_count(&buf, 40, 24);
         assert!(used <= 12, "card content should occupy <=12 rows, used {used}");
+    }
+
+    #[test]
+    fn measure_card_root_returns_natural_height() {
+        // Card > Column > [Text, Text]. Each Text = 1 content line + 2 margin = 3;
+        // Column = 3 + 3 = 6; Card adds 4 chrome → natural height 10.
+        let components = serde_json::json!([
+            { "id": "root", "component": "Card", "child": "inner" },
+            { "id": "inner", "component": "Column", "children": ["a", "b"] },
+            { "id": "a", "component": "Text", "text": "Title" },
+            { "id": "b", "component": "Text", "text": "Body" }
+        ]);
+        assert_eq!(
+            measure_root(components, 40),
+            Some(10),
+            "Card>Column>[Text,Text] natural height = 6 content + 4 chrome"
+        );
+    }
+
+    #[test]
+    fn measure_column_root_sums_children() {
+        // Column > [Text × 3] → 3 + 3 + 3 = 9.
+        let components = serde_json::json!([
+            { "id": "root", "component": "Column", "children": ["a", "b", "c"] },
+            { "id": "a", "component": "Text", "text": "One" },
+            { "id": "b", "component": "Text", "text": "Two" },
+            { "id": "c", "component": "Text", "text": "Three" }
+        ]);
+        assert_eq!(measure_root(components, 40), Some(9));
+    }
+
+    #[test]
+    fn measure_text_wraps_with_width() {
+        // A single long Text line wraps across more rows at narrow width and fewer
+        // at wide width — proving measure is width-aware (the streaming-text fix).
+        let components = serde_json::json!([
+            { "id": "root", "component": "Text", "text": "alpha beta gamma delta epsilon zeta eta theta" }
+        ]);
+        let narrow = measure_root(components.clone(), 12).expect("narrow measured");
+        let wide = measure_root(components, 60).expect("wide measured");
+        assert!(
+            narrow > wide,
+            "narrow width should wrap to more rows than wide: narrow={narrow} wide={wide}"
+        );
+        assert!(wide >= 3, "wide text still has the +2 margin floor");
+    }
+
+    #[test]
+    fn focused_textfield_border_is_colored_only_when_focused() {
+        // Two TextFields; focusing the first must color its border (the
+        // component paints a yellow border when ctx.focused_id matches), while
+        // passing no focus paints nothing yellow. This is the invariant 04_login_form
+        // violated by passing `None` to SurfaceRenderer::render.
+        use ratatui::style::Color;
+        let components = serde_json::json!([
+            { "id": "root", "component": "Column", "children": ["user", "pass"] },
+            { "id": "user", "component": "TextField", "label": "User", "value": {"path":"/u"} },
+            { "id": "pass", "component": "TextField", "label": "Pass", "value": {"path":"/p"} }
+        ]);
+        let any_yellow = |buf: &ratatui::buffer::Buffer| {
+            (0..24u16).any(|y| (0..40u16).any(|x| buf[(x, y)].fg == Color::Yellow))
+        };
+        let focused = render_to_buffer_focused(components.clone(), 40, 24, Some("user"));
+        assert!(any_yellow(&focused), "focused TextField should paint a yellow border");
+
+        let plain = render_to_buffer_focused(components, 40, 24, None);
+        assert!(!any_yellow(&plain), "no focus passed → no yellow highlight anywhere");
     }
 
     #[test]

@@ -36,79 +36,11 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use a2ui::core::catalog::Catalog;
-use a2ui::core::event::{EventResult, InputEvent, InputKey};
+use a2ui::core::event::{EventResult, InputEvent};
 use a2ui::core::message_processor::MessageProcessor;
-use a2ui::core::model::component_context::ComponentContext;
 use a2ui::tui::catalogs::basic::{build_basic_catalog, build_basic_registry};
 use a2ui::tui::focus_manager::FocusManager;
-
-// ---------------------------------------------------------------------------
-// Event dispatch helper
-// ---------------------------------------------------------------------------
-
-/// Map a crossterm `KeyCode` to the framework-agnostic `InputKey`.
-fn map_key(code: KeyCode) -> Option<InputKey> {
-    match code {
-        KeyCode::Enter => Some(InputKey::Enter),
-        KeyCode::Tab => Some(InputKey::Tab),
-        KeyCode::BackTab => Some(InputKey::BackTab),
-        KeyCode::Up => Some(InputKey::Up),
-        KeyCode::Down => Some(InputKey::Down),
-        KeyCode::Left => Some(InputKey::Left),
-        KeyCode::Right => Some(InputKey::Right),
-        KeyCode::Backspace => Some(InputKey::Backspace),
-        KeyCode::Delete => Some(InputKey::Delete),
-        KeyCode::Esc => Some(InputKey::Escape),
-        KeyCode::Char(' ') => Some(InputKey::Space),
-        KeyCode::Char(c) => Some(InputKey::Char(c)),
-        _ => None,
-    }
-}
-
-/// Dispatch a keyboard event to the focused component.
-///
-/// Returns `Some(EventResult)` if the component handled the event, `None` otherwise.
-/// The caller is responsible for processing the result (updating data model, etc.).
-fn dispatch_to_focused(
-    code: KeyCode,
-    surface: &a2ui::core::model::surface_model::SurfaceModel,
-    registry: &a2ui::tui::component_impl::ComponentRegistry,
-    catalog: &Catalog,
-    focus_manager: &FocusManager,
-) -> Option<EventResult> {
-    let input_key = map_key(code)?;
-
-    // Skip Tab/BackTab — those are handled by the focus manager directly.
-    if matches!(input_key, InputKey::Tab | InputKey::BackTab) {
-        return None;
-    }
-
-    let focused_id = focus_manager.focused_id()?.to_string();
-    let input_event = InputEvent::KeyPress { key: input_key };
-
-    // Borrow both RefCells for the duration of event handling.
-    let data_model = surface.data_model.borrow();
-    let components = surface.components.borrow();
-
-    // Look up the focused component model and its TUI implementation.
-    let comp_model = components.get(&focused_id)?;
-    let tui_comp = registry.get(&comp_model.component_type)?;
-
-    // Build a ComponentContext for the focused component.
-    let ctx = ComponentContext::new(
-        focused_id.clone(),
-        surface.id.clone(),
-        &data_model,
-        &components,
-        &catalog.functions,
-        "",
-        Some(focused_id.clone()),
-    );
-
-    // Dispatch the event to the component.
-    tui_comp.handle_event(&ctx, &input_event)
-}
+use a2ui::tui::interaction;
 
 // ---------------------------------------------------------------------------
 // Main
@@ -309,51 +241,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     KeyCode::BackTab => focus_manager.focus_prev(),
                     other => {
                         // Phase 1: dispatch event to focused component (immutable borrow).
-                        let result = processor.model.get_surface("contact").and_then(|surface| {
-                            dispatch_to_focused(
-                                other,
-                                surface,
+                        let key = interaction::map_key_code(other);
+                        let result = key.and_then(|k| {
+                            let event = InputEvent::KeyPress { key: k };
+                            interaction::dispatch_to_focused(
+                                &processor,
                                 &registry,
                                 &render_catalog,
                                 &focus_manager,
+                                &event,
                             )
                         });
 
                         // Phase 2: process the result (mutable borrow of processor).
                         if let Some(result) = result {
                             match result {
-                                EventResult::DataUpdate { path, value } => {
-                                    let msg = serde_json::json!({
-                                        "version": "v1.0",
-                                        "updateDataModel": {
-                                            "surfaceId": "contact",
-                                            "path": path,
-                                            "value": value,
-                                        }
-                                    });
-                                    let _ = processor.process_message(
-                                        MessageProcessor::parse_message(&msg.to_string()).unwrap(),
-                                    );
-                                }
-                                EventResult::Toggle { path } => {
-                                    let current = processor.model.get_surface("contact")
-                                        .map(|s| {
-                                            let dm = s.data_model.borrow();
-                                            dm.get(&path).and_then(|v| v.as_bool()).unwrap_or(false)
-                                        })
-                                        .unwrap_or(false);
-                                    let msg = serde_json::json!({
-                                        "version": "v1.0",
-                                        "updateDataModel": {
-                                            "surfaceId": "contact",
-                                            "path": path,
-                                            "value": !current,
-                                        }
-                                    });
-                                    let _ = processor.process_message(
-                                        MessageProcessor::parse_message(&msg.to_string()).unwrap(),
-                                    );
-                                }
+                                // This example has custom Action side effects
+                                // (log + status banner) on top of the shared
+                                // apply pipeline, so handle Action here and
+                                // route everything else through `apply_event_result`.
                                 EventResult::Action { event_name, context, .. } => {
                                     eprintln!("[ACTION] {} {:?}", event_name, context);
                                     // Show success status in data model.
@@ -369,7 +275,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         MessageProcessor::parse_message(&msg.to_string()).unwrap(),
                                     );
                                 }
-                                EventResult::Consumed => {}
+                                other => {
+                                    interaction::apply_event_result(&mut processor, other);
+                                }
                             }
                         }
                     }
