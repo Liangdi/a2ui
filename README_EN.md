@@ -43,6 +43,10 @@ A2UI is a JSON-based streaming UI protocol that allows AI Agents to dynamically 
 
 ![Invitation Builder](screenshot/invitation-builder.png)
 
+**Sci-fi HUD** (cyberpunk tactical HUD, `17_scifi_hud` example: custom `TuiComponent` panels compose telemetry / radar / event-log, with all live data — gauges, sweep, events — driven through the a2ui `updateDataModel` protocol)
+
+![Sci-fi HUD](screenshot/sci-fi-hud.png)
+
 ## Quick Start
 
 ```bash
