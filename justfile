@@ -10,3 +10,6 @@ release-major:
 
 upgrade:
     cargo +nightly update --breaking -Z unstable-options
+
+publish:
+    cargo publish --registry crates-io
