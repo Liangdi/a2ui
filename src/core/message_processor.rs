@@ -111,6 +111,36 @@ impl MessageProcessor {
             .any(|cat| cat.components.contains_key(component_type))
     }
 
+    /// Return the IDs of all registered catalogs (native + inline).
+    pub fn registered_catalog_ids(&self) -> Vec<String> {
+        self.catalogs.keys().cloned().collect()
+    }
+
+    /// Register an inline catalog from a raw JSON value.
+    ///
+    /// The catalog is parsed via [`capabilities::parse_inline_catalog`]. Each
+    /// declared function becomes a [`SchemaOnlyFunction`] in a fresh
+    /// [`Catalog`] (so `handle_call_function` can discover and reject
+    /// execution attempts). Declared components have no native renderer and
+    /// are *not* added to `catalog.components` — at render time they fall
+    /// back to the generic renderer.
+    pub fn register_inline_catalog(&mut self, json: serde_json::Value) -> Result<()> {
+        let parsed = crate::core::capabilities::parse_inline_catalog(&json)?;
+
+        let mut catalog = Catalog::new(parsed.catalog_id.clone());
+        for func in &parsed.functions {
+            let return_type = crate::core::catalog::schema_only::parse_return_type(&func.return_type);
+            let schema_func = crate::core::catalog::schema_only::SchemaOnlyFunction::new(
+                func.name.clone(),
+                return_type,
+            );
+            catalog = catalog.with_function(Box::new(schema_func));
+        }
+
+        self.catalogs.insert(parsed.catalog_id, catalog);
+        Ok(())
+    }
+
     /// Register a pending action that expects a server response.
     ///
     /// Call this when the caller sends an `action` message with
@@ -1365,5 +1395,97 @@ mod tests {
         let a11y = root.accessibility().expect("should have accessibility");
         assert_eq!(a11y.label, Some(DynamicString::Literal("Submit form".to_string())));
         assert_eq!(a11y.description, Some(DynamicString::Literal("Click to submit the login form".to_string())));
+    }
+
+    // ===================================================================
+    // Inline catalog / capabilities tests
+    // ===================================================================
+
+    #[test]
+    fn test_registered_catalog_ids() {
+        let proc = make_basic_processor();
+        let ids = proc.registered_catalog_ids();
+        // minimal + basic catalogs.
+        assert_eq!(ids.len(), 2);
+        assert!(ids.iter().any(|id| id.contains("basic")));
+        assert!(ids.iter().any(|id| id.contains("minimal")));
+    }
+
+    #[test]
+    fn test_register_inline_catalog_adds_schema_only_functions() {
+        let mut proc = make_basic_processor();
+        let before = proc.registered_catalog_ids().len();
+
+        let inline = serde_json::json!({
+            "catalogId": "https://example.com/inline.json",
+            "components": {"Greeting": {}},
+            "functions": {
+                "shout": {
+                    "returnType": "string",
+                    "args": {"properties": {"value": {}}}
+                }
+            }
+        });
+        proc.register_inline_catalog(inline).expect("should register inline catalog");
+
+        let ids = proc.registered_catalog_ids();
+        assert_eq!(ids.len(), before + 1);
+        assert!(ids.iter().any(|id| id == "https://example.com/inline.json"));
+    }
+
+    #[test]
+    fn test_inline_schema_only_function_rejects_execution() {
+        // An inline function has a schema but no native impl: calling it must
+        // produce an error, not a panic or a "function not found".
+        let mut proc = make_basic_processor();
+
+        let inline = serde_json::json!({
+            "catalogId": "https://example.com/inline.json",
+            "functions": {
+                "shout": {"returnType": "string", "args": {"properties": {"value": {}}}}
+            }
+        });
+        proc.register_inline_catalog(inline).unwrap();
+
+        // Create a surface so callFunction has a DataModel to borrow.
+        let create = serde_json::json!({
+            "version": "v1.0",
+            "createSurface": {"surfaceId": "s1", "catalogId": "inline"}
+        });
+        proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
+
+        let msg = serde_json::json!({
+            "version": "v1.0",
+            "functionCallId": "c1",
+            "wantResponse": true,
+            "callFunction": {"call": "shout", "args": {"value": "hi"}}
+        });
+        proc.process_message(MessageProcessor::parse_message(&msg.to_string()).unwrap())
+            .unwrap();
+
+        let outgoing = proc.drain_outgoing();
+        assert_eq!(outgoing.len(), 1);
+        match &outgoing[0].payload {
+            ClientPayload::Error(err) => {
+                assert_eq!(err.error.code, "INVALID_FUNCTION_CALL");
+                assert!(
+                    err.error.message.contains("no native implementation"),
+                    "unexpected error message: {}",
+                    err.error.message
+                );
+            }
+            other => panic!("expected Error for schema-only function, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_register_inline_catalog_rejects_invalid() {
+        let mut proc = make_basic_processor();
+        let bad = serde_json::json!({
+            "catalogId": "bad",
+            "functions": {"9nope": {"returnType": "string"}}
+        });
+        assert!(proc.register_inline_catalog(bad).is_err());
     }
 }

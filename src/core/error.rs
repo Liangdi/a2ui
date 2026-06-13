@@ -31,6 +31,9 @@ pub enum A2uiError {
     #[error("type mismatch: {0}")]
     TypeMismatch(String),
 
+    #[error("no native implementation for function: {0}")]
+    NoNativeImplementation(String),
+
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
 }

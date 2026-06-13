@@ -15,6 +15,7 @@ use crate::core::model::components_model::SurfaceComponentsModel;
 use crate::core::model::data_model::DataModel;
 use crate::core::model::surface_model::SurfaceModel;
 use super::component_impl::ComponentRegistry;
+use super::component_impl::TuiComponent;
 
 /// Renders a [`SurfaceModel`] into a ratatui frame by walking the component tree.
 pub struct SurfaceRenderer<'a> {
@@ -134,18 +135,11 @@ fn render_node(
         focused_id.map(|s| s.to_string()),
     );
 
-    let tui_comp = match registry.get(&comp_model.component_type) {
-        Some(c) => c,
-        None => {
-            let msg = format!("Unknown component type: {}", comp_model.component_type);
-            let widget = Paragraph::new(msg).block(Block::bordered());
-            frame.render_widget(widget, area);
-            return;
-        }
-    };
-
     // The render_child closure simply re-enters render_node for each child,
     // giving unbounded recursion depth without code duplication.
+    //
+    // Defined before the registry lookup so the generic fallback renderer can
+    // also recurse into any child/children of an unknown component type.
     let mut render_child = |child_id: &str, child_area: Rect, child_frame: &mut Frame, child_base_path: &str| {
         render_node(
             child_id,
@@ -159,6 +153,17 @@ fn render_node(
             functions,
             focused_id,
         );
+    };
+
+    let tui_comp = match registry.get(&comp_model.component_type) {
+        Some(c) => c,
+        None => {
+            // No native renderer for this component type (e.g. a component
+            // declared in an inline catalog). Fall back to the generic renderer
+            // so the tree is still visible instead of a static "unknown" stub.
+            super::components::GenericComponent.render(&ctx, area, frame, &mut render_child);
+            return;
+        }
     };
 
     tui_comp.render(&ctx, area, frame, &mut render_child);

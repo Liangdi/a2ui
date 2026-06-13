@@ -16,3 +16,6 @@ pub mod date_time_input;
 pub mod image;
 pub mod video;
 pub mod audio_player;
+pub mod generic;
+
+pub use generic::GenericComponent;

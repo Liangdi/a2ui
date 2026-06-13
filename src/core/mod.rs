@@ -5,3 +5,4 @@ pub mod model;
 pub mod observable;
 pub mod catalog;
 pub mod message_processor;
+pub mod capabilities;
