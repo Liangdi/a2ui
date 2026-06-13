@@ -39,6 +39,10 @@ A2UI is a JSON-based streaming UI protocol that allows AI Agents to dynamically 
 
 ![Agent Chat](screenshot/agent-chat.png)
 
+**Invitation Builder** (spec sample `30_live-invitation-builder`: a reactive form layout where TextField / Slider / ChoicePicker / DateTimeInput components work together to preview an invitation in real time)
+
+![Invitation Builder](screenshot/invitation-builder.png)
+
 ## Quick Start
 
 ```bash
