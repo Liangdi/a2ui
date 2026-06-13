@@ -14,10 +14,16 @@ use crate::core::catalog::function_api::FunctionImplementation;
 pub struct ComponentContext<'a> {
     /// The component's ID.
     pub component_id: String,
+    /// The surface ID this component belongs to.
+    pub surface_id: String,
     /// Scoped data access for resolving dynamic values.
     pub data_context: DataContext<'a>,
     /// The components model (escape hatch for inspecting siblings/children).
     pub components: &'a SurfaceComponentsModel,
+    /// The ID of the currently focused component, if any.
+    pub focused_id: Option<String>,
+    /// The index of this component within a template iteration, if applicable.
+    pub template_index: Option<usize>,
 }
 
 impl<'a> ComponentContext<'a> {
@@ -27,10 +33,12 @@ impl<'a> ComponentContext<'a> {
     /// before calling this and pass the references.
     pub fn new(
         component_id: String,
+        surface_id: String,
         data_model: &'a DataModel,
         components: &'a SurfaceComponentsModel,
         functions: &'a HashMap<String, Box<dyn FunctionImplementation>>,
         base_path: &str,
+        focused_id: Option<String>,
     ) -> Self {
         let data_context = if base_path.is_empty() {
             DataContext::new(data_model, functions)
@@ -40,8 +48,11 @@ impl<'a> ComponentContext<'a> {
 
         Self {
             component_id,
+            surface_id,
             data_context,
             components,
+            focused_id,
+            template_index: None,
         }
     }
 }

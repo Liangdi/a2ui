@@ -27,8 +27,22 @@ pub trait TuiComponent: Send + Sync + 'static {
         ctx: &ComponentContext,
         area: Rect,
         frame: &mut Frame,
-        render_child: &mut dyn FnMut(&str, Rect, &mut Frame),
+        render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
     );
+
+    /// Handle an input event directed at this component.
+    ///
+    /// Returns `Some(EventResult)` if the component produced an action or data change
+    /// that the application should process, or `None` if the event was not handled.
+    ///
+    /// The default implementation ignores all events (non-interactive components).
+    fn handle_event(
+        &self,
+        _ctx: &ComponentContext,
+        _event: &crate::core::event::InputEvent,
+    ) -> Option<crate::core::event::EventResult> {
+        None
+    }
 }
 
 /// Registry that maps component type names to their [`TuiComponent`] implementations.
@@ -77,7 +91,7 @@ mod tests {
             _ctx: &ComponentContext,
             _area: Rect,
             _frame: &mut Frame,
-            _render_child: &mut dyn FnMut(&str, Rect, &mut Frame),
+            _render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
         ) {
         }
     }

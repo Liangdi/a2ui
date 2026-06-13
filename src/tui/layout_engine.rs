@@ -105,6 +105,57 @@ pub fn apply_justify(
             }
             result
         }
+        Justify::SpaceAround => {
+            let count = items.len();
+            if count == 0 {
+                return vec![];
+            }
+            let gap = container_size.saturating_sub(total_item_size);
+            let spacing = gap / count as u16;
+            let start_offset = spacing / 2;
+            let mut result = Vec::with_capacity(count);
+            let mut offset: u16 = 0;
+            for (rect, size) in items {
+                offset += if result.is_empty() { start_offset } else { spacing };
+                result.push(set_offset(*rect, total_area, direction, offset));
+                offset += size;
+            }
+            result
+        }
+        Justify::SpaceEvenly => {
+            let count = items.len();
+            if count == 0 {
+                return vec![];
+            }
+            let gap = container_size.saturating_sub(total_item_size);
+            let spacing = gap / (count as u16 + 1);
+            let mut result = Vec::with_capacity(count);
+            let mut offset: u16 = spacing;
+            for (rect, size) in items {
+                result.push(set_offset(*rect, total_area, direction, offset));
+                offset += size + spacing;
+            }
+            result
+        }
+        Justify::Stretch => {
+            let count = items.len();
+            if count == 0 {
+                return vec![];
+            }
+            let each_size = container_size / count as u16;
+            let mut result = Vec::with_capacity(count);
+            let mut offset: u16 = 0;
+            for (i, (_rect, _size)) in items.iter().enumerate() {
+                let size = if i == count - 1 {
+                    container_size - offset
+                } else {
+                    each_size
+                };
+                result.push(make_rect(direction, total_area, offset, size));
+                offset += size;
+            }
+            result
+        }
     }
 }
 
@@ -355,5 +406,155 @@ mod tests {
         ];
         let result = apply_justify(Justify::End, &items, container, Direction::Vertical);
         assert_eq!(result[0].y, 20); // 30 - 10
+    }
+
+    // --- SpaceAround tests ---
+
+    #[test]
+    fn apply_justify_space_around_three_items() {
+        let container = Rect::new(0, 0, 100, 30);
+        let items: Vec<(Rect, u16)> = vec![
+            (Rect::new(0, 0, 20, 30), 20),
+            (Rect::new(20, 0, 20, 30), 20),
+            (Rect::new(40, 0, 20, 30), 20),
+        ];
+        let result = apply_justify(Justify::SpaceAround, &items, container, Direction::Horizontal);
+        assert_eq!(result.len(), 3);
+        // 100 - 60 = 40 gap, spacing = 40 / 3 = 13, start_offset = 13 / 2 = 6
+        // item0: offset = 6
+        // item1: offset = 6 + 20 + 13 = 39
+        // item2: offset = 39 + 20 + 13 = 72
+        assert_eq!(result[0].x, 6);
+        assert_eq!(result[1].x, 39);
+        assert_eq!(result[2].x, 72);
+    }
+
+    #[test]
+    fn apply_justify_space_around_single_item() {
+        let container = Rect::new(0, 0, 100, 30);
+        let items: Vec<(Rect, u16)> = vec![
+            (Rect::new(0, 0, 20, 30), 20),
+        ];
+        let result = apply_justify(Justify::SpaceAround, &items, container, Direction::Horizontal);
+        assert_eq!(result.len(), 1);
+        // 100 - 20 = 80 gap, spacing = 80 / 1 = 80, start_offset = 40
+        assert_eq!(result[0].x, 40);
+    }
+
+    #[test]
+    fn apply_justify_space_around_empty() {
+        let container = Rect::new(0, 0, 100, 30);
+        let items: Vec<(Rect, u16)> = vec![];
+        let result = apply_justify(Justify::SpaceAround, &items, container, Direction::Horizontal);
+        assert!(result.is_empty());
+    }
+
+    // --- SpaceEvenly tests ---
+
+    #[test]
+    fn apply_justify_space_evenly_three_items() {
+        let container = Rect::new(0, 0, 100, 30);
+        let items: Vec<(Rect, u16)> = vec![
+            (Rect::new(0, 0, 20, 30), 20),
+            (Rect::new(20, 0, 20, 30), 20),
+            (Rect::new(40, 0, 20, 30), 20),
+        ];
+        let result = apply_justify(Justify::SpaceEvenly, &items, container, Direction::Horizontal);
+        assert_eq!(result.len(), 3);
+        // 100 - 60 = 40 gap, spacing = 40 / 4 = 10
+        // item0: offset = 10
+        // item1: offset = 10 + 20 + 10 = 40
+        // item2: offset = 40 + 20 + 10 = 70
+        assert_eq!(result[0].x, 10);
+        assert_eq!(result[1].x, 40);
+        assert_eq!(result[2].x, 70);
+    }
+
+    #[test]
+    fn apply_justify_space_evenly_single_item() {
+        let container = Rect::new(0, 0, 100, 30);
+        let items: Vec<(Rect, u16)> = vec![
+            (Rect::new(0, 0, 20, 30), 20),
+        ];
+        let result = apply_justify(Justify::SpaceEvenly, &items, container, Direction::Horizontal);
+        assert_eq!(result.len(), 1);
+        // 100 - 20 = 80 gap, spacing = 80 / 2 = 40
+        assert_eq!(result[0].x, 40);
+    }
+
+    #[test]
+    fn apply_justify_space_evenly_empty() {
+        let container = Rect::new(0, 0, 100, 30);
+        let items: Vec<(Rect, u16)> = vec![];
+        let result = apply_justify(Justify::SpaceEvenly, &items, container, Direction::Horizontal);
+        assert!(result.is_empty());
+    }
+
+    // --- Stretch tests ---
+
+    #[test]
+    fn apply_justify_stretch_three_items() {
+        let container = Rect::new(0, 0, 99, 30);
+        let items: Vec<(Rect, u16)> = vec![
+            (Rect::new(0, 0, 20, 30), 20),
+            (Rect::new(20, 0, 20, 30), 20),
+            (Rect::new(40, 0, 20, 30), 20),
+        ];
+        let result = apply_justify(Justify::Stretch, &items, container, Direction::Horizontal);
+        assert_eq!(result.len(), 3);
+        // each = 99 / 3 = 33, last gets remainder 99 - 66 = 33
+        assert_eq!(result[0].x, 0);
+        assert_eq!(result[0].width, 33);
+        assert_eq!(result[1].x, 33);
+        assert_eq!(result[1].width, 33);
+        assert_eq!(result[2].x, 66);
+        assert_eq!(result[2].width, 33);
+        // Total fills container
+        let total: u16 = result.iter().map(|r| r.width).sum();
+        assert_eq!(total, 99);
+    }
+
+    #[test]
+    fn apply_justify_stretch_with_remainder() {
+        let container = Rect::new(0, 0, 100, 30);
+        let items: Vec<(Rect, u16)> = vec![
+            (Rect::new(0, 0, 10, 30), 10),
+            (Rect::new(10, 0, 10, 30), 10),
+            (Rect::new(20, 0, 10, 30), 10),
+        ];
+        let result = apply_justify(Justify::Stretch, &items, container, Direction::Horizontal);
+        assert_eq!(result.len(), 3);
+        // each = 100 / 3 = 33, last gets remainder 100 - 66 = 34
+        assert_eq!(result[0].width, 33);
+        assert_eq!(result[1].width, 33);
+        assert_eq!(result[2].width, 34);
+        let total: u16 = result.iter().map(|r| r.width).sum();
+        assert_eq!(total, 100);
+    }
+
+    #[test]
+    fn apply_justify_stretch_vertical() {
+        let container = Rect::new(0, 0, 100, 30);
+        let items: Vec<(Rect, u16)> = vec![
+            (Rect::new(0, 0, 100, 5), 5),
+            (Rect::new(0, 5, 100, 5), 5),
+        ];
+        let result = apply_justify(Justify::Stretch, &items, container, Direction::Vertical);
+        assert_eq!(result.len(), 2);
+        // each = 30 / 2 = 15
+        assert_eq!(result[0].y, 0);
+        assert_eq!(result[0].height, 15);
+        assert_eq!(result[1].y, 15);
+        assert_eq!(result[1].height, 15);
+        let total: u16 = result.iter().map(|r| r.height).sum();
+        assert_eq!(total, 30);
+    }
+
+    #[test]
+    fn apply_justify_stretch_empty() {
+        let container = Rect::new(0, 0, 100, 30);
+        let items: Vec<(Rect, u16)> = vec![];
+        let result = apply_justify(Justify::Stretch, &items, container, Direction::Horizontal);
+        assert!(result.is_empty());
     }
 }

@@ -38,9 +38,10 @@ impl<'a> SurfaceRenderer<'a> {
     }
 
     /// Main entry point: render the component tree into the frame.
-    pub fn render(&self, frame: &mut Frame, area: Rect) {
+    pub fn render(&self, frame: &mut Frame, area: Rect, focused_id: Option<&str>) {
         let data_model = self.surface.data_model.borrow();
         let components = self.surface.components.borrow();
+        let surface_id = &self.surface.id;
 
         // Look up the root component.
         if !components.contains("root") {
@@ -51,6 +52,7 @@ impl<'a> SurfaceRenderer<'a> {
 
         render_node(
             "root",
+            surface_id,
             "",
             area,
             frame,
@@ -58,6 +60,7 @@ impl<'a> SurfaceRenderer<'a> {
             &components,
             self.registry,
             &self.catalog.functions,
+            focused_id,
         );
     }
 
@@ -69,14 +72,17 @@ impl<'a> SurfaceRenderer<'a> {
     pub fn render_child_by_id(
         &self,
         child_id: &str,
+        surface_id: &str,
         base_path: &str,
         area: Rect,
         frame: &mut Frame,
         data_model: &DataModel,
         components: &SurfaceComponentsModel,
+        focused_id: Option<&str>,
     ) {
         render_node(
             child_id,
+            surface_id,
             base_path,
             area,
             frame,
@@ -84,6 +90,7 @@ impl<'a> SurfaceRenderer<'a> {
             components,
             self.registry,
             &self.catalog.functions,
+            focused_id,
         );
     }
 }
@@ -97,6 +104,7 @@ impl<'a> SurfaceRenderer<'a> {
 /// 4. Passes a `render_child` closure that re-enters this same function for any children.
 fn render_node(
     component_id: &str,
+    surface_id: &str,
     base_path: &str,
     area: Rect,
     frame: &mut Frame,
@@ -104,6 +112,7 @@ fn render_node(
     components: &SurfaceComponentsModel,
     registry: &ComponentRegistry,
     functions: &HashMap<String, Box<dyn FunctionImplementation>>,
+    focused_id: Option<&str>,
 ) {
     let comp_model = match components.get(component_id) {
         Some(m) => m,
@@ -117,10 +126,12 @@ fn render_node(
 
     let ctx = ComponentContext::new(
         component_id.to_string(),
+        surface_id.to_string(),
         data_model,
         components,
         functions,
         base_path,
+        focused_id.map(|s| s.to_string()),
     );
 
     let tui_comp = match registry.get(&comp_model.component_type) {
@@ -135,16 +146,18 @@ fn render_node(
 
     // The render_child closure simply re-enters render_node for each child,
     // giving unbounded recursion depth without code duplication.
-    let mut render_child = |child_id: &str, child_area: Rect, child_frame: &mut Frame| {
+    let mut render_child = |child_id: &str, child_area: Rect, child_frame: &mut Frame, child_base_path: &str| {
         render_node(
             child_id,
-            base_path,
+            surface_id,
+            child_base_path,
             child_area,
             child_frame,
             data_model,
             components,
             registry,
             functions,
+            focused_id,
         );
     };
 

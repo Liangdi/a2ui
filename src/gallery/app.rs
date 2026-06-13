@@ -17,7 +17,9 @@ use ratatui::{
 };
 
 use crate::core::catalog::Catalog;
+use crate::core::event::{EventResult, InputEvent, InputKey};
 use crate::core::message_processor::MessageProcessor;
+use crate::core::model::component_context::ComponentContext;
 use crate::core::protocol::server_to_client::A2uiMessage;
 use crate::gallery::sample_loader::{self, Sample};
 use crate::tui::catalogs::basic::{build_basic_catalog, build_basic_registry};
@@ -54,6 +56,7 @@ struct FrameData {
     selected_sample: usize,
     messages_processed: usize,
     total_messages: usize,
+    focused_id: Option<String>,
 }
 
 /// The gallery application.
@@ -92,7 +95,7 @@ impl GalleryApp {
 
         let basic_catalog = build_basic_catalog();
         let minimal_catalog = build_minimal_catalog();
-        let catalog = Catalog::new(""); // placeholder; rendering uses basic_catalog
+        let catalog = build_basic_catalog(); // real catalog for ComponentContext building
         let registry = build_basic_registry();
         let processor = MessageProcessor::new(vec![basic_catalog, minimal_catalog]);
 
@@ -145,7 +148,15 @@ impl GalleryApp {
                         render_sample_list(frame, &fd, list_state);
                     }
                     AppMode::Rendered => {
-                        render_split_view(frame, &fd, list_state, surface_ref, registry, catalog);
+                        render_split_view(
+                            frame,
+                            &fd,
+                            list_state,
+                            surface_ref,
+                            registry,
+                            catalog,
+                            fd.focused_id.as_deref(),
+                        );
                     }
                 }
             })?;
@@ -177,6 +188,7 @@ impl GalleryApp {
             selected_sample: self.selected_sample,
             messages_processed: self.messages_processed,
             total_messages: self.current_messages.len(),
+            focused_id: self.focus_manager.focused_id().map(|s| s.to_string()),
         }
     }
 
@@ -265,7 +277,138 @@ impl GalleryApp {
             KeyCode::BackTab => {
                 self.focus_manager.focus_prev();
             }
-            _ => {}
+            _ => {
+                self.dispatch_event_to_focused(code);
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Event dispatch
+    // -----------------------------------------------------------------------
+
+    /// Dispatch a keyboard event to the focused component.
+    fn dispatch_event_to_focused(&mut self, code: KeyCode) {
+        // Map KeyCode to InputKey
+        let input_key = match code {
+            KeyCode::Enter => InputKey::Enter,
+            KeyCode::Tab => InputKey::Tab,
+            KeyCode::BackTab => InputKey::BackTab,
+            KeyCode::Up => InputKey::Up,
+            KeyCode::Down => InputKey::Down,
+            KeyCode::Left => InputKey::Left,
+            KeyCode::Right => InputKey::Right,
+            KeyCode::Backspace => InputKey::Backspace,
+            KeyCode::Delete => InputKey::Delete,
+            KeyCode::Esc => InputKey::Escape,
+            KeyCode::Char(' ') => InputKey::Space,
+            KeyCode::Char(c) => InputKey::Char(c),
+            _ => return,
+        };
+
+        let event = InputEvent::KeyPress { key: input_key };
+
+        // Get focused component ID
+        let focused_id = match self.focus_manager.focused_id() {
+            Some(id) => id.to_string(),
+            None => return,
+        };
+
+        // Get surface and component info
+        let surface = match self.processor.model.surfaces().next() {
+            Some(s) => s,
+            None => return,
+        };
+
+        let (comp_type, surface_id) = {
+            let components = surface.components.borrow();
+            let comp_model = match components.get(&focused_id) {
+                Some(m) => m,
+                None => return,
+            };
+            (comp_model.component_type.clone(), surface.id.clone())
+        };
+
+        // Find the TuiComponent in the registry
+        let tui_comp = match self.registry.get(&comp_type) {
+            Some(c) => c,
+            None => return,
+        };
+
+        // Build a ComponentContext
+        let data_model = surface.data_model.borrow();
+        let components = surface.components.borrow();
+        let catalog_functions = &self.catalog.functions;
+
+        let ctx = ComponentContext::new(
+            focused_id.clone(),
+            surface_id,
+            &data_model,
+            &components,
+            catalog_functions,
+            "",
+            Some(focused_id.clone()),
+        );
+
+        // Dispatch event
+        let result = tui_comp.handle_event(&ctx, &event);
+
+        // Process result — must drop borrows before mutating
+        drop(components);
+        drop(data_model);
+        if let Some(result) = result {
+            self.process_event_result(result);
+        }
+    }
+
+    /// Process an EventResult from a component.
+    fn process_event_result(&mut self, result: EventResult) {
+        // Deconstruct the result to separate data mutations from action registration,
+        // avoiding borrow conflicts with self.processor.
+        match result {
+            EventResult::Action {
+                event_name,
+                context,
+                want_response,
+                response_path,
+            } => {
+                // For the gallery demo, just log the action to stderr
+                eprintln!("[A2UI Action] {} {:?}", event_name, context);
+
+                if want_response {
+                    // Get the surface ID first, then register the action separately.
+                    let surface_id = self
+                        .processor
+                        .model
+                        .surfaces()
+                        .next()
+                        .map(|s| s.id.clone());
+                    if let Some(sid) = surface_id {
+                        let action_id = uuid::Uuid::new_v4().to_string();
+                        let _ = self.processor.register_action(&sid, &action_id, response_path);
+                    }
+                }
+            }
+            EventResult::DataUpdate { path, value } => {
+                if let Some(surface) = self.processor.model.surfaces_mut().next() {
+                    surface.data_model.borrow_mut().set(&path, value);
+                }
+            }
+            EventResult::Toggle { path } => {
+                if let Some(surface) = self.processor.model.surfaces_mut().next() {
+                    let current = surface
+                        .data_model
+                        .borrow()
+                        .get(&path)
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false);
+                    surface
+                        .data_model
+                        .borrow_mut()
+                        .set(&path, serde_json::json!(!current));
+                }
+            }
+            EventResult::Consumed => {}
         }
     }
 
@@ -380,6 +523,7 @@ fn render_split_view(
     surface: Option<&crate::core::model::surface_model::SurfaceModel>,
     registry: &ComponentRegistry,
     catalog: &Catalog,
+    focused_id: Option<&str>,
 ) {
     let area = frame.area();
 
@@ -398,7 +542,7 @@ fn render_split_view(
     render_sample_list_panel(frame, fd, panels[0], list_state);
 
     // Right: rendered surface.
-    render_surface_panel(frame, panels[1], surface, registry, catalog);
+    render_surface_panel(frame, panels[1], surface, registry, catalog, focused_id);
 
     // Bottom: controls help.
     render_help_bar(frame, outer[1], fd);
@@ -450,10 +594,11 @@ fn render_surface_panel(
     surface: Option<&crate::core::model::surface_model::SurfaceModel>,
     registry: &ComponentRegistry,
     catalog: &Catalog,
+    focused_id: Option<&str>,
 ) {
     if let Some(surface) = surface {
         let renderer = SurfaceRenderer::new(surface, registry, catalog);
-        renderer.render(frame, area);
+        renderer.render(frame, area, focused_id);
     } else {
         let paragraph = Paragraph::new("No surface loaded.\nPress 'n' to step through messages.")
             .block(Block::default().borders(Borders::ALL).title(" Surface "));

@@ -3,11 +3,12 @@
 use ratatui::{
     Frame,
     layout::Rect,
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::Paragraph,
+    widgets::{Block, Borders, Paragraph},
 };
 
+use crate::core::event::{EventResult, InputEvent, InputKey};
 use crate::core::model::component_context::ComponentContext;
 use crate::core::protocol::common_types::{DynamicString, DynamicStringList};
 use crate::tui::component_impl::TuiComponent;
@@ -38,7 +39,7 @@ impl TuiComponent for ChoicePickerComponent {
         ctx: &ComponentContext,
         area: Rect,
         frame: &mut Frame,
-        _render_child: &mut dyn FnMut(&str, Rect, &mut Frame),
+        _render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
@@ -105,15 +106,20 @@ impl TuiComponent for ChoicePickerComponent {
         let variant: Option<String> = comp_model.get_property("variant");
         let is_exclusive = variant.as_deref() == Some("mutuallyExclusive");
 
+        // Determine if this choice picker has keyboard focus.
+        let is_focused = ctx.focused_id.as_deref() == Some(ctx.component_id.as_str());
+
         // Build lines.
         let mut lines: Vec<Line> = Vec::new();
 
         // Add label line if present.
         if !label.is_empty() {
-            lines.push(Line::from(Span::styled(
-                label,
-                Style::default().fg(Color::White),
-            )));
+            let label_style = if is_focused {
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            lines.push(Line::from(Span::styled(label, label_style)));
         }
 
         // Add option lines.
@@ -147,6 +153,88 @@ impl TuiComponent for ChoicePickerComponent {
         }
 
         let paragraph = Paragraph::new(lines);
-        frame.render_widget(paragraph, inner);
+
+        // When focused, render with a yellow bordered block.
+        if is_focused {
+            let block = Block::default()
+                .borders(Borders::ALL)
+                .style(Style::default().fg(Color::Yellow));
+            let content_area = block.inner(inner);
+            frame.render_widget(block, inner);
+            frame.render_widget(paragraph, content_area);
+        } else {
+            frame.render_widget(paragraph, inner);
+        }
+    }
+
+    fn handle_event(
+        &self,
+        ctx: &ComponentContext,
+        event: &crate::core::event::InputEvent,
+    ) -> Option<crate::core::event::EventResult> {
+        let comp_model = ctx.components.get(&ctx.component_id)?;
+
+        let options: Vec<ChoiceOption> = comp_model.get_property("options")?;
+        if options.is_empty() {
+            return None;
+        }
+
+        let variant: Option<String> = comp_model.get_property("variant");
+        let is_exclusive = variant.as_deref() == Some("mutuallyExclusive");
+
+        let value_dsl = comp_model.get_property::<DynamicStringList>("value")?;
+        let (binding, selected) = match &value_dsl {
+            DynamicStringList::Binding(b) => {
+                let selected = match ctx.data_context.get(&b.path) {
+                    Some(serde_json::Value::Array(arr)) => arr
+                        .iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect::<Vec<_>>(),
+                    Some(serde_json::Value::String(s)) => vec![s.clone()],
+                    _ => Vec::new(),
+                };
+                (b.clone(), selected)
+            }
+            _ => return None,
+        };
+
+        match event {
+            InputEvent::KeyPress { key: InputKey::Down } | InputEvent::KeyPress { key: InputKey::Up } => {
+                if !is_exclusive {
+                    return None;
+                }
+                // Find current selection index, move to next/prev.
+                let current_idx = selected
+                    .first()
+                    .and_then(|v| options.iter().position(|o| &o.value == v))
+                    .unwrap_or(0);
+                let new_idx = match event {
+                    InputEvent::KeyPress { key: InputKey::Down } => {
+                        (current_idx + 1) % options.len()
+                    }
+                    InputEvent::KeyPress { key: InputKey::Up } => {
+                        if current_idx == 0 {
+                            options.len() - 1
+                        } else {
+                            current_idx - 1
+                        }
+                    }
+                    _ => current_idx,
+                };
+                Some(EventResult::DataUpdate {
+                    path: binding.path.clone(),
+                    value: serde_json::json!([options[new_idx].value]),
+                })
+            }
+            InputEvent::KeyPress { key: InputKey::Enter } | InputEvent::KeyPress { key: InputKey::Space } => {
+                if is_exclusive {
+                    return None;
+                } // handled by Up/Down for exclusive
+                  // For multiple selection: not enough state to know which option to toggle.
+                  // Skip for now.
+                None
+            }
+            _ => None,
+        }
     }
 }

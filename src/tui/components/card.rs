@@ -27,7 +27,7 @@ impl TuiComponent for CardComponent {
         ctx: &ComponentContext,
         area: Rect,
         frame: &mut Frame,
-        render_child: &mut dyn FnMut(&str, Rect, &mut Frame),
+        render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
@@ -62,7 +62,7 @@ impl TuiComponent for CardComponent {
         // Render the single child inside the card, if present.
         if let Some(child_id) = comp_model.child() {
             if child_area.width > 0 && child_area.height > 0 {
-                render_child(&child_id, child_area, frame);
+                render_child(&child_id, child_area, frame, "");
             }
         }
     }

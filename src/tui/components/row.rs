@@ -23,7 +23,7 @@ impl TuiComponent for RowComponent {
         ctx: &ComponentContext,
         area: Rect,
         frame: &mut Frame,
-        render_child: &mut dyn FnMut(&str, Rect, &mut Frame),
+        render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
@@ -60,7 +60,7 @@ pub(crate) fn render_static_children(
     ctx: &ComponentContext,
     area: Rect,
     frame: &mut Frame,
-    render_child: &mut dyn FnMut(&str, Rect, &mut Frame),
+    render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
     ids: &[String],
     justify: Justify,
     align: Align,
@@ -101,7 +101,7 @@ pub(crate) fn render_static_children(
     // Apply align and render each child.
     for (i, child_id) in ids.iter().enumerate() {
         let child_area = apply_align(align, justified[i], area, direction);
-        render_child(child_id, child_area, frame);
+        render_child(child_id, child_area, frame, ""); // static children inherit parent's base_path
     }
 }
 
@@ -110,7 +110,7 @@ pub(crate) fn render_template_children(
     ctx: &ComponentContext,
     area: Rect,
     frame: &mut Frame,
-    render_child: &mut dyn FnMut(&str, Rect, &mut Frame),
+    render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
     component_id: &str,
     path: &str,
     justify: Justify,
@@ -148,11 +148,9 @@ pub(crate) fn render_template_children(
 
     for i in 0..count {
         let child_area = apply_align(align, justified[i], area, direction);
-        // Note: template iteration with nested data paths is not fully supported
-        // by the current render_child closure signature. Each instance renders
-        // the same component_id. Full template support requires passing a nested
-        // base_path through the closure.
-        let _ = &array[i]; // acknowledge iteration
-        render_child(component_id, child_area, frame);
+        // Compute per-item nested path so each template instance resolves
+        // data from its own array element.
+        let item_path = format!("{}/{}", path, i);
+        render_child(component_id, child_area, frame, &item_path);
     }
 }

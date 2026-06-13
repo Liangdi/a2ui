@@ -29,7 +29,7 @@ impl TuiComponent for DateTimeInputComponent {
         ctx: &ComponentContext,
         area: Rect,
         frame: &mut Frame,
-        _render_child: &mut dyn FnMut(&str, Rect, &mut Frame),
+        _render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
@@ -63,8 +63,16 @@ impl TuiComponent for DateTimeInputComponent {
         // Build display text with calendar icon.
         let display_text = format!("\u{1F4C5} {}", value);
 
+        // Determine if this date-time input has keyboard focus.
+        let is_focused = ctx.focused_id.as_deref() == Some(ctx.component_id.as_str());
+
         // Build bordered block with label as title.
-        let mut block = Block::default().borders(Borders::ALL);
+        let block_style = if is_focused {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default()
+        };
+        let mut block = Block::default().borders(Borders::ALL).style(block_style);
         if !label.is_empty() {
             block = block.title(Span::styled(
                 format!(" {} ", label),

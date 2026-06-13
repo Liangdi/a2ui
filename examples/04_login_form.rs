@@ -177,7 +177,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let renderer = a2ui::tui::surface::SurfaceRenderer::new(
                     surface, &registry, &render_catalog,
                 );
-                renderer.render(frame, chunks[0]);
+                renderer.render(frame, chunks[0], None);
             }
 
             let help = " Tab: next field  Shift+Tab: prev field  q: quit ";

@@ -3,10 +3,12 @@
 use ratatui::{
     Frame,
     layout::Rect,
+    style::{Color, Style},
     text::Line,
     widgets::{Block, Borders, Paragraph},
 };
 
+use crate::core::event::{EventResult, InputEvent, InputKey};
 use crate::core::model::component_context::ComponentContext;
 use crate::core::protocol::common_types::DynamicString;
 use crate::tui::component_impl::TuiComponent;
@@ -35,7 +37,7 @@ impl TuiComponent for TextFieldComponent {
         ctx: &ComponentContext,
         area: Rect,
         frame: &mut Frame,
-        _render_child: &mut dyn FnMut(&str, Rect, &mut Frame),
+        _render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
@@ -76,10 +78,20 @@ impl TuiComponent for TextFieldComponent {
         // Build the display text: value followed by a cursor block character.
         let display_text = format!("{}\u{2588}", display_value);
 
+        // Determine if this text field has keyboard focus.
+        let is_focused = ctx.focused_id.as_deref() == Some(ctx.component_id.as_str());
+
         // Build the bordered block with the label as title.
+        // When focused, use yellow border to indicate focus.
+        let block_style = if is_focused {
+            Style::default().fg(Color::Yellow)
+        } else {
+            Style::default()
+        };
         let block = Block::default()
             .borders(Borders::ALL)
-            .title(label);
+            .title(label)
+            .style(block_style);
 
         let content_area = block.inner(inner);
 
@@ -93,6 +105,48 @@ impl TuiComponent for TextFieldComponent {
         // Render the paragraph with the display text.
         let paragraph = Paragraph::new(Line::from(display_text));
         frame.render_widget(paragraph, content_area);
+    }
+
+    fn handle_event(
+        &self,
+        ctx: &ComponentContext,
+        event: &crate::core::event::InputEvent,
+    ) -> Option<crate::core::event::EventResult> {
+        let comp_model = ctx.components.get(&ctx.component_id)?;
+
+        // Get the value binding path.
+        let value_ds = comp_model.get_property::<DynamicString>("value")?;
+        let binding = match value_ds {
+            DynamicString::Binding(b) => b,
+            _ => return None,
+        };
+
+        let current = ctx.data_context.resolve_dynamic_string(
+            &DynamicString::Binding(binding.clone()),
+        );
+
+        match event {
+            InputEvent::KeyPress { key: InputKey::Char(c) } => {
+                let new_value = format!("{}{}", current, c);
+                Some(EventResult::DataUpdate {
+                    path: binding.path.clone(),
+                    value: serde_json::Value::String(new_value),
+                })
+            }
+            InputEvent::KeyPress { key: InputKey::Backspace } => {
+                let new_value = if let Some((idx, _)) = current.char_indices().next_back() {
+                    &current[..idx]
+                } else {
+                    ""
+                }
+                .to_string();
+                Some(EventResult::DataUpdate {
+                    path: binding.path.clone(),
+                    value: serde_json::Value::String(new_value),
+                })
+            }
+            _ => None,
+        }
     }
 }
 

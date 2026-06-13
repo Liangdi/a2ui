@@ -1,3 +1,7 @@
+[workspace]
+members = ["crates/ratatui-css"]
+resolver = "3"
+
 [package]
 name = "a2ui"
 version = "0.1.1"

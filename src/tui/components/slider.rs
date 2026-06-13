@@ -8,6 +8,7 @@ use ratatui::{
     widgets::Paragraph,
 };
 
+use crate::core::event::{EventResult, InputEvent, InputKey};
 use crate::core::model::component_context::ComponentContext;
 use crate::core::protocol::common_types::{DynamicNumber, DynamicString};
 use crate::tui::component_impl::TuiComponent;
@@ -29,7 +30,7 @@ impl TuiComponent for SliderComponent {
         ctx: &ComponentContext,
         area: Rect,
         frame: &mut Frame,
-        _render_child: &mut dyn FnMut(&str, Rect, &mut Frame),
+        _render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
@@ -92,6 +93,10 @@ impl TuiComponent for SliderComponent {
         let filled = (bar_width as f64 * ratio).round() as usize;
         let unfilled = bar_width.saturating_sub(filled);
 
+        // Determine if this slider has keyboard focus.
+        let is_focused = ctx.focused_id.as_deref() == Some(ctx.component_id.as_str());
+        let bar_color = if is_focused { Color::Yellow } else { Color::Cyan };
+
         let bar_str = if bar_width > 0 {
             let filled_str: String = "━".repeat(filled);
             let unfilled_str: String = "─".repeat(unfilled);
@@ -110,7 +115,7 @@ impl TuiComponent for SliderComponent {
         }
         spans.push(Span::styled(
             bar_str,
-            Style::default().fg(Color::Cyan),
+            Style::default().fg(bar_color),
         ));
         spans.push(Span::styled(
             format!(" {}", value_text),
@@ -119,5 +124,53 @@ impl TuiComponent for SliderComponent {
 
         let paragraph = Paragraph::new(Line::from(spans));
         frame.render_widget(paragraph, inner);
+    }
+
+    fn handle_event(
+        &self,
+        ctx: &ComponentContext,
+        event: &crate::core::event::InputEvent,
+    ) -> Option<crate::core::event::EventResult> {
+        let comp_model = ctx.components.get(&ctx.component_id)?;
+
+        let value_dn = comp_model.get_property::<DynamicNumber>("value")?;
+        let binding = match value_dn {
+            DynamicNumber::Binding(b) => b,
+            _ => return None,
+        };
+
+        let current = ctx.data_context.resolve_dynamic_number(
+            &DynamicNumber::Binding(binding.clone()),
+        );
+        let min = comp_model
+            .get_property::<DynamicNumber>("min")
+            .map(|dn| ctx.data_context.resolve_dynamic_number(&dn))
+            .unwrap_or(0.0);
+        let max = comp_model
+            .get_property::<DynamicNumber>("max")
+            .map(|dn| ctx.data_context.resolve_dynamic_number(&dn))
+            .unwrap_or(100.0);
+
+        let steps = comp_model
+            .get_property::<DynamicNumber>("steps")
+            .map(|dn| ctx.data_context.resolve_dynamic_number(&dn) as usize)
+            .unwrap_or(10);
+        let step = if steps > 0 {
+            (max - min) / steps as f64
+        } else {
+            1.0
+        };
+
+        let delta = match event {
+            InputEvent::KeyPress { key: InputKey::Right } => step,
+            InputEvent::KeyPress { key: InputKey::Left } => -step,
+            _ => return None,
+        };
+
+        let new_value = (current + delta).clamp(min, max);
+        Some(EventResult::DataUpdate {
+            path: binding.path.clone(),
+            value: serde_json::json!(new_value),
+        })
     }
 }

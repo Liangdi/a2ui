@@ -22,7 +22,7 @@ impl TuiComponent for ModalComponent {
         ctx: &ComponentContext,
         area: Rect,
         frame: &mut Frame,
-        render_child: &mut dyn FnMut(&str, Rect, &mut Frame),
+        render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
@@ -32,7 +32,7 @@ impl TuiComponent for ModalComponent {
         // Render the trigger child normally.
         if let Some(trigger_id) = comp_model.get_property::<String>("trigger") {
             if area.width > 0 && area.height > 0 {
-                render_child(&trigger_id, area, frame);
+                render_child(&trigger_id, area, frame, "");
             }
         }
     }

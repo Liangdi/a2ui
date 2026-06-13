@@ -232,6 +232,9 @@ pub enum Justify {
     Center,
     End,
     SpaceBetween,
+    SpaceAround,
+    SpaceEvenly,
+    Stretch,
 }
 
 /// Cross-axis alignment (maps to flexbox align-items).

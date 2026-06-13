@@ -82,7 +82,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let renderer = a2ui::tui::surface::SurfaceRenderer::new(
                     surface, &registry, &render_catalog,
                 );
-                renderer.render(frame, chunks[0]);
+                renderer.render(frame, chunks[0], None);
             } else if processed == 0 {
                 let waiting = Paragraph::new("No surface yet. Press 'n' to process the first message.")
                     .block(Block::default().borders(Borders::ALL).title(" Waiting "));

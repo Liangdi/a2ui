@@ -1119,6 +1119,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "ratatui-css"
+version = "0.1.0"
+dependencies = [
+ "ratatui",
+ "ratatui-themekit",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "ratatui-macros"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1136,6 +1146,15 @@ checksum = "386b8ff8f74ed749509391c56d549761a2fcdb408e1f42e467286bcb7dac8967"
 dependencies = [
  "ratatui-core",
  "termwiz",
+]
+
+[[package]]
+name = "ratatui-themekit"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "add55c1a2dce84b0fbc98bad03721a70a91213c27709986be3c31df912f47655"
+dependencies = [
+ "ratatui",
 ]
 
 [[package]]

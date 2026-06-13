@@ -37,7 +37,7 @@ impl TuiComponent for TabsComponent {
         ctx: &ComponentContext,
         area: Rect,
         frame: &mut Frame,
-        render_child: &mut dyn FnMut(&str, Rect, &mut Frame),
+        render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
@@ -91,7 +91,7 @@ impl TuiComponent for TabsComponent {
 
         // Render the active tab's child (always index 0).
         if content_area.width > 0 && content_area.height > 0 {
-            render_child(&tabs[0].child, content_area, frame);
+            render_child(&tabs[0].child, content_area, frame, "");
         }
     }
 }

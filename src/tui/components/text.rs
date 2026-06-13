@@ -27,7 +27,7 @@ impl TuiComponent for TextComponent {
         ctx: &ComponentContext,
         area: Rect,
         frame: &mut Frame,
-        _render_child: &mut dyn FnMut(&str, Rect, &mut Frame),
+        _render_child: &mut dyn FnMut(&str, Rect, &mut Frame, &str),
     ) {
         let comp_model = match ctx.components.get(&ctx.component_id) {
             Some(m) => m,
