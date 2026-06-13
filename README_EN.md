@@ -14,11 +14,16 @@ A2UI is a JSON-based streaming UI protocol that allows AI Agents to dynamically 
 
 - ✅ Full A2UI v1.0 protocol support
 - ✅ **18 TUI components**: Text, Row, Column, Button, TextField, Card, Divider, List, CheckBox, Icon, Tabs, Modal, Slider, ChoicePicker, DateTimeInput, Image, Video, AudioPlayer
+  - Interactive: Text, Row, Column, Button, TextField, Slider, CheckBox, ChoicePicker, DateTimeInput (arrow keys adjust the value)
+  - Placeholders (default): Image / Video / AudioPlayer render only text placeholders (`[🖼 description]`, `[▶ url]`, `[♫ url]`) — the terminal cannot decode pixels/audio/video. Enable real image/audio rendering via the Optional Features below.
+- ✅ **Capabilities negotiation**: `ClientCapabilities` / `ServerCapabilities` types + a builder that derives `supportedCatalogIds` from registered catalogs.
+- ✅ **Inline catalogs**: the server can declare `acceptsInlineCatalogs`; the client parses and validates inline catalog JSON (UAX#31 identifier checks) and registers schema-only functions at runtime.
+- ✅ **Generic fallback renderer**: unknown / inline-custom component types render as a visible labeled box (type + properties + children) instead of a bare "unknown" error.
 - ✅ **14 client-side functions**: required, regex, length, numeric, email, and/or/not, formatString, formatNumber, formatCurrency, formatDate, pluralize, openUrl
 - ✅ Modular layered architecture (Core Layer + TUI Layer)
 - ✅ JSON Pointer data binding with reactive state management
 - ✅ Gallery App sample browser with progressive message rendering
-- ✅ 89 unit/integration tests, including end-to-end tests with A2UI specification examples
+- ✅ **150 unit/integration tests** (core 102 + tui 48), including end-to-end tests with A2UI specification examples
 
 ## Screenshots
 
@@ -35,6 +40,9 @@ A2UI is a JSON-based streaming UI protocol that allows AI Agents to dynamically 
 ```bash
 # Run the Gallery App
 cargo run
+
+# Minimal capabilities-handshake demo (no TUI)
+cargo run --example 12_handshake
 ```
 
 ### Controls
@@ -122,6 +130,16 @@ A2UI uses a JSON streaming message format to drive UI rendering:
 | `05_custom_function` | Custom catalog function implementation | `cargo run --example 05_custom_function` |
 | `06_call_function` | Server-initiated `callFunction` & `functionResponse` | `cargo run --example 06_call_function` |
 | `07_action_response` | `actionResponse` with `responsePath` reactive updates | `cargo run --example 07_action_response` |
+| `12_handshake` | Capabilities-negotiation handshake | `cargo run --example 12_handshake` |
+
+## Optional Features
+
+Image rendering is **built-in and on by default**: a plain `cargo build` renders real images via `ratatui-image` (auto-degrading kitty / iTerm2 / Sixel / Halfblocks), local file paths only, falling back to the placeholder when unloadable. The following are additional **opt-in** features, OFF by default:
+
+| Feature | Description | Enable | Limitation |
+|---------|-------------|--------|------------|
+| `audio` | Real audio playback via `rodio` (background thread) | `--features audio` | **LOCAL file paths only**; requires the ALSA system dev library (`alsa-lib-devel` on Fedora / `libasound2-dev` on Debian); silently falls back to the placeholder on failure |
+| — (Video) | No feature exists for video | — | There is no mature TUI video solution, so Video always renders a placeholder |
 
 ## Using as a Library
 
