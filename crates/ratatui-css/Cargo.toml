@@ -24,6 +24,9 @@ serde = ["dep:serde", "dep:serde_json"]
 # Bridge semantic color slots from `ratatui-themekit` into CSS custom properties.
 themekit = ["dep:ratatui-themekit"]
 
+[dev-dependencies]
+crossterm = "0.29"
+
 [[example]]
 name = "themekit_bridge"
 required-features = ["themekit"]

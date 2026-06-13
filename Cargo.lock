@@ -1122,6 +1122,7 @@ dependencies = [
 name = "ratatui-css"
 version = "0.1.0"
 dependencies = [
+ "crossterm",
  "ratatui",
  "ratatui-themekit",
  "serde",
