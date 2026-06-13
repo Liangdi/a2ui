@@ -1,5 +1,9 @@
 # A2UI — 基于 Ratatui 的 TUI 渲染器
 
+[![crates.io](https://img.shields.io/crates/v/a2ui.svg)](https://crates.io/crates/a2ui)
+[![docs.rs](https://docs.rs/a2ui/badge.svg)](https://docs.rs/a2ui)
+[![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 [English](README_EN.md) | 中文
 
 一个 Rust 实现的 [A2UI (Agent to UI) v1.0](https://github.com/a2ui-project/a2ui) 协议终端渲染器，基于 [ratatui](https://ratatui.rs/) 构建。

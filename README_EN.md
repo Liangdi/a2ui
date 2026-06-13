@@ -1,5 +1,9 @@
 # A2UI — Ratatui-based TUI Renderer
 
+[![crates.io](https://img.shields.io/crates/v/a2ui.svg)](https://crates.io/crates/a2ui)
+[![docs.rs](https://docs.rs/a2ui/badge.svg)](https://docs.rs/a2ui)
+[![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 English | [中文](README.md)
 
 A Rust implementation of the [A2UI (Agent to UI) v1.0](https://github.com/a2ui-project/a2ui) protocol terminal renderer, built on [ratatui](https://ratatui.rs/).
