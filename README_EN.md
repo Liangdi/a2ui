@@ -35,6 +35,10 @@ A2UI is a JSON-based streaming UI protocol that allows AI Agents to dynamically 
 
 ![Login Form](screenshot/login-form.png)
 
+**Agent Chat** (AI chat interface, `08_agent_chat` example: multi-surface chat layout, streaming A2UI messages, rich components like Card / Column / Row / Divider)
+
+![Agent Chat](screenshot/agent-chat.png)
+
 ## Quick Start
 
 ```bash
