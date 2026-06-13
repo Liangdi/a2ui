@@ -367,13 +367,12 @@ impl GalleryApp {
         // avoiding borrow conflicts with self.processor.
         match result {
             EventResult::Action {
-                event_name,
-                context,
                 want_response,
                 response_path,
+                ..
             } => {
-                // For the gallery demo, just log the action to stderr
-                eprintln!("[A2UI Action] {} {:?}", event_name, context);
+                // Note: we intentionally do NOT eprintln here — the TUI renders
+                // into stderr, so any write would corrupt the display.
 
                 if want_response {
                     // Get the surface ID first, then register the action separately.
@@ -422,8 +421,10 @@ impl GalleryApp {
             return;
         }
 
-        // Reset processor state for the new sample.
-        self.processor = MessageProcessor::new(vec![]);
+        // Reset processor state for the new sample, keeping catalogs registered
+        // (resetting with empty catalogs would flag every component as unknown
+        // and pollute the TUI with warnings).
+        self.processor.reset();
 
         let sample = &self.samples[index];
         self.current_messages = sample.messages.clone();
@@ -451,7 +452,7 @@ impl GalleryApp {
     /// Reset and replay all messages for the current sample.
     fn replay_current_sample(&mut self) {
         let messages = self.current_messages.clone();
-        self.processor = MessageProcessor::new(vec![]);
+        self.processor.reset();
         self.current_messages = messages;
         self.messages_processed = 0;
         self.focus_manager.reset();

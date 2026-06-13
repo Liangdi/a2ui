@@ -41,6 +41,18 @@ impl MessageProcessor {
         }
     }
 
+    /// Reset all processed state (surfaces and outgoing messages) while
+    /// keeping the registered catalogs intact.
+    ///
+    /// Use this to replay a sample from scratch instead of constructing a new
+    /// processor with `MessageProcessor::new(vec![])`, which would silently
+    /// drop the catalogs and cause every component type to be flagged as
+    /// "unknown".
+    pub fn reset(&mut self) {
+        self.model = SurfaceGroupModel::new();
+        self.outgoing_messages.clear();
+    }
+
     /// Parse a raw JSON string into an A2uiMessage.
     pub fn parse_message(json: &str) -> Result<A2uiMessage> {
         let msg: A2uiMessage = serde_json::from_str(json)?;
@@ -177,16 +189,10 @@ impl MessageProcessor {
     }
 
     fn handle_update_components(&mut self, data: &UpdateComponentsData) -> Result<()> {
-        // Validate component types against catalogs (before mutable borrow of surface)
-        for comp_value in &data.components {
-            if let Some(comp_type) = comp_value.get("component").and_then(|v| v.as_str()) {
-                if !self.catalog_type_exists(comp_type) {
-                    // Log a warning but don't fail — graceful degradation
-                    eprintln!("[A2UI Warning] Unknown component type: {}", comp_type);
-                }
-            }
-        }
-
+        // Graceful degradation: unknown component types are still added below
+        // via add_from_json. We intentionally do NOT eprintln diagnostics here
+        // — this is a library, and writing to stderr corrupts TUI consumers
+        // (e.g. the gallery app renders into stderr).
         let surface = self.model.get_surface_mut(&data.surface_id)
             .ok_or_else(|| A2uiError::SurfaceNotFound(data.surface_id.clone()))?;
 
@@ -700,6 +706,35 @@ mod tests {
         assert!(proc.catalog_type_exists("Button"));
         assert!(proc.catalog_type_exists("Slider"));
         assert!(!proc.catalog_type_exists("NonExistentComponent"));
+    }
+
+    /// Regression: `reset()` must keep registered catalogs. Previously the
+    /// gallery rebuilt the processor with `MessageProcessor::new(vec![])`,
+    /// which dropped catalogs and made every component type "unknown".
+    #[test]
+    fn test_reset_preserves_catalogs() {
+        let mut proc = make_basic_processor();
+
+        // Create a surface so we can prove reset clears model state.
+        let create = serde_json::json!({
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "main",
+                "catalogId": "test",
+                "components": [{"component": "Text", "text": "hi", "id": "t1"}]
+            }
+        });
+        let msg = MessageProcessor::parse_message(create.to_string().as_str()).unwrap();
+        assert!(proc.process_message(msg).is_ok());
+        assert!(proc.model.surfaces().next().is_some());
+
+        proc.reset();
+
+        // Model is cleared...
+        assert!(proc.model.surfaces().next().is_none());
+        // ...but catalogs are intact, so component validation still works.
+        assert!(proc.catalog_type_exists("Text"));
+        assert!(proc.catalog_type_exists("Button"));
     }
 
     #[test]
