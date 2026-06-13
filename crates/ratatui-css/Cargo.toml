@@ -23,3 +23,7 @@ default = ["serde"]
 serde = ["dep:serde", "dep:serde_json"]
 # Bridge semantic color slots from `ratatui-themekit` into CSS custom properties.
 themekit = ["dep:ratatui-themekit"]
+
+[[example]]
+name = "themekit_bridge"
+required-features = ["themekit"]

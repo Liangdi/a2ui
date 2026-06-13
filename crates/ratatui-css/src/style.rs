@@ -135,6 +135,22 @@ impl CssStyle {
         self
     }
 
+    /// Box-model builders. These parse CSS shorthand strings and panic on a
+    /// malformed value — intended for builder ergonomics where the literal is
+    /// known at compile time. For data-driven input, deserialize instead.
+    pub fn padding(mut self, shorthand: &str) -> Self {
+        self.padding = Some(crate::box_model::BoxEdges::parse(shorthand).expect("valid padding"));
+        self
+    }
+    pub fn margin(mut self, shorthand: &str) -> Self {
+        self.margin = Some(crate::box_model::BoxEdges::parse(shorthand).expect("valid margin"));
+        self
+    }
+    pub fn border(mut self, shorthand: &str) -> Self {
+        self.border = Some(crate::box_model::BorderSpec::parse_shorthand(shorthand).expect("valid border"));
+        self
+    }
+
     // --- cascade -----------------------------------------------------------
 
     /// Overlay `other` onto `self`: every field that is `Some` in `other`
