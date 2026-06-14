@@ -1,3 +1,8 @@
+// With `backend` off the helpers below are unused; `cargo publish` verifies
+// with default features (backend off), so silence that rather than cfg-gating
+// every item.
+#![allow(unused)]
+
 //! Compile the A2UI Slint UI into a Rust module.
 //!
 //! Slint cannot express recursion (neither recursive structs nor self-
@@ -23,6 +28,7 @@ use std::path::Path;
 /// what the root `Surface` instantiates. Trees deeper than this truncate.
 const MAX_DEPTH: usize = 7;
 
+#[cfg(feature = "backend")]
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
@@ -35,6 +41,12 @@ fn main() {
     slint_build::compile(dst.to_str().expect("utf8 path"))
         .expect("Slint UI compilation failed");
 }
+
+// Without the `backend` feature, `slint-build` is not a build-dependency, so
+// the build script is a no-op. `cargo publish` verifies with default features
+// (backend off), so this must compile standalone.
+#[cfg(not(feature = "backend"))]
+fn main() {}
 
 /// Produce the full `.slint` source: the `LiveNode` struct, the `Events`
 /// global (routes UI interactions back to Rust), the `Node0..Node{MAX_DEPTH}`
