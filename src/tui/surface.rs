@@ -610,4 +610,101 @@ mod render_tests {
             "2 TextFields + Button + Card ⇒ ≥8 border rows, found {border_rows}"
         );
     }
+
+    #[test]
+    fn templated_children_expand_from_data_array() {
+        // Mirrors the "Incremental List" sample (minimal catalog): a root Column
+        // whose `children` is a template `{path, componentId}` bound to a data
+        // array. Each array element must instantiate the template component with
+        // its own nested data path.
+        //
+        // Regression: the `componentId` (camelCase) key did not deserialize into
+        // `ChildList::Template` (snake_case `component_id` with no serde rename),
+        // so `children()` returned `None` and the Column rendered a blank panel.
+        use crate::tui::catalogs::minimal::{build_minimal_catalog, build_minimal_registry};
+
+        let registry = build_minimal_registry();
+        let mut processor = MessageProcessor::new(vec![build_minimal_catalog()]);
+
+        let create = serde_json::json!({
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "example_7",
+                "catalogId": "https://a2ui.org/specification/v1_0/catalogs/minimal/catalog.json"
+            }
+        });
+        processor
+            .process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
+
+        let set_data = serde_json::json!({
+            "version": "v1.0",
+            "updateDataModel": {
+                "surfaceId": "example_7",
+                "path": "/",
+                "value": { "restaurants": [
+                    { "title": "The Golden Fork", "subtitle": "Fine Dining & Spirits", "address": "123 Gastronomy Lane" },
+                    { "title": "Ocean's Bounty", "subtitle": "Fresh Daily Seafood", "address": "456 Shoreline Dr" }
+                ] }
+            }
+        });
+        processor
+            .process_message(MessageProcessor::parse_message(&set_data.to_string()).unwrap())
+            .unwrap();
+
+        let update = serde_json::json!({
+            "version": "v1.0",
+            "updateComponents": {
+                "surfaceId": "example_7",
+                "components": [
+                    { "id": "root", "component": "Column", "children": { "path": "/restaurants", "componentId": "restaurant_card" } },
+                    { "id": "restaurant_card", "component": "Column", "children": ["rc_title", "rc_subtitle", "rc_address"] },
+                    { "id": "rc_title", "component": "Text", "text": { "path": "title" } },
+                    { "id": "rc_subtitle", "component": "Text", "text": { "path": "subtitle" } },
+                    { "id": "rc_address", "component": "Text", "text": { "path": "address" } }
+                ]
+            }
+        });
+        processor
+            .process_message(MessageProcessor::parse_message(&update.to_string()).unwrap())
+            .unwrap();
+
+        // Confirm the children parsed as a Template, not None.
+        let surface = processor.model.get_surface("example_7").expect("surface exists");
+        {
+            let components = surface.components.borrow();
+            let root = components.get("root").expect("root exists");
+            match root.children() {
+                Some(crate::core::protocol::common_types::ChildList::Template { component_id, path }) => {
+                    assert_eq!(component_id, "restaurant_card");
+                    assert_eq!(path, "/restaurants");
+                }
+                other => panic!("root.children should be Template, got {other:?}"),
+            }
+        }
+
+        let backend = TestBackend::new(60, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        let render_catalog = Catalog::new("placeholder");
+        terminal
+            .draw(|frame| {
+                let renderer = SurfaceRenderer::new(surface, &registry, &render_catalog);
+                renderer.render(frame, frame.area(), None);
+            })
+            .unwrap();
+
+        let buf = terminal.backend().buffer().clone();
+        let mut screen = String::new();
+        for y in 0..24u16 {
+            for x in 0..60u16 {
+                screen.push(buf[(x, y)].symbol().chars().next().unwrap_or(' '));
+            }
+            screen.push('\n');
+        }
+
+        assert!(screen.contains("The Golden Fork"), "first restaurant title should render:\n{screen}");
+        assert!(screen.contains("Ocean's Bounty"), "second restaurant title should render:\n{screen}");
+        assert!(screen.contains("Fine Dining & Spirits"), "first restaurant subtitle should render:\n{screen}");
+        assert!(screen.contains("456 Shoreline Dr"), "second restaurant address should render:\n{screen}");
+    }
 }

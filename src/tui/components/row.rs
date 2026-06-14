@@ -80,9 +80,12 @@ impl TuiComponent for RowComponent {
         if ids.is_empty() {
             return Some(0);
         }
+        // Static children inherit this component's base path (matters when this
+        // component is itself a template instance rendered at a nested path).
+        let base = ctx.data_context.base_path();
         let mut max: u16 = 0;
         for id in &ids {
-            max = max.max(measure_child(id, "", available_width)?);
+            max = max.max(measure_child(id, base, available_width)?);
         }
         Some(max)
     }
@@ -110,6 +113,11 @@ pub(crate) fn render_static_children(
         return;
     }
 
+    // Static children inherit the parent's current base path so a static list
+    // nested inside a template instance still resolves bindings against the item's
+    // data scope (e.g. a template card rendered at /items/0 → [title, subtitle]).
+    let base = ctx.data_context.base_path().to_string();
+
     // Build (natural_main_size, weight) per child. Only the vertical main axis has a
     // measured natural size (height); horizontal relies on weight distribution.
     let items: Vec<(Option<u16>, Option<f64>)> = ids
@@ -117,7 +125,7 @@ pub(crate) fn render_static_children(
         .map(|id| {
             let weight = ctx.components.get(id).and_then(|m| m.weight());
             let natural = match direction {
-                Direction::Vertical => measure_child(id, "", area.width),
+                Direction::Vertical => measure_child(id, &base, area.width),
                 Direction::Horizontal => None,
             };
             (natural, weight)
@@ -126,11 +134,10 @@ pub(crate) fn render_static_children(
 
     let rects = flex_layout(direction, area, &items, justify);
 
-    // Apply cross-axis alignment and render each child. Static children inherit the
-    // parent's base_path ("").
+    // Apply cross-axis alignment and render each child.
     for (i, child_id) in ids.iter().enumerate() {
         let child_area = apply_align(align, rects[i], area, direction);
-        render_child(child_id, child_area, frame, "");
+        render_child(child_id, child_area, frame, &base);
     }
 }
 

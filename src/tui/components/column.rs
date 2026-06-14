@@ -86,9 +86,12 @@ impl TuiComponent for ColumnComponent {
         if ids.is_empty() {
             return Some(0);
         }
+        // Static children inherit this component's base path (matters when this
+        // component is itself a template instance rendered at a nested path).
+        let base = ctx.data_context.base_path();
         let mut sum: u16 = 0;
         for id in &ids {
-            sum = sum.saturating_add(measure_child(id, "", available_width)?);
+            sum = sum.saturating_add(measure_child(id, base, available_width)?);
         }
         Some(sum)
     }

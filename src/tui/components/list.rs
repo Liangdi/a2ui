@@ -92,18 +92,21 @@ impl TuiComponent for ListComponent {
         if ids.is_empty() {
             return Some(0);
         }
+        // Static children inherit this component's base path (matters when this
+        // component is itself a template instance rendered at a nested path).
+        let base = ctx.data_context.base_path();
         match dir {
             Direction::Vertical => {
                 let mut sum: u16 = 0;
                 for id in &ids {
-                    sum = sum.saturating_add(measure_child(id, "", available_width)?);
+                    sum = sum.saturating_add(measure_child(id, base, available_width)?);
                 }
                 Some(sum)
             }
             Direction::Horizontal => {
                 let mut max: u16 = 0;
                 for id in &ids {
-                    max = max.max(measure_child(id, "", available_width)?);
+                    max = max.max(measure_child(id, base, available_width)?);
                 }
                 Some(max)
             }

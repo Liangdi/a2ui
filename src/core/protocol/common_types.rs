@@ -152,6 +152,7 @@ pub enum ChildList {
     Static(Vec<ComponentId>),
     /// A template that iterates over a data-bound array,
     /// instantiating `component_id` for each item.
+    #[serde(rename_all = "camelCase")]
     Template {
         component_id: ComponentId,
         path: String,
@@ -245,4 +246,32 @@ pub enum Align {
     Center,
     End,
     Stretch,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn childlist_static_array_deserializes() {
+        let json = serde_json::json!(["a", "b", "c"]);
+        let cl: ChildList = serde_json::from_value(json).unwrap();
+        assert_eq!(cl, ChildList::Static(vec!["a".to_string(), "b".to_string(), "c".to_string()]));
+    }
+
+    #[test]
+    fn childlist_template_deserializes_camel_case_component_id() {
+        // The spec schema (common_types.json) requires the camelCase key
+        // `componentId`. This is the form every sample uses, e.g. the
+        // "Incremental List" sample's root Column.
+        let json = serde_json::json!({ "path": "/restaurants", "componentId": "restaurant_card" });
+        let cl: ChildList = serde_json::from_value(json).unwrap();
+        match cl {
+            ChildList::Template { component_id, path } => {
+                assert_eq!(component_id, "restaurant_card");
+                assert_eq!(path, "/restaurants");
+            }
+            other => panic!("expected Template, got {other:?}"),
+        }
+    }
 }
