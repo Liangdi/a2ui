@@ -27,7 +27,7 @@ use a2ui_core::model::component_context::ComponentContext;
 use a2ui_core::protocol::server_to_client::A2uiMessage;
 
 use crate::live_tree::build_nodes;
-use crate::ui::{Events, LiveNode, Surface};
+use crate::ui::{Events, LiveNode, SampleEntry, Surface};
 
 /// Owns a Slint window bound to a single A2UI surface.
 pub struct SurfaceHost {
@@ -42,6 +42,8 @@ struct HostState {
     /// unique), used to resolve dynamic values while walking + dispatching.
     functions: HashMap<String, Box<dyn FunctionImplementation>>,
     focus: RefCell<FocusManager>,
+    /// Gallery samples: `(name, messages)`. Selection replays a sample's messages.
+    samples: RefCell<Vec<(String, Vec<A2uiMessage>)>>,
 }
 
 impl SurfaceHost {
@@ -64,6 +66,7 @@ impl SurfaceHost {
             processor: RefCell::new(processor),
             functions,
             focus: RefCell::new(focus),
+            samples: RefCell::new(Vec::new()),
         });
 
         // Route button presses → core dispatch.
@@ -74,9 +77,30 @@ impl SurfaceHost {
                 .global::<Events>()
                 .on_activate(move |node_id| s.handle_activate(node_id.as_str()));
         }
+        // Route gallery sidebar clicks → load the selected sample.
+        {
+            let s = Rc::clone(&state);
+            state
+                .surface
+                .on_select_sample(move |idx| s.select(idx as usize));
+        }
 
         state.redraw();
         Ok(SurfaceHost { state })
+    }
+
+    /// Populate the left-hand sample browser with `samples` `(name, messages)`
+    /// pairs, then load the sample at `initial` into the right-hand pane.
+    pub fn set_samples(&self, samples: Vec<(String, Vec<A2uiMessage>)>, initial: usize) {
+        let entries: Vec<SampleEntry> = samples
+            .iter()
+            .map(|(name, _)| SampleEntry { name: name.as_str().into() })
+            .collect();
+        let model = slint::ModelRc::new(Rc::new(slint::VecModel::from(entries)));
+        self.state.surface.set_samples(model);
+        self.state.samples.borrow_mut().clear();
+        self.state.samples.borrow_mut().extend(samples);
+        self.state.select(initial);
     }
 
     /// Feed an A2UI message (createSurface / updateComponents / updateDataModel / …).
@@ -158,6 +182,38 @@ impl HostState {
             let mut proc = self.processor.borrow_mut();
             let _ = apply_event_result(&mut proc, result);
         }
+        self.redraw();
+    }
+
+    /// Load sample `idx`: reset the processor (keeping catalogs), replay its
+    /// messages, refresh focus, highlight the row, and redraw. No-op if the
+    /// index is out of range.
+    fn select(&self, idx: usize) {
+        let messages = self
+            .samples
+            .borrow()
+            .get(idx)
+            .map(|(_, msgs)| msgs.clone());
+        let Some(messages) = messages else {
+            return;
+        };
+
+        let mut proc = self.processor.borrow_mut();
+        proc.reset();
+        for msg in &messages {
+            let _ = proc.process_message(msg.clone());
+        }
+        drop(proc);
+
+        self.focus.borrow_mut().reset();
+        {
+            let proc = self.processor.borrow();
+            if let Some(surface) = proc.model.surfaces().next() {
+                let components = surface.components.borrow();
+                self.focus.borrow_mut().rebuild_from_components(&components);
+            }
+        }
+        self.surface.set_selected_sample(idx as i32);
         self.redraw();
     }
 }

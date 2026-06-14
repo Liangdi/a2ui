@@ -18,6 +18,7 @@ use std::process::ExitCode;
 
 use a2ui_core::catalog::basic_functions::build_basic_functions;
 use a2ui_core::catalog::function_api::FunctionImplementation;
+use a2ui_core::protocol::server_to_client::A2uiMessage;
 use a2ui_gallery::sample_loader::{self, Sample};
 use a2ui_slint::host::SurfaceHost;
 use a2ui_tui::catalogs::basic::build_basic_catalog;
@@ -140,14 +141,15 @@ fn main() -> ExitCode {
     };
 
     // ------------------------------------------------------------------
-    // 6. Feed the chosen sample's messages in order. `process_message` redraws
-    //    and rebuilds focus on each call, so the surface is fully populated
-    //    before the window appears.
+    // 6. Hand all samples to the host. It builds the left-hand sample browser
+    //    and loads the CLI-selected sample (or the first) into the right pane;
+    //    clicking a row in the sidebar switches samples live.
     // ------------------------------------------------------------------
-    for msg in &sample.messages {
-        host.process_message(msg.clone());
-    }
-    host.rebuild_focus();
+    let entries: Vec<(String, Vec<A2uiMessage>)> = samples
+        .iter()
+        .map(|s| (s.name.clone(), s.messages.clone()))
+        .collect();
+    host.set_samples(entries, selected);
 
     // ------------------------------------------------------------------
     // 7. Show the window and block until it's closed.

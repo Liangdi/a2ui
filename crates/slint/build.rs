@@ -60,6 +60,14 @@ fn generate() -> String {
          }\n\n",
     );
 
+    // One entry in the gallery's left-hand sample browser. The model position
+    // is the sample index used for selection.
+    out.push_str(
+        "struct SampleEntry {\n\
+         \x20   name: string,\n\
+         }\n\n",
+    );
+
     // Event bridge global. Rust connects to `activate` to route a node's action.
     // `export`-ed so slint generates a public `Events` type reachable from Rust
     // via `surface.global::<Events>()`.
@@ -79,11 +87,54 @@ fn generate() -> String {
         out.push('\n');
     }
 
-    // Root surface: hosts the flat node array and renders Node{MAX_DEPTH} for index 0.
+    // Root surface: a left-hand sample browser + the rendered A2UI surface.
+    //   samples        — the sample list (left sidebar)
+    //   selected-sample — currently highlighted/loaded sample index
+    //   select-sample  — fired when a sidebar row is clicked
+    //   nodes          — the flat LiveNode array for the loaded sample (right pane)
     out.push_str(&format!(
         "export component Surface inherits Window {{\n\
+         \x20   title: \"A2UI Slint Gallery\";\n\
+         \x20   preferred-width: 1000px;\n\
+         \x20   preferred-height: 700px;\n\
          \x20   in property <[LiveNode]> nodes;\n\
-         \x20   Node{MAX_DEPTH} {{ all: nodes; idx: 0; }}\n\
+         \x20   in property <[SampleEntry]> samples;\n\
+         \x20   in property <int> selected-sample;\n\
+         \x20   callback select-sample(int);\n\
+         \n\
+         \x20   HorizontalLayout {{\n\
+         \x20       // Left: sample browser.\n\
+         \x20       Rectangle {{\n\
+         \x20           width: 220px;\n\
+         \x20           background: #f5f5f5;\n\
+         \x20           VerticalLayout {{\n\
+         \x20               padding: 8px;\n\
+         \x20               spacing: 6px;\n\
+         \x20               Text {{ text: \"Samples\"; font-weight: 800; }}\n\
+         \x20               Flickable {{\n\
+         \x20               VerticalLayout {{\n\
+         \x20                   for s[i] in root.samples : Rectangle {{\n\
+         \x20                       height: 28px;\n\
+         \x20                       background: i == root.selected-sample ? #2563eb : transparent;\n\
+         \x20                       HorizontalLayout {{\n\
+         \x20                           padding-left: 8px;\n\
+         \x20                           Text {{\n\
+         \x20                               text: s.name;\n\
+         \x20                               color: i == root.selected-sample ? #ffffff : #222222;\n\
+         \x20                               vertical-alignment: center;\n\
+         \x20                           }}\n\
+         \x20                       }}\n\
+         \x20                       TouchArea {{ clicked => {{ root.select-sample(i); }} }}\n\
+         \x20                   }}\n\
+         \x20               }}\n\
+         \x20               }}\n\
+         \x20           }}\n\
+         \x20       }}\n\
+         \x20       // Divider.\n\
+         \x20       Rectangle {{ width: 1px; background: #ddd; }}\n\
+         \x20       // Right: the rendered A2UI surface.\n\
+         \x20       Node{MAX_DEPTH} {{ all: nodes; idx: 0; }}\n\
+         \x20   }}\n\
          }}\n",
     ));
 
