@@ -8,7 +8,7 @@ members = ["crates/core", "crates/tui", "crates/gallery", "crates/a2ui", "crates
 default-members = ["crates/core", "crates/tui", "crates/gallery", "crates/a2ui"]
 
 [workspace.package]
-version = "0.1.2"
+version = "0.2.0"
 edition = "2024"
 authors = ["Liangdi <wu@liangdi.me>"]
 license = "MIT"

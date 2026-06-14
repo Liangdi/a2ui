@@ -1,3 +1,37 @@
+## [0.2.0] - 2026-06-14
+
+### 🚀 Features
+
+- *(gallery)* Numbered sample rows + panel-focus navigation
+- *(slint)* Add Slint backend (a2ui-slint) + gallery binary
+- *(slint)* Render all 18 component kinds (P7)
+- *(slint-gallery)* Add left-hand sample browser sidebar
+
+### 🐛 Bug Fixes
+
+- *(tui)* Render data-templated children (componentId + base_path)
+
+### 💼 Other
+
+- *(workspace)* Restore `cargo install a2ui` bin + workspace release config
+
+### 🚜 Refactor
+
+- Split single crate into a 4-crate Cargo workspace
+- *(core)* Lift FocusManager + interaction + 4 handle_events into core
+
+### 📚 Documentation
+
+- Update READMEs for the workspace split
+- Document the Slint desktop backend in both READMEs
+
+### ⚙️ Miscellaneous Tasks
+
+- Publish a2ui-slint + a2ui-slint-gallery in dependency order
+
+### ◀️ Revert
+
+- *(umbrella)* Drop the a2ui bin to keep umbrella a pure re-export lib
 ## [0.1.2] - 2026-06-13
 
 ### 🚀 Features
@@ -37,6 +71,7 @@
 - *(justfile)* Add cargo publish recipe
 - Update AGENTS.md project conventions
 - Restore a2ui spec folder
+- Release a2ui version 0.1.2
 ## [0.1.1] - 2026-06-12
 
 ### 🚀 Features
