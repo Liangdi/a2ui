@@ -10,7 +10,7 @@
 
 A2UI 是一个 JSON 流式 UI 协议，允许 AI Agent 动态生成和更新终端用户界面。
 
-项目组织为 Cargo workspace:`a2ui-core`(框架无关核心)+ `a2ui-tui`(ratatui backend)+ `a2ui-gallery`(展示 app)+ `a2ui`(umbrella，re-export 保持 `use a2ui::core::...` / `use a2ui::tui::...` 不破)。
+项目组织为 Cargo workspace:`a2ui-core`(框架无关核心)+ `a2ui-tui`(ratatui backend)+ `a2ui-gallery`(展示 app)+ `a2ui`(umbrella，re-export 保持 `use a2ui::core::...` / `use a2ui::tui::...` 不破)。此外还有一个**可选的**第二后端 `a2ui-slint`,它把 A2UI 组件树渲染到原生桌面窗口(基于 [Slint](https://slint.dev/),pinned 1.16),详见下方[「Slint 桌面后端」](#slint-桌面后端)。
 
 ## 特性
 
@@ -117,6 +117,48 @@ crates/
     └── examples/                  # 17 个示例
 ```
 
+## Slint 桌面后端
+
+除 ratatui 终端后端外,项目还提供 **`a2ui-slint`**:它将 A2UI 组件树渲染到**原生桌面窗口**(基于 [Slint](https://slint.dev/),固定 1.16 版本)。框架无关的交互逻辑(焦点遍历、事件分发、`EventResult` 应用)共享在 `a2ui-core` 中,因此两个后端在键盘 / 按钮交互上表现一致。
+
+**它是可选且较重的依赖**:`a2ui-slint` 是 workspace 的**非默认成员**(会拉取 Slint 工具链 + GUI 系统库)。普通的 `cargo build` 只编译 ratatui 栈。需要显式构建 Slint 后端:
+
+```bash
+cargo build -p a2ui-slint --features backend
+```
+
+umbrella crate 也在 `slint` cargo feature 之后将后端 re-export 为 `a2ui::slint`。
+
+### 运行 Gallery(桌面版)
+
+`a2ui-slint-gallery` 加载与 ratatui gallery 相同的内嵌 A2UI 样例,在窗口中展示。启动时会在终端打印完整的带编号样例列表:
+
+```bash
+cargo run -p a2ui-slint-gallery             # 第一个样例
+cargo run -p a2ui-slint-gallery -- 3        # 按 1 起始的序号
+cargo run -p a2ui-slint-gallery -- login    # 按名称子串(大小写不敏感)
+```
+
+渲染器使用 `renderer-software` + `backend-winit`,**无需 GPU / OpenGL 驱动**即可运行。
+
+### 组件覆盖
+
+全部 18 个 A2UI 组件类型均可渲染:
+
+- **富渲染**:Text / Button / Column / Row / Card / TextField / CheckBox / Slider(Button 与 CheckBox 的点击通过共享的 `core::components::dispatch_event` 分发)
+- **尽力渲染**:Divider / Icon / Tabs / Modal / List / ChoicePicker / DateTimeInput
+- **占位符**:Image / Video / AudioPlayer 渲染为带标签的占位符(二进制媒体不会带入 Slint 树)
+
+### 实现要点:为什么需要展平组件树
+
+Slint **无法表达递归**(既不支持递归 struct,也不支持自引用组件 —— 见 [slint-ui/slint#4218](https://github.com/slint-ui/slint/issues/4218))。因此 `live_tree` 不是嵌套树,而是把组件树展平为一个 `Vec<LiveNode>`,通过基于索引的 `children` 引用;`build.rs` 代码生成了一个**有界深度**的组件链 `Node0`(叶子)→ … → `Node7`(根)。A2UI 树通常很浅,深度 7 足以覆盖实际 UI;更深的子树会被截断为 `…`。这是未来贡献者最需要了解的关键约束。
+
+### 当前限制
+
+- 超过 7 层的树会被截断;
+- TextField 能显示其值,但尚未接入原生可编辑输入控件;
+- Tabs / ChoicePicker / DateTimeInput 可渲染,但它们的键盘处理未进入共享 core 的 dispatch(Slint 侧除 Button / CheckBox 外的交互尚未接通)。
+
 ## 协议概览
 
 A2UI 使用 JSON 流式消息驱动 UI 渲染：
@@ -145,6 +187,8 @@ A2UI 使用 JSON 流式消息驱动 UI 渲染：
 
 图片渲染**内置且默认开启**：默认 `cargo build` 即通过 `ratatui-image` 进行真实图片渲染（kitty / iTerm2 / Sixel / Halfblocks 自动降级），仅支持本地文件路径，无法加载时回退为占位符。以下为额外的**可选**特性，默认关闭：
 
+> 桌面 GUI 后端见上方[「Slint 桌面后端」](#slint-桌面后端)章节(独立 workspace 成员,非 ratatui feature)。
+
 | 特性 | 说明 | 启用 | 限制 |
 |------|------|------|------|
 | `audio` | 通过 `rodio` 进行真实音频播放（后台线程） | `--features audio` | **仅支持本地文件路径**；需安装 ALSA 系统开发库（Fedora: `alsa-lib-devel`，Debian: `libasound2-dev`）；失败时静默回退为占位符 |
@@ -152,7 +196,7 @@ A2UI 使用 JSON 流式消息驱动 UI 渲染：
 
 ## 作为库使用
 
-`a2ui-core` 完全框架无关，可独立用于非 ratatui 场景，或作为其他 backend（如下一步规划的 slint）的基础：
+`a2ui-core` 完全框架无关，可独立用于非 ratatui 场景，或作为其他 backend 的基础（项目已基于它实现了 [Slint 桌面后端](#slint-桌面后端)）：
 
 ```bash
 # 方式一：直接依赖（最精简，推荐用于库）

@@ -10,7 +10,7 @@ A Rust implementation of the [A2UI (Agent to UI) v1.0](https://github.com/a2ui-p
 
 A2UI is a JSON-based streaming UI protocol that allows AI Agents to dynamically generate and update terminal user interfaces.
 
-The project is organized as a Cargo workspace: `a2ui-core` (framework-agnostic core) + `a2ui-tui` (ratatui backend) + `a2ui-gallery` (demo app) + `a2ui` (umbrella that re-exports core+tui, keeping `use a2ui::core::...` / `use a2ui::tui::...` paths working).
+The project is organized as a Cargo workspace: `a2ui-core` (framework-agnostic core) + `a2ui-tui` (ratatui backend) + `a2ui-gallery` (demo app) + `a2ui` (umbrella that re-exports core+tui, keeping `use a2ui::core::...` / `use a2ui::tui::...` paths working). There is also an **optional** second backend, `a2ui-slint`, which renders A2UI component trees into a native desktop window (built on [Slint](https://slint.dev/), pinned to 1.16) — see [Slint Desktop Backend](#slint-desktop-backend) below.
 
 ## Features
 
@@ -117,6 +117,48 @@ crates/
     └── examples/                  # 17 examples
 ```
 
+## Slint Desktop Backend
+
+Alongside the ratatui terminal backend, the project ships **`a2ui-slint`**, which renders A2UI component trees into a **native desktop window** (built on [Slint](https://slint.dev/), pinned to 1.16). The framework-agnostic interaction logic (focus traversal, event dispatch, `EventResult` application) is shared in `a2ui-core`, so both backends behave identically for keyboard / button interactions.
+
+**It is opt-in and heavy**: `a2ui-slint` is a **non-default workspace member** (it pulls the Slint toolchain + GUI system libraries). A plain `cargo build` only compiles the ratatui stack. Build the Slint backend explicitly:
+
+```bash
+cargo build -p a2ui-slint --features backend
+```
+
+The umbrella crate also re-exports it as `a2ui::slint` behind a `slint` cargo feature.
+
+### Running the Gallery (desktop)
+
+`a2ui-slint-gallery` loads the same embedded A2UI samples as the ratatui gallery, in a window. It prints the full numbered sample list at startup:
+
+```bash
+cargo run -p a2ui-slint-gallery             # first sample
+cargo run -p a2ui-slint-gallery -- 3        # by 1-based index
+cargo run -p a2ui-slint-gallery -- login    # by case-insensitive name substring
+```
+
+Renderer: `renderer-software` + `backend-winit` — it works **without a GPU / OpenGL driver**.
+
+### Component coverage
+
+All 18 A2UI component kinds render:
+
+- **Rich**: Text / Button / Column / Row / Card / TextField / CheckBox / Slider (Button & CheckBox clicks dispatch through the shared `core::components::dispatch_event`)
+- **Best-effort**: Divider / Icon / Tabs / Modal / List / ChoicePicker / DateTimeInput
+- **Placeholders**: Image / Video / AudioPlayer render as labeled placeholders (binary media isn't carried into the Slint tree)
+
+### Implementation note: why the tree is flattened
+
+Slint **cannot express recursion** (neither recursive structs nor self-referencing components — see [slint-ui/slint#4218](https://github.com/slint-ui/slint/issues/4218)). So instead of a nested tree, `live_tree` flattens the component tree into a `Vec<LiveNode>` with index-based `children`, and `build.rs` code-generates a **bounded-depth** component chain `Node0` (leaf) → … → `Node7` (root). A2UI trees are shallow, so depth 7 covers realistic UIs; deeper subtrees truncate to a `…`. This is the key constraint a future contributor needs to know.
+
+### Current limitations
+
+- Trees deeper than 7 levels truncate;
+- TextField shows its value but isn't wired to a native editable input yet;
+- Tabs / ChoicePicker / DateTimeInput render, but their keyboard handlers aren't in the shared core dispatch (interaction beyond Button / CheckBox is not yet wired on the Slint side).
+
 ## Protocol Overview
 
 A2UI uses a JSON streaming message format to drive UI rendering:
@@ -145,6 +187,8 @@ A2UI uses a JSON streaming message format to drive UI rendering:
 
 Image rendering is **built-in and on by default**: a plain `cargo build` renders real images via `ratatui-image` (auto-degrading kitty / iTerm2 / Sixel / Halfblocks), local file paths only, falling back to the placeholder when unloadable. The following are additional **opt-in** features, OFF by default:
 
+> The desktop GUI backend lives in its own [Slint Desktop Backend](#slint-desktop-backend) section above (a separate workspace member, not a ratatui feature).
+
 | Feature | Description | Enable | Limitation |
 |---------|-------------|--------|------------|
 | `audio` | Real audio playback via `rodio` (background thread) | `--features audio` | **LOCAL file paths only**; requires the ALSA system dev library (`alsa-lib-devel` on Fedora / `libasound2-dev` on Debian); silently falls back to the placeholder on failure |
@@ -152,7 +196,7 @@ Image rendering is **built-in and on by default**: a plain `cargo build` renders
 
 ## Using as a Library
 
-`a2ui-core` is fully framework-agnostic — usable on its own for non-ratatui scenarios, or as the foundation for other backends (e.g. a planned slint backend):
+`a2ui-core` is fully framework-agnostic — usable on its own for non-ratatui scenarios, or as the foundation for other backends (the project already builds the [Slint desktop backend](#slint-desktop-backend) on top of it):
 
 ```bash
 # Option 1: depend directly (most minimal, recommended for libraries)
