@@ -1,4 +1,4 @@
-# A2UI — Ratatui-based TUI Renderer
+# A2UI — Rust impl of the A2UI protocol (ratatui terminal + Slint desktop)
 
 [![crates.io](https://img.shields.io/crates/v/a2ui.svg)](https://crates.io/crates/a2ui)
 [![docs.rs](https://docs.rs/a2ui/badge.svg)](https://docs.rs/a2ui)
@@ -25,7 +25,7 @@ The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic c
 - ✅ **Modular Cargo workspace architecture** (`a2ui-base` framework-agnostic / `a2ui-tui` ratatui backend / `a2ui-gallery` demo app / `a2ui` umbrella)
 - ✅ JSON Pointer data binding with reactive state management
 - ✅ Gallery App sample browser with progressive message rendering
-- ✅ **173 unit/integration tests** (core 83 + tui 69 + gallery e2e 21), including end-to-end tests with A2UI specification examples
+- ✅ **182 unit/integration tests** (core 91 + tui 61 + gallery e2e 21 + slint 9), including end-to-end tests with A2UI specification examples
 
 ## Screenshots
 
@@ -77,18 +77,18 @@ cargo run -p a2ui --example 12_handshake
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│  a2ui-gallery (bin)                     │  ← Gallery App + spec tree embedded at build time
-├─────────────────────────────────────────┤
-│  a2ui (umbrella lib)                    │  ← re-exports core+tui, keeps use a2ui:: paths
-├─────────────────────────────────────────┤
-│  a2ui-tui  (ratatui backend)            │  ← 18 component impls + Surface rendering
-├─────────────────────────────────────────┤
-│  a2ui-base (framework-agnostic)         │  ← Protocol / Model / Catalog / Processor
-└─────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  apps:       a2ui-gallery (TUI)        a2ui-slint-gallery (desktop)
+├──────────────────────────────────────────────────────────────┤
+│  umbrella:   a2ui  (re-export core + tui [+ slint])           │
+├──────────────────────────────────────────────────────────────┤
+│  backends:   a2ui-tui (ratatui)        a2ui-slint (Slint, opt-in)
+├──────────────────────────────────────────────────────────────┤
+│  a2ui-base (framework-agnostic: Protocol / Model / Catalog / Processor)
+└──────────────────────────────────────────────────────────────┘
 ```
 
-Dependencies flow upward: `a2ui-base` ← `a2ui-tui` ← `a2ui-gallery`; the `a2ui` umbrella depends on core+tui. `a2ui-base` has zero ratatui dependency and can be used standalone by other backends.
+Dependencies flow upward: `a2ui-base` underpins two backends — `a2ui-tui` (ratatui, default) and `a2ui-slint` (Slint desktop, optional). `a2ui-tui` ← `a2ui-gallery`; `a2ui-slint` ← `a2ui-slint-gallery`; the `a2ui` umbrella depends on core + tui (slint behind the `slint` feature). `a2ui-base` has zero ratatui/slint dependency and can be used standalone by other backends.
 
 ### Project Structure
 
@@ -112,7 +112,12 @@ crates/
 │   ├── src/                       # app.rs / sample_loader.rs / main.rs
 │   ├── tests/e2e.rs               # End-to-end tests (loads spec samples)
 │   └── a2ui/specification/        # Spec tree embedded at build time
-└── a2ui/              # a2ui: umbrella, re-exports core+tui
+├── slint/             # a2ui-slint: Slint desktop backend (optional, non-default member)
+│   ├── build.rs                  # generates bounded-depth Node0..N7 (Slint can't recurse)
+│   └── src/                      # live_tree (flat node array) / host / ui
+├── slint-gallery/     # a2ui-slint-gallery: desktop Gallery App (bin, left list + right preview)
+│   └── src/main.rs
+└── a2ui/              # a2ui: umbrella, re-exports core+tui [+slint]
     ├── src/lib.rs
     └── examples/                  # 17 examples
 ```
