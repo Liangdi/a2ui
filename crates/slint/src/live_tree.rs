@@ -25,7 +25,7 @@ use a2ui_core::model::component_context::ComponentContext;
 use a2ui_core::model::components_model::SurfaceComponentsModel;
 use a2ui_core::model::data_model::DataModel;
 use a2ui_core::model::surface_model::SurfaceModel;
-use a2ui_core::protocol::common_types::{ChildList, DynamicString};
+use a2ui_core::protocol::common_types::{ChildList, DynamicBoolean, DynamicNumber, DynamicString};
 
 use crate::ui::LiveNode;
 
@@ -81,7 +81,7 @@ impl FlatBuilder {
         // Resolve this node's display fields while we hold the context borrow,
         // then plan its children — both as fully-owned data so the recursive
         // `add` calls below don't fight the borrow.
-        let (text, label, variant, child_plan) = {
+        let (text, label, variant, checked, number, extra, child_plan) = {
             let ctx = ComponentContext::new(
                 id.to_string(),
                 surface_id.to_string(),
@@ -91,9 +91,9 @@ impl FlatBuilder {
                 base_path,
                 focused_id.map(|s| s.to_string()),
             );
-            let (text, label, variant) = resolve_fields(&kind, &ctx, model);
+            let (text, label, variant, checked, number, extra) = resolve_fields(&kind, &ctx, model);
             let plan = build_child_plan(model, &ctx);
-            (text, label, variant, plan)
+            (text, label, variant, checked, number, extra, plan)
         };
 
         // Reserve this node's slot first so it keeps the lowest index, then
@@ -115,6 +115,9 @@ impl FlatBuilder {
             text: text.into(),
             label: label.into(),
             variant: variant.into(),
+            checked,
+            number: number as f32,
+            extra: extra.into(),
             focused: focused_id == Some(id),
             children: to_int_model(child_indices),
         };
@@ -122,7 +125,8 @@ impl FlatBuilder {
     }
 }
 
-/// Extract the (text, label, variant) display fields for a component type.
+/// Extract the display fields for a component type, returning
+/// `(text, label, variant, checked, number, extra)`.
 ///
 /// Unknown kinds fall through with empty text (the generated `.slint` shows the
 /// kind name so an unimplemented component is still visible).
@@ -130,7 +134,7 @@ fn resolve_fields(
     kind: &str,
     ctx: &ComponentContext,
     model: &a2ui_core::model::component_model::ComponentModel,
-) -> (String, String, String) {
+) -> (String, String, String, bool, f64, String) {
     let variant: String = model.get_property::<String>("variant").unwrap_or_default();
     match kind {
         "Text" => {
@@ -138,7 +142,7 @@ fn resolve_fields(
                 .get_property::<DynamicString>("text")
                 .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
                 .unwrap_or_default();
-            (text, String::new(), variant)
+            (text, String::new(), variant, false, 0.0, String::new())
         }
         "TextField" => {
             let label = model
@@ -149,9 +153,77 @@ fn resolve_fields(
                 .get_property::<DynamicString>("value")
                 .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
                 .unwrap_or_default();
-            (value, label, variant)
+            (value, label, variant, false, 0.0, String::new())
         }
-        _ => (String::new(), String::new(), variant),
+        "CheckBox" => {
+            let label = model
+                .get_property::<DynamicString>("label")
+                .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
+                .unwrap_or_default();
+            let checked = model
+                .get_property::<DynamicBoolean>("value")
+                .map(|db| ctx.data_context.resolve_dynamic_boolean(&db))
+                .unwrap_or(false);
+            (label, String::new(), variant, checked, 0.0, String::new())
+        }
+        "Slider" => {
+            let number = model
+                .get_property::<DynamicNumber>("value")
+                .map(|dn| ctx.data_context.resolve_dynamic_number(&dn))
+                .unwrap_or(0.0);
+            let label = model
+                .get_property::<DynamicString>("label")
+                .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
+                .unwrap_or_default();
+            (String::new(), label, variant, false, number, String::new())
+        }
+        "Tabs" => {
+            let number = model
+                .get_property::<DynamicNumber>("activeTab")
+                .map(|dn| ctx.data_context.resolve_dynamic_number(&dn))
+                .unwrap_or(0.0);
+            (String::new(), String::new(), variant, false, number, String::new())
+        }
+        "Icon" => {
+            let name = model
+                .get_property::<DynamicString>("name")
+                .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
+                .unwrap_or_default();
+            (String::new(), String::new(), variant, false, 0.0, name)
+        }
+        "DateTimeInput" => {
+            let label = model
+                .get_property::<DynamicString>("label")
+                .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
+                .unwrap_or_default();
+            let value = model
+                .get_property::<DynamicString>("value")
+                .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
+                .unwrap_or_default();
+            (String::new(), label, variant, false, 0.0, value)
+        }
+        "Image" | "Video" | "AudioPlayer" => {
+            let url = model
+                .get_property::<DynamicString>("url")
+                .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
+                .unwrap_or_default();
+            (String::new(), String::new(), variant, false, 0.0, url)
+        }
+        "ChoicePicker" => {
+            let label = model
+                .get_property::<DynamicString>("label")
+                .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
+                .unwrap_or_default();
+            (String::new(), label, variant, false, 0.0, String::new())
+        }
+        "Modal" => {
+            let is_open = model
+                .get_property::<DynamicBoolean>("isOpen")
+                .map(|db| ctx.data_context.resolve_dynamic_boolean(&db))
+                .unwrap_or(false);
+            (String::new(), String::new(), variant, is_open, 0.0, String::new())
+        }
+        _ => (String::new(), String::new(), variant, false, 0.0, String::new()),
     }
 }
 
@@ -203,6 +275,9 @@ fn empty_node() -> LiveNode {
         text: "".into(),
         label: "".into(),
         variant: "".into(),
+        checked: false,
+        number: 0.0,
+        extra: "".into(),
         focused: false,
         children: slint::ModelRc::default(),
     }
@@ -350,5 +425,48 @@ mod tests {
         assert!(!nodes[0].focused, "root not focused");
         assert!(nodes[1].focused, "first field focused");
         assert!(!nodes[2].focused);
+    }
+
+    #[test]
+    fn checkbox_carries_checked_from_data_model() {
+        let nodes = build(
+            serde_json::json!([
+                { "id": "root", "component": "Column", "children": ["c"] },
+                { "id": "c", "component": "CheckBox", "label": "Agree", "value": { "path": "/flag" } }
+            ]),
+            Some(serde_json::json!({ "flag": true })),
+            None,
+        );
+        assert_eq!(nodes[1].kind.to_string(), "CheckBox");
+        assert_eq!(nodes[1].text.to_string(), "Agree");
+        assert!(nodes[1].checked, "checked reflects data-model bool");
+    }
+
+    #[test]
+    fn slider_carries_number_from_data_model() {
+        let nodes = build(
+            serde_json::json!([
+                { "id": "root", "component": "Column", "children": ["s"] },
+                { "id": "s", "component": "Slider", "value": { "path": "/vol" } }
+            ]),
+            Some(serde_json::json!({ "vol": 42 })),
+            None,
+        );
+        assert_eq!(nodes[1].kind.to_string(), "Slider");
+        assert!(((nodes[1].number as f64) - 42.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn image_carries_source_in_extra() {
+        let nodes = build(
+            serde_json::json!([
+                { "id": "root", "component": "Column", "children": ["img"] },
+                { "id": "img", "component": "Image", "url": "https://example.com/a.png" }
+            ]),
+            None,
+            None,
+        );
+        assert_eq!(nodes[1].kind.to_string(), "Image");
+        assert_eq!(nodes[1].extra.to_string(), "https://example.com/a.png");
     }
 }

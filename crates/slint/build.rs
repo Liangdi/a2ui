@@ -52,6 +52,9 @@ fn generate() -> String {
          \x20   text: string,\n\
          \x20   label: string,\n\
          \x20   variant: string,\n\
+         \x20   checked: bool,\n\
+         \x20   number: float,\n\
+         \x20   extra: string,\n\
          \x20   focused: bool,\n\
          \x20   children: [int],\n\
          }\n\n",
@@ -155,9 +158,92 @@ fn node_body(k: usize, child_comp: Option<&str>) -> String {
          \x20       }}\n\
          \x20   }}\n\
          \n\
+         \x20   // Divider — thin full-width horizontal rule.\n\
+         \x20   if me.kind == \"Divider\" : Rectangle {{\n\
+         \x20       height: 1px;\n\
+         \x20       background: #d0d0d0;\n\
+         \x20   }}\n\
+         \n\
+         \x20   // List — vertical stack of children (same layout as Column).\n\
+         \x20   if me.kind == \"List\" : VerticalLayout {{\n\
+         \x20       spacing: 2px;\n\
+         \x20       {render_children}\n\
+         \x20   }}\n\
+         \n\
+         \x20   // CheckBox — indicator + label; Enter toggles via core dispatch.\n\
+         \x20   if me.kind == \"CheckBox\" : HorizontalLayout {{\n\
+         \x20       spacing: 6px;\n\
+         \x20       Text {{ text: me.checked ? \"\u{2611}\" : \"\u{2610}\"; }}\n\
+         \x20       Text {{ text: me.text; }}\n\
+         \x20       TouchArea {{ clicked => {{ Events.activate(me.id); }} }}\n\
+         \x20   }}\n\
+         \n\
+         \x20   // Slider — display-only track showing the current value.\n\
+         \x20   if me.kind == \"Slider\" : HorizontalLayout {{\n\
+         \x20       Text {{ text: \"\u{25ae}\u{2500}\u{2500} (slider) \" + me.number; }}\n\
+         \x20   }}\n\
+         \n\
+         \x20   // Icon — labeled box (no icon font available).\n\
+         \x20   if me.kind == \"Icon\" : Rectangle {{\n\
+         \x20       background: #f3f4f6;\n\
+         \x20       border-width: 1px; border-color: #ddd;\n\
+         \x20       HorizontalLayout {{ padding: 4px; Text {{ text: \"[icon: \" + me.extra + \"]\"; color: #666; }} }}\n\
+         \x20   }}\n\
+         \n\
+         \x20   // Tabs — active index label + active child panel.\n\
+         \x20   if me.kind == \"Tabs\" : VerticalLayout {{\n\
+         \x20       Text {{ text: \"Tabs (active: \" + me.number + \")\"; color: #666; font-size: 11px; }}\n\
+         \x20       {render_children}\n\
+         \x20   }}\n\
+         \n\
+         \x20   // Modal — elevated panel; renders nothing when closed.\n\
+         \x20   if me.kind == \"Modal\" && me.checked : Rectangle {{\n\
+         \x20       background: #fff;\n\
+         \x20       border-radius: 8px;\n\
+         \x20       border-width: 2px; border-color: #bbb;\n\
+         \x20       drop-shadow-blur: 6px; drop-shadow-color: #0003;\n\
+         \x20       VerticalLayout {{ padding: 12px; {render_children} }}\n\
+         \x20   }}\n\
+         \n\
+         \x20   // ChoicePicker — labeled box (display-only).\n\
+         \x20   if me.kind == \"ChoicePicker\" : Rectangle {{\n\
+         \x20       background: #fafafa;\n\
+         \x20       border-width: 1px; border-color: #ddd;\n\
+         \x20       HorizontalLayout {{ padding: 6px; Text {{ text: me.label; }} }}\n\
+         \x20   }}\n\
+         \n\
+         \x20   // DateTimeInput — bordered field showing label + datetime value.\n\
+         \x20   if me.kind == \"DateTimeInput\" : Rectangle {{\n\
+         \x20       border-width: 1px; border-color: me.focused ? #eab308 : #ccc;\n\
+         \x20       border-radius: 4px;\n\
+         \x20       VerticalLayout {{\n\
+         \x20           padding: 4px;\n\
+         \x20           Text {{ text: me.label; color: #666; font-size: 11px; }}\n\
+         \x20           Text {{ text: me.extra; }}\n\
+         \x20       }}\n\
+         \x20   }}\n\
+         \n\
+         \x20   // Image / Video / AudioPlayer — labeled placeholders (bytes not carried).\n\
+         \x20   if me.kind == \"Image\" : Rectangle {{\n\
+         \x20       background: #f3f4f6; border-width: 1px; border-color: #ddd;\n\
+         \x20       HorizontalLayout {{ padding: 6px; Text {{ text: \"[Image: \" + me.extra + \"]\"; color: #666; }} }}\n\
+         \x20   }}\n\
+         \x20   if me.kind == \"Video\" : Rectangle {{\n\
+         \x20       background: #f3f4f6; border-width: 1px; border-color: #ddd;\n\
+         \x20       HorizontalLayout {{ padding: 6px; Text {{ text: \"[Video: \" + me.extra + \"]\"; color: #666; }} }}\n\
+         \x20   }}\n\
+         \x20   if me.kind == \"AudioPlayer\" : Rectangle {{\n\
+         \x20       background: #f3f4f6; border-width: 1px; border-color: #ddd;\n\
+         \x20       HorizontalLayout {{ padding: 6px; Text {{ text: \"\u{25b6} [Audio: \" + me.extra + \"]\"; color: #666; }} }}\n\
+         \x20   }}\n\
+         \n\
          \x20   // Unknown / not-yet-implemented kind — show the kind name so the tree is visible.\n\
          \x20   if me.kind != \"Column\" && me.kind != \"Row\" && me.kind != \"Card\" &&\n\
-         \x20      me.kind != \"Text\" && me.kind != \"Button\" && me.kind != \"TextField\" :\n\
+         \x20      me.kind != \"Text\" && me.kind != \"Button\" && me.kind != \"TextField\" &&\n\
+         \x20      me.kind != \"Divider\" && me.kind != \"List\" && me.kind != \"CheckBox\" &&\n\
+         \x20      me.kind != \"Slider\" && me.kind != \"Icon\" && me.kind != \"Tabs\" &&\n\
+         \x20      me.kind != \"Modal\" && me.kind != \"ChoicePicker\" && me.kind != \"DateTimeInput\" &&\n\
+         \x20      me.kind != \"Image\" && me.kind != \"Video\" && me.kind != \"AudioPlayer\" :\n\
          \x20       Rectangle {{\n\
          \x20           background: #fafafa;\n\
          \x20           border-width: 1px; border-color: #ddd;\n\
