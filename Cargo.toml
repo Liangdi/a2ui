@@ -41,11 +41,14 @@ slint = { version = "1.16", default-features = false, features = ["std", "compat
 # so the backend compiles real `.slint` files instead.)
 slint-build = { version = "1.16" }
 
-# Internal crates — path dependencies shared across the workspace.
-a2ui-base = { path = "crates/core" }
-a2ui-tui = { path = "crates/tui" }
-a2ui-gallery = { path = "crates/gallery" }
-a2ui-slint = { path = "crates/slint" }
+# Internal crates — path dependencies shared across the workspace. Each carries
+# a `version` (the workspace package version) so `cargo publish` can resolve them
+# against crates.io (the `path` is stripped on publish). Consumers use
+# `{ workspace = true }` and inherit both.
+a2ui-base = { path = "crates/core", version = "0.2.0" }
+a2ui-tui = { path = "crates/tui", version = "0.2.0" }
+a2ui-gallery = { path = "crates/gallery", version = "0.2.0" }
+a2ui-slint = { path = "crates/slint", version = "0.2.0" }
 
 # --- Release profile: optimize for binary size --------------------------------
 # The gallery embeds the full spec tree, so we trim the distributed binary.
