@@ -1,11 +1,11 @@
 [package]
-name = "a2ui-core"
+name = "a2ui-base"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Framework-agnostic core (protocol, model, catalog) for A2UI"
+description = "Framework-agnostic base for A2UI (Agent to UI): protocol, models, and catalog"
 
 [dependencies]
 serde = { workspace = true }

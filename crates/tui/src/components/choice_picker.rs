@@ -8,9 +8,9 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 
-use a2ui_core::event::{EventResult, InputEvent, InputKey};
-use a2ui_core::model::component_context::ComponentContext;
-use a2ui_core::protocol::common_types::{DynamicString, DynamicStringList};
+use a2ui_base::event::{EventResult, InputEvent, InputKey};
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::common_types::{DynamicString, DynamicStringList};
 use crate::component_impl::TuiComponent;
 
 /// An option entry in the choice picker.
@@ -84,7 +84,7 @@ impl TuiComponent for ChoicePickerComponent {
                 DynamicStringList::Function(fc) => {
                     // Execute function and try to get array of strings.
                     let result = ctx.data_context.resolve_dynamic_value(
-                        &a2ui_core::protocol::common_types::DynamicValue::Function(fc),
+                        &a2ui_base::protocol::common_types::DynamicValue::Function(fc),
                     );
                     match result {
                         serde_json::Value::Array(arr) => arr
@@ -224,8 +224,8 @@ impl TuiComponent for ChoicePickerComponent {
     fn handle_event(
         &self,
         ctx: &ComponentContext,
-        event: &a2ui_core::event::InputEvent,
-    ) -> Option<a2ui_core::event::EventResult> {
+        event: &a2ui_base::event::InputEvent,
+    ) -> Option<a2ui_base::event::EventResult> {
         let comp_model = ctx.components.get(&ctx.component_id)?;
 
         let options: Vec<ChoiceOption> = comp_model.get_property("options")?;

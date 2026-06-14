@@ -16,9 +16,9 @@ use std::collections::HashMap;
 use std::env;
 use std::process::ExitCode;
 
-use a2ui_core::catalog::basic_functions::build_basic_functions;
-use a2ui_core::catalog::function_api::FunctionImplementation;
-use a2ui_core::protocol::server_to_client::A2uiMessage;
+use a2ui_base::catalog::basic_functions::build_basic_functions;
+use a2ui_base::catalog::function_api::FunctionImplementation;
+use a2ui_base::protocol::server_to_client::A2uiMessage;
 use a2ui_gallery::sample_loader::{self, Sample};
 use a2ui_slint::host::SurfaceHost;
 use a2ui_tui::catalogs::basic::build_basic_catalog;

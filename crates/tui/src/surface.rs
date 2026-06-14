@@ -8,12 +8,12 @@ use ratatui::{
     widgets::{Block, Paragraph},
 };
 
-use a2ui_core::catalog::function_api::FunctionImplementation;
-use a2ui_core::catalog::Catalog;
-use a2ui_core::model::component_context::ComponentContext;
-use a2ui_core::model::components_model::SurfaceComponentsModel;
-use a2ui_core::model::data_model::DataModel;
-use a2ui_core::model::surface_model::SurfaceModel;
+use a2ui_base::catalog::function_api::FunctionImplementation;
+use a2ui_base::catalog::Catalog;
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::model::components_model::SurfaceComponentsModel;
+use a2ui_base::model::data_model::DataModel;
+use a2ui_base::model::surface_model::SurfaceModel;
 use super::component_impl::ComponentRegistry;
 use super::component_impl::TuiComponent;
 
@@ -318,7 +318,7 @@ fn measure_node(
 #[cfg(test)]
 mod render_tests {
     use super::*;
-    use a2ui_core::message_processor::MessageProcessor;
+    use a2ui_base::message_processor::MessageProcessor;
     use crate::catalogs::basic::{build_basic_catalog, build_basic_registry};
     use ratatui::backend::TestBackend;
 
@@ -675,7 +675,7 @@ mod render_tests {
             let components = surface.components.borrow();
             let root = components.get("root").expect("root exists");
             match root.children() {
-                Some(a2ui_core::protocol::common_types::ChildList::Template { component_id, path }) => {
+                Some(a2ui_base::protocol::common_types::ChildList::Template { component_id, path }) => {
                     assert_eq!(component_id, "restaurant_card");
                     assert_eq!(path, "/restaurants");
                 }

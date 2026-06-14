@@ -35,13 +35,13 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use a2ui_core::model::component_context::ComponentContext;
-use a2ui_core::protocol::common_types::DynamicString;
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::common_types::DynamicString;
 use crate::component_impl::TuiComponent;
 
 // Event types are only needed by the feature-gated `handle_event`.
 #[cfg(feature = "audio")]
-use a2ui_core::event::{EventResult, InputEvent, InputKey};
+use a2ui_base::event::{EventResult, InputEvent, InputKey};
 
 /// Render the standard text placeholder into `inner`.
 fn render_placeholder(description: &str, display_text: &str, inner: Rect, frame: &mut Frame) {

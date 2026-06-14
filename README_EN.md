@@ -10,7 +10,7 @@ A Rust implementation of the [A2UI (Agent to UI) v1.0](https://github.com/a2ui-p
 
 A2UI is a JSON-based streaming UI protocol that allows AI Agents to dynamically generate and update terminal user interfaces.
 
-The project is organized as a Cargo workspace: `a2ui-core` (framework-agnostic core) + `a2ui-tui` (ratatui backend) + `a2ui-gallery` (demo app) + `a2ui` (umbrella that re-exports core+tui, keeping `use a2ui::core::...` / `use a2ui::tui::...` paths working). There is also an **optional** second backend, `a2ui-slint`, which renders A2UI component trees into a native desktop window (built on [Slint](https://slint.dev/), pinned to 1.16) — see [Slint Desktop Backend](#slint-desktop-backend) below.
+The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic core) + `a2ui-tui` (ratatui backend) + `a2ui-gallery` (demo app) + `a2ui` (umbrella that re-exports core+tui, keeping `use a2ui::core::...` / `use a2ui::tui::...` paths working). There is also an **optional** second backend, `a2ui-slint`, which renders A2UI component trees into a native desktop window (built on [Slint](https://slint.dev/), pinned to 1.16) — see [Slint Desktop Backend](#slint-desktop-backend) below.
 
 ## Features
 
@@ -22,7 +22,7 @@ The project is organized as a Cargo workspace: `a2ui-core` (framework-agnostic c
 - ✅ **Inline catalogs**: the server can declare `acceptsInlineCatalogs`; the client parses and validates inline catalog JSON (UAX#31 identifier checks) and registers schema-only functions at runtime.
 - ✅ **Generic fallback renderer**: unknown / inline-custom component types render as a visible labeled box (type + properties + children) instead of a bare "unknown" error.
 - ✅ **14 client-side functions**: required, regex, length, numeric, email, and/or/not, formatString, formatNumber, formatCurrency, formatDate, pluralize, openUrl
-- ✅ **Modular Cargo workspace architecture** (`a2ui-core` framework-agnostic / `a2ui-tui` ratatui backend / `a2ui-gallery` demo app / `a2ui` umbrella)
+- ✅ **Modular Cargo workspace architecture** (`a2ui-base` framework-agnostic / `a2ui-tui` ratatui backend / `a2ui-gallery` demo app / `a2ui` umbrella)
 - ✅ JSON Pointer data binding with reactive state management
 - ✅ Gallery App sample browser with progressive message rendering
 - ✅ **173 unit/integration tests** (core 83 + tui 69 + gallery e2e 21), including end-to-end tests with A2UI specification examples
@@ -84,17 +84,17 @@ cargo run -p a2ui --example 12_handshake
 ├─────────────────────────────────────────┤
 │  a2ui-tui  (ratatui backend)            │  ← 18 component impls + Surface rendering
 ├─────────────────────────────────────────┤
-│  a2ui-core (framework-agnostic)         │  ← Protocol / Model / Catalog / Processor
+│  a2ui-base (framework-agnostic)         │  ← Protocol / Model / Catalog / Processor
 └─────────────────────────────────────────┘
 ```
 
-Dependencies flow upward: `a2ui-core` ← `a2ui-tui` ← `a2ui-gallery`; the `a2ui` umbrella depends on core+tui. `a2ui-core` has zero ratatui dependency and can be used standalone by other backends.
+Dependencies flow upward: `a2ui-base` ← `a2ui-tui` ← `a2ui-gallery`; the `a2ui` umbrella depends on core+tui. `a2ui-base` has zero ratatui dependency and can be used standalone by other backends.
 
 ### Project Structure
 
 ```
 crates/
-├── core/              # a2ui-core: framework-agnostic layer
+├── core/              # a2ui-base: framework-agnostic layer
 │   └── src/
 │       ├── protocol/ model/ catalog/ observable/
 │       ├── message_processor.rs   # JSON parse → state mutation
@@ -119,7 +119,7 @@ crates/
 
 ## Slint Desktop Backend
 
-Alongside the ratatui terminal backend, the project ships **`a2ui-slint`**, which renders A2UI component trees into a **native desktop window** (built on [Slint](https://slint.dev/), pinned to 1.16). The framework-agnostic interaction logic (focus traversal, event dispatch, `EventResult` application) is shared in `a2ui-core`, so both backends behave identically for keyboard / button interactions.
+Alongside the ratatui terminal backend, the project ships **`a2ui-slint`**, which renders A2UI component trees into a **native desktop window** (built on [Slint](https://slint.dev/), pinned to 1.16). The framework-agnostic interaction logic (focus traversal, event dispatch, `EventResult` application) is shared in `a2ui-base`, so both backends behave identically for keyboard / button interactions.
 
 **It is opt-in and heavy**: `a2ui-slint` is a **non-default workspace member** (it pulls the Slint toolchain + GUI system libraries). A plain `cargo build` only compiles the ratatui stack. Build the Slint backend explicitly:
 
@@ -196,19 +196,19 @@ Image rendering is **built-in and on by default**: a plain `cargo build` renders
 
 ## Using as a Library
 
-`a2ui-core` is fully framework-agnostic — usable on its own for non-ratatui scenarios, or as the foundation for other backends (the project already builds the [Slint desktop backend](#slint-desktop-backend) on top of it):
+`a2ui-base` is fully framework-agnostic — usable on its own for non-ratatui scenarios, or as the foundation for other backends (the project already builds the [Slint desktop backend](#slint-desktop-backend) on top of it):
 
 ```bash
 # Option 1: depend directly (most minimal, recommended for libraries)
-cargo add a2ui-core a2ui-tui
+cargo add a2ui-base a2ui-tui
 
 # Option 2: via the umbrella (keeps a2ui:: paths)
 cargo add a2ui
 ```
 
 ```rust
-use a2ui_core::message_processor::MessageProcessor;
-use a2ui_core::catalog::Catalog;
+use a2ui_base::message_processor::MessageProcessor;
+use a2ui_base::catalog::Catalog;
 use a2ui_tui::catalogs::basic::{build_basic_catalog, build_basic_registry};
 use a2ui_tui::surface::SurfaceRenderer;
 
@@ -227,7 +227,7 @@ let renderer = SurfaceRenderer::new(surface, &registry, &catalog);
 renderer.render(&mut frame, area);
 ```
 
-> Via the umbrella, just swap `a2ui_core::` / `a2ui_tui::` for `a2ui::core::` / `a2ui::tui::` — everything else stays the same.
+> Via the umbrella, just swap `a2ui_base::` / `a2ui_tui::` for `a2ui::core::` / `a2ui::tui::` — everything else stays the same.
 
 ## License
 

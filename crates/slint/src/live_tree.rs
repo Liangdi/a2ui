@@ -20,12 +20,12 @@
 
 use std::collections::HashMap;
 
-use a2ui_core::catalog::function_api::FunctionImplementation;
-use a2ui_core::model::component_context::ComponentContext;
-use a2ui_core::model::components_model::SurfaceComponentsModel;
-use a2ui_core::model::data_model::DataModel;
-use a2ui_core::model::surface_model::SurfaceModel;
-use a2ui_core::protocol::common_types::{ChildList, DynamicBoolean, DynamicNumber, DynamicString};
+use a2ui_base::catalog::function_api::FunctionImplementation;
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::model::components_model::SurfaceComponentsModel;
+use a2ui_base::model::data_model::DataModel;
+use a2ui_base::model::surface_model::SurfaceModel;
+use a2ui_base::protocol::common_types::{ChildList, DynamicBoolean, DynamicNumber, DynamicString};
 
 use crate::ui::LiveNode;
 
@@ -133,7 +133,7 @@ impl FlatBuilder {
 fn resolve_fields(
     kind: &str,
     ctx: &ComponentContext,
-    model: &a2ui_core::model::component_model::ComponentModel,
+    model: &a2ui_base::model::component_model::ComponentModel,
 ) -> (String, String, String, bool, f64, String) {
     let variant: String = model.get_property::<String>("variant").unwrap_or_default();
     match kind {
@@ -230,7 +230,7 @@ fn resolve_fields(
 /// Plan a node's children as `(child_id, child_base_path)` pairs, honoring all
 /// three A2UI child shapes (`child`, static `children`, template `children`).
 fn build_child_plan(
-    model: &a2ui_core::model::component_model::ComponentModel,
+    model: &a2ui_base::model::component_model::ComponentModel,
     ctx: &ComponentContext,
 ) -> Vec<(String, String)> {
     let mut plan = Vec::new();
@@ -286,8 +286,8 @@ fn empty_node() -> LiveNode {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use a2ui_core::catalog::Catalog;
-    use a2ui_core::message_processor::MessageProcessor;
+    use a2ui_base::catalog::Catalog;
+    use a2ui_base::message_processor::MessageProcessor;
     use slint::Model;
 
     /// Build a surface from `components_json` (describing `root` + children),

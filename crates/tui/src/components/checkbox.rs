@@ -7,8 +7,8 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use a2ui_core::model::component_context::ComponentContext;
-use a2ui_core::protocol::common_types::{DynamicBoolean, DynamicString};
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::common_types::{DynamicBoolean, DynamicString};
 use crate::component_impl::TuiComponent;
 
 /// CheckBox component implementation.
@@ -84,8 +84,8 @@ impl TuiComponent for CheckBoxComponent {
     fn handle_event(
         &self,
         ctx: &ComponentContext,
-        event: &a2ui_core::event::InputEvent,
-    ) -> Option<a2ui_core::event::EventResult> {
-        a2ui_core::components::checkbox::handle_event(ctx, event)
+        event: &a2ui_base::event::InputEvent,
+    ) -> Option<a2ui_base::event::EventResult> {
+        a2ui_base::components::checkbox::handle_event(ctx, event)
     }
 }

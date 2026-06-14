@@ -8,8 +8,8 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 
-use a2ui_core::model::component_context::ComponentContext;
-use a2ui_core::protocol::common_types::DynamicString;
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::common_types::DynamicString;
 use crate::component_impl::TuiComponent;
 
 /// TextField component implementation.
@@ -135,9 +135,9 @@ impl TuiComponent for TextFieldComponent {
     fn handle_event(
         &self,
         ctx: &ComponentContext,
-        event: &a2ui_core::event::InputEvent,
-    ) -> Option<a2ui_core::event::EventResult> {
-        a2ui_core::components::text_field::handle_event(ctx, event)
+        event: &a2ui_base::event::InputEvent,
+    ) -> Option<a2ui_base::event::EventResult> {
+        a2ui_base::components::text_field::handle_event(ctx, event)
     }
 }
 

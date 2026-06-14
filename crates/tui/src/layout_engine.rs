@@ -5,7 +5,7 @@
 
 use ratatui::layout::{Direction, Rect};
 
-use a2ui_core::protocol::common_types::{Align, Justify};
+use a2ui_base::protocol::common_types::{Align, Justify};
 
 /// Content rect inside the standard 1-cell margin, but guaranteed never to collapse
 /// to zero — so a leaf nested in a tight area (e.g. a `Text` label inside a `Button`'s

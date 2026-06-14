@@ -1,7 +1,7 @@
 //! Basic catalog — registers all 14 functions and 18 components.
 
-use a2ui_core::catalog::basic_functions::build_basic_functions;
-use a2ui_core::catalog::Catalog;
+use a2ui_base::catalog::basic_functions::build_basic_functions;
+use a2ui_base::catalog::Catalog;
 use crate::component_impl::{ComponentRegistry, build_registry};
 use crate::components::audio_player::AudioPlayerComponent;
 use crate::components::button::ButtonComponent;

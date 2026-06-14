@@ -2,8 +2,8 @@
 
 use ratatui::{Frame, layout::{Direction, Rect}};
 
-use a2ui_core::model::component_context::ComponentContext;
-use a2ui_core::protocol::common_types::{Align, ChildList, Justify};
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::common_types::{Align, ChildList, Justify};
 use crate::component_impl::TuiComponent;
 use crate::components::row::{render_static_children, render_template_children};
 

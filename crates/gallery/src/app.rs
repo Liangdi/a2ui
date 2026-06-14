@@ -16,11 +16,11 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
 };
 
-use a2ui_core::catalog::Catalog;
-use a2ui_core::event::{EventResult, InputEvent, InputKey};
-use a2ui_core::message_processor::MessageProcessor;
-use a2ui_core::model::component_context::ComponentContext;
-use a2ui_core::protocol::server_to_client::A2uiMessage;
+use a2ui_base::catalog::Catalog;
+use a2ui_base::event::{EventResult, InputEvent, InputKey};
+use a2ui_base::message_processor::MessageProcessor;
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::server_to_client::A2uiMessage;
 use crate::sample_loader::{self, Sample};
 use a2ui_tui::catalogs::basic::{build_basic_catalog, build_basic_registry};
 use a2ui_tui::catalogs::minimal::build_minimal_catalog;
@@ -582,7 +582,7 @@ fn render_split_view(
     frame: &mut ratatui::Frame,
     fd: &FrameData,
     list_state: &mut ListState,
-    surface: Option<&a2ui_core::model::surface_model::SurfaceModel>,
+    surface: Option<&a2ui_base::model::surface_model::SurfaceModel>,
     registry: &ComponentRegistry,
     catalog: &Catalog,
     focused_id: Option<&str>,
@@ -669,7 +669,7 @@ fn render_sample_list_panel(
 fn render_surface_panel(
     frame: &mut ratatui::Frame,
     area: Rect,
-    surface: Option<&a2ui_core::model::surface_model::SurfaceModel>,
+    surface: Option<&a2ui_base::model::surface_model::SurfaceModel>,
     registry: &ComponentRegistry,
     catalog: &Catalog,
     focused_id: Option<&str>,

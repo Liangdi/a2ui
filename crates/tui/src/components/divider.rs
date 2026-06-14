@@ -7,7 +7,7 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use a2ui_core::model::component_context::ComponentContext;
+use a2ui_base::model::component_context::ComponentContext;
 use crate::component_impl::TuiComponent;
 
 /// Divider component implementation.

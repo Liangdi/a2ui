@@ -13,10 +13,10 @@
 
 use crossterm::event::KeyCode;
 
-use a2ui_core::catalog::Catalog;
-use a2ui_core::event::{EventResult, InputEvent, InputKey};
-use a2ui_core::message_processor::MessageProcessor;
-use a2ui_core::model::component_context::ComponentContext;
+use a2ui_base::catalog::Catalog;
+use a2ui_base::event::{EventResult, InputEvent, InputKey};
+use a2ui_base::message_processor::MessageProcessor;
+use a2ui_base::model::component_context::ComponentContext;
 use crate::component_impl::ComponentRegistry;
 use crate::focus_manager::FocusManager;
 
@@ -118,11 +118,11 @@ pub fn dispatch_to_focused(
 
 /// Apply an [`EventResult`] produced by a component to the processor's state.
 ///
-/// Re-exported from [`a2ui_core::interaction::apply_event_result`]
+/// Re-exported from [`a2ui_base::interaction::apply_event_result`]
 /// (framework-agnostic) so every backend shares one implementation. Kept here
 /// under the historical `a2ui_tui::interaction::apply_event_result` path so
 /// existing callers keep compiling.
-pub use a2ui_core::interaction::apply_event_result;
+pub use a2ui_base::interaction::apply_event_result;
 
 /// The one-call keyboard pipeline: map a [`KeyCode`], dispatch it to the
 /// focused component, and apply the resulting [`EventResult`].

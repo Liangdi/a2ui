@@ -16,8 +16,8 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use a2ui_core::model::component_context::ComponentContext;
-use a2ui_core::protocol::common_types::DynamicString;
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::common_types::DynamicString;
 use crate::component_impl::TuiComponent;
 
 /// Render the standard text placeholder into `inner`.

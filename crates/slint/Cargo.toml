@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Slint backend for A2UI"
+description = "Slint native-GUI backend for A2UI (Agent to UI)"
 build = "build.rs"
 
 [features]
@@ -25,7 +25,7 @@ backend = [
 ]
 
 [dependencies]
-a2ui-core = { workspace = true }
+a2ui-base = { workspace = true }
 serde_json = { workspace = true }
 # Optional: the Slint runtime. `default-features = false` + `std` keeps the
 # surface minimal (core types: SharedString, Model, generated components). A

@@ -1,8 +1,8 @@
 //! Slint backend for A2UI.
 //!
 //! Translates an A2UI component tree (the flat `id → ComponentModel` map owned
-//! by [`a2ui_core::model`]) into a Slint reactive tree and bridges Slint UI
-//! events back to the framework-agnostic interaction layer in `a2ui_core`.
+//! by [`a2ui_base::model`]) into a Slint reactive tree and bridges Slint UI
+//! events back to the framework-agnostic interaction layer in `a2ui_base`.
 //!
 //! Unlike the ratatui backend (immediate-mode painting on a character grid),
 //! Slint is retained-mode + declarative: layout is handled by Slint's engine,
@@ -12,7 +12,7 @@
 //!
 //! Everything here lives behind the `backend` cargo feature, which pulls in the
 //! Slint runtime. Without it this crate is an empty shell (it compiles with no
-//! dependencies beyond `a2ui-core`), keeping the workspace's default build light.
+//! dependencies beyond `a2ui-base`), keeping the workspace's default build light.
 
 #![cfg_attr(not(feature = "backend"), allow(unused_imports))]
 
@@ -30,8 +30,8 @@ pub use ui::LiveNode;
 /// Re-export the core interaction pieces backends compose against, so consumers
 /// can `use a2ui_slint::{dispatch_event, apply_event_result, ...}` in one place.
 #[cfg(feature = "backend")]
-pub use a2ui_core::components::dispatch_event;
+pub use a2ui_base::components::dispatch_event;
 #[cfg(feature = "backend")]
-pub use a2ui_core::focus::FocusManager;
+pub use a2ui_base::focus::FocusManager;
 #[cfg(feature = "backend")]
-pub use a2ui_core::interaction::apply_event_result;
+pub use a2ui_base::interaction::apply_event_result;

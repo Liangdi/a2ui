@@ -42,7 +42,7 @@ slint = { version = "1.16", default-features = false, features = ["std", "compat
 slint-build = { version = "1.16" }
 
 # Internal crates — path dependencies shared across the workspace.
-a2ui-core = { path = "crates/core" }
+a2ui-base = { path = "crates/core" }
 a2ui-tui = { path = "crates/tui" }
 a2ui-gallery = { path = "crates/gallery" }
 a2ui-slint = { path = "crates/slint" }

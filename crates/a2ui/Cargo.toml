@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "A TUI component library built on top of ratatui"
+description = "A2UI (Agent to UI) — render JSON streaming UIs authored by AI agents (ratatui + Slint backends)"
 
 [features]
 default = []
@@ -16,7 +16,7 @@ audio = ["a2ui-tui/audio"]
 slint = ["dep:a2ui-slint"]
 
 [dependencies]
-a2ui-core = { workspace = true }
+a2ui-base = { workspace = true }
 a2ui-tui = { workspace = true }
 # Optional: the Slint backend, re-exported as `a2ui::slint` under the `slint`
 # feature. The inner `backend` feature is what actually links the Slint runtime.

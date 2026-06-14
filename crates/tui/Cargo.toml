@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "ratatui backend for A2UI"
+description = "ratatui terminal backend for A2UI (Agent to UI)"
 
 [features]
 default = []
@@ -14,7 +14,7 @@ default = []
 audio = ["dep:rodio"]
 
 [dependencies]
-a2ui-core = { workspace = true }
+a2ui-base = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
 serde = { workspace = true }

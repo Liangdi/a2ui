@@ -5,14 +5,14 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "A2UI gallery application (Slint backend)"
+description = "A2UI gallery — browse and render the sample specs in a Slint window"
 
 [[bin]]
 name = "a2ui_slint_gallery"
 path = "src/main.rs"
 
 [dependencies]
-a2ui-core = { workspace = true }
+a2ui-base = { workspace = true }
 a2ui-tui = { workspace = true }          # build_basic_catalog / build_minimal_catalog
 a2ui-gallery = { workspace = true }      # sample_loader
 # The `backend` feature enables the Slint windowing backend (winit + software

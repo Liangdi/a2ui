@@ -7,7 +7,7 @@ use ratatui::{
     widgets::{Block, Borders},
 };
 
-use a2ui_core::model::component_context::ComponentContext;
+use a2ui_base::model::component_context::ComponentContext;
 use crate::component_impl::TuiComponent;
 
 /// Button component implementation.
@@ -135,14 +135,14 @@ impl TuiComponent for ButtonComponent {
     fn handle_event(
         &self,
         ctx: &ComponentContext,
-        event: &a2ui_core::event::InputEvent,
-    ) -> Option<a2ui_core::event::EventResult> {
-        a2ui_core::components::button::handle_event(ctx, event)
+        event: &a2ui_base::event::InputEvent,
+    ) -> Option<a2ui_base::event::EventResult> {
+        a2ui_base::components::button::handle_event(ctx, event)
     }
 }
 
 /// Evaluate all `checks` on the component. Returns `true` if all pass (or none exist).
-fn evaluate_checks(ctx: &ComponentContext, comp_model: &a2ui_core::model::component_model::ComponentModel) -> bool {
+fn evaluate_checks(ctx: &ComponentContext, comp_model: &a2ui_base::model::component_model::ComponentModel) -> bool {
     match comp_model.checks() {
         Some(checks) => checks.iter().all(|rule| {
             ctx.data_context.resolve_dynamic_boolean_condition(&rule.condition)

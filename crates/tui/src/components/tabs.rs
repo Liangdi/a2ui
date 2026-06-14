@@ -8,9 +8,9 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use a2ui_core::event::{EventResult, InputEvent, InputKey};
-use a2ui_core::model::component_context::ComponentContext;
-use a2ui_core::protocol::common_types::{DynamicNumber, DynamicString};
+use a2ui_base::event::{EventResult, InputEvent, InputKey};
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::common_types::{DynamicNumber, DynamicString};
 use crate::component_impl::TuiComponent;
 
 /// Tab entry deserialized from the `tabs` property.
@@ -131,8 +131,8 @@ impl TuiComponent for TabsComponent {
     fn handle_event(
         &self,
         ctx: &ComponentContext,
-        event: &a2ui_core::event::InputEvent,
-    ) -> Option<a2ui_core::event::EventResult> {
+        event: &a2ui_base::event::InputEvent,
+    ) -> Option<a2ui_base::event::EventResult> {
         let comp_model = ctx.components.get(&ctx.component_id)?;
         let tabs: Vec<TabEntry> = comp_model.get_property("tabs")?;
         if tabs.is_empty() {

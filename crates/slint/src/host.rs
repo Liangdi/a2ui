@@ -1,11 +1,11 @@
 //! Runtime host — owns the Slint window, the message processor, and the bridge
-//! between UI events and the framework-agnostic interaction layer in `a2ui_core`.
+//! between UI events and the framework-agnostic interaction layer in `a2ui_base`.
 //!
 //! [`SurfaceHost`] is the Slint counterpart of the tui gallery's `GalleryApp`:
 //! it holds the [`MessageProcessor`] state, renders the first surface into the
 //! `Surface` window via [`live_tree`], and routes node activations (button
-//! presses) through [`a2ui_core::components::dispatch_event`] +
-//! [`a2ui_core::interaction::apply_event_result`].
+//! presses) through [`a2ui_base::components::dispatch_event`] +
+//! [`a2ui_base::interaction::apply_event_result`].
 //!
 //! Shared state lives behind `Rc` so the Slint `Events.activate` callback (set
 //! once at construction) can reach back into the processor. Slint runs on a
@@ -17,14 +17,14 @@ use std::rc::Rc;
 
 use slint::ComponentHandle;
 
-use a2ui_core::catalog::function_api::FunctionImplementation;
-use a2ui_core::components::dispatch_event;
-use a2ui_core::event::{InputEvent, InputKey};
-use a2ui_core::focus::FocusManager;
-use a2ui_core::interaction::apply_event_result;
-use a2ui_core::message_processor::MessageProcessor;
-use a2ui_core::model::component_context::ComponentContext;
-use a2ui_core::protocol::server_to_client::A2uiMessage;
+use a2ui_base::catalog::function_api::FunctionImplementation;
+use a2ui_base::components::dispatch_event;
+use a2ui_base::event::{InputEvent, InputKey};
+use a2ui_base::focus::FocusManager;
+use a2ui_base::interaction::apply_event_result;
+use a2ui_base::message_processor::MessageProcessor;
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::server_to_client::A2uiMessage;
 
 use crate::live_tree::build_nodes;
 use crate::ui::{Events, LiveNode, SampleEntry, Surface};
@@ -54,7 +54,7 @@ impl SurfaceHost {
     /// `catalogs` carry — passed separately because [`MessageProcessor`] owns
     /// the catalogs and doesn't expose their functions).
     pub fn new(
-        catalogs: Vec<a2ui_core::catalog::Catalog>,
+        catalogs: Vec<a2ui_base::catalog::Catalog>,
         functions: HashMap<String, Box<dyn FunctionImplementation>>,
     ) -> Result<Self, slint::PlatformError> {
         let processor = MessageProcessor::new(catalogs);

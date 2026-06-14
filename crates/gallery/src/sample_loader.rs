@@ -10,8 +10,8 @@ use std::path::Path;
 
 use include_dir::{include_dir, Dir};
 
-use a2ui_core::message_processor::MessageProcessor;
-use a2ui_core::protocol::server_to_client::A2uiMessage;
+use a2ui_base::message_processor::MessageProcessor;
+use a2ui_base::protocol::server_to_client::A2uiMessage;
 
 /// The full A2UI specification tree, embedded at compile time.
 ///

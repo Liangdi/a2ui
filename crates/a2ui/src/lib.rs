@@ -5,7 +5,7 @@
 //! The Slint backend is available as `a2ui::slint` under the `slint` cargo
 //! feature — it is opt-in because it pulls the (heavy) Slint runtime.
 
-pub use a2ui_core as core;
+pub use a2ui_base as core;
 pub use a2ui_tui as tui;
 
 #[cfg(feature = "slint")]

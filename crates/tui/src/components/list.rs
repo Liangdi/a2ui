@@ -2,8 +2,8 @@
 
 use ratatui::{Frame, layout::{Direction, Rect}};
 
-use a2ui_core::model::component_context::ComponentContext;
-use a2ui_core::protocol::common_types::{Align, ChildList, Justify};
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::common_types::{Align, ChildList, Justify};
 use crate::component_impl::TuiComponent;
 use crate::components::row::{render_static_children, render_template_children};
 
@@ -116,7 +116,7 @@ impl TuiComponent for ListComponent {
 
 /// Resolve a List's direction property (default vertical).
 fn list_direction(
-    comp_model: &a2ui_core::model::component_model::ComponentModel,
+    comp_model: &a2ui_base::model::component_model::ComponentModel,
 ) -> Direction {
     let direction: Option<String> = comp_model.get_property("direction");
     match direction.as_deref() {

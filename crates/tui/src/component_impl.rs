@@ -7,7 +7,7 @@ use std::collections::HashMap;
 
 use ratatui::{Frame, layout::Rect};
 
-use a2ui_core::model::component_context::ComponentContext;
+use a2ui_base::model::component_context::ComponentContext;
 
 /// Trait for ratatui component implementations.
 ///
@@ -67,13 +67,13 @@ pub trait TuiComponent: Send + Sync + 'static {
     fn handle_event(
         &self,
         _ctx: &ComponentContext,
-        _event: &a2ui_core::event::InputEvent,
-    ) -> Option<a2ui_core::event::EventResult> {
+        _event: &a2ui_base::event::InputEvent,
+    ) -> Option<a2ui_base::event::EventResult> {
         None
     }
 }
 
-// After the workspace split, ComponentApi lives in a2ui-core — an external
+// After the workspace split, ComponentApi lives in a2ui-base — an external
 // crate from here — so the blanket `impl<T: TuiComponent> ComponentApi for T`
 // would violate the orphan rule (foreign trait for a bare type parameter).
 // Instead we impl ComponentApi concretely for each registered component type
@@ -81,7 +81,7 @@ pub trait TuiComponent: Send + Sync + 'static {
 // whenever a new component is registered into a catalog.
 macro_rules! impl_component_api {
     ($t:path) => {
-        impl a2ui_core::catalog::component_api::ComponentApi for $t {
+        impl a2ui_base::catalog::component_api::ComponentApi for $t {
             fn name(&self) -> &'static str {
                 <Self as crate::component_impl::TuiComponent>::name(self)
             }

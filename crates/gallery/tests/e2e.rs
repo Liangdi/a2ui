@@ -2,14 +2,14 @@
 //!
 //! These tests exercise the full A2UI pipeline (message parsing → model
 //! mutation → catalog functions → outgoing messages) through the **public**
-//! API of `a2ui-core`, `a2ui-tui`, and `a2ui-gallery`. They were migrated here
-//! from `a2ui-core`'s `message_processor.rs` because they depend on the tui
+//! API of `a2ui-base`, `a2ui-tui`, and `a2ui-gallery`. They were migrated here
+//! from `a2ui-base`'s `message_processor.rs` because they depend on the tui
 //! catalog builders (`build_basic_catalog` / `build_minimal_catalog`) and the
-//! embedded sample loader, which `a2ui-core` must not depend on.
+//! embedded sample loader, which `a2ui-base` must not depend on.
 
-use a2ui_core::message_processor::MessageProcessor;
-use a2ui_core::protocol::client_to_server::ClientPayload;
-use a2ui_core::protocol::server_to_client::A2uiMessage;
+use a2ui_base::message_processor::MessageProcessor;
+use a2ui_base::protocol::client_to_server::ClientPayload;
+use a2ui_base::protocol::server_to_client::A2uiMessage;
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -174,7 +174,7 @@ fn test_e2e_contact_form_sample() {
     assert_eq!(form_container.component_type, "Column");
     let children = form_container.children().unwrap();
     match children {
-        a2ui_core::protocol::common_types::ChildList::Static(ids) => {
+        a2ui_base::protocol::common_types::ChildList::Static(ids) => {
             assert_eq!(ids.len(), 8, "form_container should have 8 children");
         }
         _ => panic!("expected static children for form_container"),
@@ -206,18 +206,18 @@ fn test_e2e_contact_form_sample() {
 
 #[test]
 fn test_e2e_basic_catalog_functions_in_context() {
-    use a2ui_core::catalog::basic_functions::{
+    use a2ui_base::catalog::basic_functions::{
         EmailFunction, FormatStringFunction, RequiredFunction,
     };
-    use a2ui_core::catalog::function_api::FunctionImplementation;
-    use a2ui_core::model::data_context::DataContext;
-    use a2ui_core::model::data_model::DataModel;
-    use a2ui_core::protocol::common_types::{DynamicBoolean, DynamicString, FunctionCall};
+    use a2ui_base::catalog::function_api::FunctionImplementation;
+    use a2ui_base::model::data_context::DataContext;
+    use a2ui_base::model::data_model::DataModel;
+    use a2ui_base::protocol::common_types::{DynamicBoolean, DynamicString, FunctionCall};
 
     // Build the function map from the basic catalog
     let func_map: std::collections::HashMap<
         String,
-        Box<dyn a2ui_core::catalog::function_api::FunctionImplementation>,
+        Box<dyn a2ui_base::catalog::function_api::FunctionImplementation>,
     > = {
         let mut m = std::collections::HashMap::new();
         let req: Box<dyn FunctionImplementation> = Box::new(RequiredFunction);
@@ -612,7 +612,7 @@ fn test_call_function_with_format_string() {
 
 #[test]
 fn test_accessibility_parsing() {
-    use a2ui_core::protocol::common_types::DynamicString;
+    use a2ui_base::protocol::common_types::DynamicString;
 
     let mut proc = make_basic_processor();
 
@@ -809,7 +809,7 @@ fn test_e2e_login_form_render_pipeline() {
     assert_eq!(root.component_type, "Column");
     let children = root.children().unwrap();
     match children {
-        a2ui_core::protocol::common_types::ChildList::Static(ids) => {
+        a2ui_base::protocol::common_types::ChildList::Static(ids) => {
             assert_eq!(ids, vec!["form_title", "username_field", "password_field", "submit_button"]);
         }
         _ => panic!("expected static children"),
@@ -823,10 +823,10 @@ fn test_e2e_login_form_render_pipeline() {
 
     // Verify TextField has dynamic binding
     let username = components.get("username_field").unwrap();
-    let value_binding: a2ui_core::protocol::common_types::DynamicString =
+    let value_binding: a2ui_base::protocol::common_types::DynamicString =
         username.get_property("value").unwrap();
     match value_binding {
-        a2ui_core::protocol::common_types::DynamicString::Binding(b) => {
+        a2ui_base::protocol::common_types::DynamicString::Binding(b) => {
             assert_eq!(b.path, "/username");
         }
         _ => panic!("expected binding for username value"),

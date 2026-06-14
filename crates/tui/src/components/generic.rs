@@ -18,8 +18,8 @@ use ratatui::{
     widgets::{Block, Paragraph},
 };
 
-use a2ui_core::model::component_context::ComponentContext;
-use a2ui_core::protocol::common_types::{ChildList, DynamicString};
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::common_types::{ChildList, DynamicString};
 use crate::component_impl::TuiComponent;
 
 /// A stateless, zero-sized fallback renderer for unknown component types.
@@ -122,7 +122,7 @@ impl TuiComponent for GenericComponent {
         let comp_model = ctx.components.get(&ctx.component_id)?;
         let prop_count = comp_model.properties.len().max(1) as u16;
         let has_children = comp_model.child().is_some()
-            || matches!(comp_model.children(), Some(a2ui_core::protocol::common_types::ChildList::Static(v)) if !v.is_empty());
+            || matches!(comp_model.children(), Some(a2ui_base::protocol::common_types::ChildList::Static(v)) if !v.is_empty());
         let mut h = prop_count.saturating_add(2);
         if has_children {
             h = h.saturating_add(1);
@@ -151,7 +151,7 @@ fn resolve_value_for_display(
 /// Collect the IDs of any `child` (single) or `children` (list) to render
 /// beneath the property dump. Robust to missing/malformed fields.
 fn collect_child_ids(
-    comp_model: &a2ui_core::model::component_model::ComponentModel,
+    comp_model: &a2ui_base::model::component_model::ComponentModel,
 ) -> Vec<String> {
     let mut ids = Vec::new();
     if let Some(single) = comp_model.child() {
@@ -170,7 +170,7 @@ fn collect_child_ids(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use a2ui_core::model::component_model::ComponentModel;
+    use a2ui_base::model::component_model::ComponentModel;
     use serde_json::json;
 
     #[test]

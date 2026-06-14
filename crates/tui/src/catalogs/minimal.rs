@@ -2,10 +2,10 @@
 
 use std::collections::HashMap;
 
-use a2ui_core::catalog::function_api::{FunctionImplementation, ReturnType};
-use a2ui_core::catalog::Catalog;
-use a2ui_core::error::A2uiError;
-use a2ui_core::model::data_context::DataContext;
+use a2ui_base::catalog::function_api::{FunctionImplementation, ReturnType};
+use a2ui_base::catalog::Catalog;
+use a2ui_base::error::A2uiError;
+use a2ui_base::model::data_context::DataContext;
 use crate::component_impl::{ComponentRegistry, build_registry};
 use crate::components::button::ButtonComponent;
 use crate::components::column::ColumnComponent;

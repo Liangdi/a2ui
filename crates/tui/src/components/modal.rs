@@ -2,8 +2,8 @@
 
 use ratatui::{Frame, layout::Rect};
 
-use a2ui_core::model::component_context::ComponentContext;
-use a2ui_core::protocol::common_types::DynamicBoolean;
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::common_types::DynamicBoolean;
 use crate::component_impl::TuiComponent;
 
 /// Modal component implementation.

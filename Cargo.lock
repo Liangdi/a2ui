@@ -6,7 +6,7 @@ version = 4
 name = "a2ui"
 version = "0.2.0"
 dependencies = [
- "a2ui-core",
+ "a2ui-base",
  "a2ui-slint",
  "a2ui-tui",
  "crossterm",
@@ -15,7 +15,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "a2ui-core"
+name = "a2ui-base"
 version = "0.2.0"
 dependencies = [
  "chrono",
@@ -30,7 +30,7 @@ dependencies = [
 name = "a2ui-gallery"
 version = "0.2.0"
 dependencies = [
- "a2ui-core",
+ "a2ui-base",
  "a2ui-tui",
  "crossterm",
  "include_dir",
@@ -43,7 +43,7 @@ dependencies = [
 name = "a2ui-slint"
 version = "0.2.0"
 dependencies = [
- "a2ui-core",
+ "a2ui-base",
  "serde_json",
  "slint",
  "slint-build",
@@ -53,7 +53,7 @@ dependencies = [
 name = "a2ui-slint-gallery"
 version = "0.2.0"
 dependencies = [
- "a2ui-core",
+ "a2ui-base",
  "a2ui-gallery",
  "a2ui-slint",
  "a2ui-tui",
@@ -64,7 +64,7 @@ dependencies = [
 name = "a2ui-tui"
 version = "0.2.0"
 dependencies = [
- "a2ui-core",
+ "a2ui-base",
  "chrono",
  "crossterm",
  "image",

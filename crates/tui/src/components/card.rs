@@ -7,7 +7,7 @@ use ratatui::{
     widgets::{Block, BorderType, Borders},
 };
 
-use a2ui_core::model::component_context::ComponentContext;
+use a2ui_base::model::component_context::ComponentContext;
 use crate::component_impl::TuiComponent;
 
 /// Card component implementation.
