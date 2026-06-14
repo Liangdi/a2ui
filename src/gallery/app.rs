@@ -52,6 +52,17 @@ enum AppMode {
     Rendered,
 }
 
+/// Which panel owns keyboard input while in the split ([`AppMode::Rendered`]) view.
+///
+/// `List` — ↑/↓ walk the sample list and live-update the right panel.
+/// `Render` — keys dispatch to the focused component (stepper, typing, Tab focus).
+/// Esc steps `Render → List → SampleList`; Tab/Enter steps back to `Render`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PanelFocus {
+    List,
+    Render,
+}
+
 /// Snapshot of the data needed to render a single frame.
 ///
 /// This struct is extracted from `GalleryApp` before calling
@@ -64,6 +75,8 @@ struct FrameData {
     messages_processed: usize,
     total_messages: usize,
     focused_id: Option<String>,
+    /// Which split-view panel is focused (only meaningful in `Rendered` mode).
+    panel_focus: PanelFocus,
 }
 
 /// The gallery application.
@@ -90,6 +103,8 @@ pub struct GalleryApp {
     running: bool,
     /// Current display mode.
     mode: AppMode,
+    /// Which split-view panel owns keyboard input (only used in `Rendered` mode).
+    panel_focus: PanelFocus,
     /// List state for ratatui List widget highlighting.
     list_state: ListState,
 }
@@ -127,6 +142,7 @@ impl GalleryApp {
             focus_manager: FocusManager::new(),
             running: true,
             mode: AppMode::SampleList,
+            panel_focus: PanelFocus::Render,
             list_state,
         })
     }
@@ -196,6 +212,7 @@ impl GalleryApp {
             messages_processed: self.messages_processed,
             total_messages: self.current_messages.len(),
             focused_id: self.focus_manager.focused_id().map(|s| s.to_string()),
+            panel_focus: self.panel_focus,
         }
     }
 
@@ -242,10 +259,47 @@ impl GalleryApp {
     }
 
     fn handle_rendered_key(&mut self, code: KeyCode) {
+        match self.panel_focus {
+            PanelFocus::List => self.handle_list_focus_key(code),
+            PanelFocus::Render => self.handle_surface_focus_key(code),
+        }
+    }
+
+    /// Keys while the sample list owns focus (split view): walk samples with
+    /// live right-panel update, then hand focus to the surface to interact.
+    fn handle_list_focus_key(&mut self, code: KeyCode) {
         match code {
-            KeyCode::Char('q') | KeyCode::Esc => {
-                self.mode = AppMode::SampleList;
+            KeyCode::Char('q') => self.running = false,
+            // Esc steps back: list focus → full-screen sample browser.
+            KeyCode::Esc => self.mode = AppMode::SampleList,
+            KeyCode::Up | KeyCode::Char('k') => {
+                if self.selected_sample > 0 {
+                    self.load_sample(self.selected_sample - 1);
+                }
             }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if !self.samples.is_empty()
+                    && self.selected_sample < self.samples.len() - 1
+                {
+                    self.load_sample(self.selected_sample + 1);
+                }
+            }
+            // Enter / Tab / → : move focus to the rendered surface.
+            KeyCode::Enter | KeyCode::Tab | KeyCode::Right | KeyCode::Char('l') => {
+                self.panel_focus = PanelFocus::Render;
+            }
+            _ => {}
+        }
+    }
+
+    /// Keys while the rendered surface owns focus (split view): stepper,
+    /// component focus cycling, and dispatch to the focused component.
+    fn handle_surface_focus_key(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Char('q') => self.running = false,
+            // Esc steps back: surface focus → list focus (so ↑/↓ walk samples).
+            // A second Esc (handled in list focus) returns to the sample browser.
+            KeyCode::Esc => self.panel_focus = PanelFocus::List,
             KeyCode::Char('n') => {
                 // Process next message (stepper).
                 if self.messages_processed < self.current_messages.len() {
@@ -409,7 +463,22 @@ impl GalleryApp {
     // -----------------------------------------------------------------------
 
     /// Select a sample, switch to rendered mode, and process all messages.
+    /// Select a sample, switch to rendered mode, and process all messages.
     fn select_sample(&mut self, index: usize) {
+        if index >= self.samples.len() {
+            return;
+        }
+        self.load_sample(index);
+        self.panel_focus = PanelFocus::Render;
+        self.mode = AppMode::Rendered;
+    }
+
+    /// Load `index`'s messages into the processor and reset interaction state.
+    ///
+    /// This is the shared core of entering a sample ([`Self::select_sample`]) and
+    /// walking the sample list while keeping the split view open (↑/↓ in list
+    /// focus). It does NOT touch `mode` or `panel_focus` — callers decide those.
+    fn load_sample(&mut self, index: usize) {
         if index >= self.samples.len() {
             return;
         }
@@ -419,8 +488,7 @@ impl GalleryApp {
         // and pollute the TUI with warnings).
         self.processor.reset();
 
-        let sample = &self.samples[index];
-        self.current_messages = sample.messages.clone();
+        self.current_messages = self.samples[index].messages.clone();
         self.messages_processed = 0;
         self.focus_manager.reset();
         self.selected_sample = index;
@@ -429,8 +497,6 @@ impl GalleryApp {
         // Process all messages at once.
         self.process_remaining_messages();
         self.rebuild_focus();
-
-        self.mode = AppMode::Rendered;
     }
 
     /// Process all remaining unprocessed messages.
@@ -479,17 +545,19 @@ fn render_sample_list(
         .iter()
         .enumerate()
         .map(|(i, (name, desc))| {
-            let style = if i == fd.selected_sample {
+            let text_style = if i == fd.selected_sample {
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };
-            let line = Line::from(Span::styled(
-                format!("  {} — {}", name, desc),
-                style,
-            ));
+            // Index is always dim so the row number stays scannable regardless
+            // of selection; the name/description carry the selection styling.
+            let line = Line::from(vec![
+                Span::styled(format!(" {:>2}. ", i + 1), Style::default().fg(Color::DarkGray)),
+                Span::styled(format!("{} — {}", name, desc), text_style),
+            ]);
             ListItem::new(line)
         })
         .collect();
@@ -533,10 +601,10 @@ fn render_split_view(
         .split(outer[0]);
 
     // Left: compact sample list.
-    render_sample_list_panel(frame, fd, panels[0], list_state);
+    render_sample_list_panel(frame, fd, panels[0], list_state, fd.panel_focus == PanelFocus::List);
 
     // Right: rendered surface.
-    render_surface_panel(frame, panels[1], surface, registry, catalog, focused_id);
+    render_surface_panel(frame, panels[1], surface, registry, catalog, focused_id, fd.panel_focus == PanelFocus::Render);
 
     // Bottom: controls help.
     render_help_bar(frame, outer[1], fd);
@@ -548,29 +616,41 @@ fn render_sample_list_panel(
     fd: &FrameData,
     area: Rect,
     list_state: &mut ListState,
+    focused: bool,
 ) {
     let items: Vec<ListItem> = fd
         .samples
         .iter()
         .enumerate()
         .map(|(i, (name, _desc))| {
-            let style = if i == fd.selected_sample {
+            let text_style = if i == fd.selected_sample {
                 Style::default()
                     .fg(Color::Yellow)
                     .add_modifier(Modifier::BOLD)
             } else {
                 Style::default()
             };
-            let line = Line::from(Span::styled(format!(" {} ", name), style));
+            let line = Line::from(vec![
+                Span::styled(format!("{:>2}. ", i + 1), Style::default().fg(Color::DarkGray)),
+                Span::styled(name.clone(), text_style),
+            ]);
             ListItem::new(line)
         })
         .collect();
+
+    let border_style = if focused {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default()
+    };
+    let title = if focused { " ◄ Samples " } else { " Samples " };
 
     let list = List::new(items)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" Samples "),
+                .border_style(border_style)
+                .title(title),
         )
         .highlight_style(
             Style::default()
@@ -582,6 +662,10 @@ fn render_sample_list_panel(
 }
 
 /// Render the current surface using SurfaceRenderer.
+///
+/// A bordered frame is always drawn so the panel's focus state is visible
+/// (yellow border + ` Surface ► ` title when focused); the surface itself is
+/// rendered into the inner area so it never overwrites the border.
 fn render_surface_panel(
     frame: &mut ratatui::Frame,
     area: Rect,
@@ -589,34 +673,54 @@ fn render_surface_panel(
     registry: &ComponentRegistry,
     catalog: &Catalog,
     focused_id: Option<&str>,
+    focused: bool,
 ) {
+    let border_style = if focused {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default()
+    };
+    let title = if focused { " Surface ► " } else { " Surface " };
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(border_style)
+        .title(title);
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
     if let Some(surface) = surface {
         let renderer = SurfaceRenderer::new(surface, registry, catalog);
-        renderer.render(frame, area, focused_id);
+        renderer.render(frame, inner, focused_id);
     } else {
-        let paragraph = Paragraph::new("No surface loaded.\nPress 'n' to step through messages.")
-            .block(Block::default().borders(Borders::ALL).title(" Surface "));
-        frame.render_widget(paragraph, area);
+        let paragraph = Paragraph::new("No surface loaded.\nPress 'n' to step through messages.");
+        frame.render_widget(paragraph, inner);
     }
 }
 
 /// Render the bottom help bar.
 fn render_help_bar(frame: &mut ratatui::Frame, area: Rect, fd: &FrameData) {
+    let step_info = |prefix: &str| -> String {
+        if fd.total_messages == 0 {
+            String::new()
+        } else {
+            format!("{}[{}/{}] ", prefix, fd.messages_processed, fd.total_messages)
+        }
+    };
+
     let help_text: String = match fd.mode {
         AppMode::SampleList => {
             " ↑/k: up  ↓/j: down  Enter: select  q/Esc: quit ".to_string()
         }
-        AppMode::Rendered => {
-            let step_info = if fd.total_messages == 0 {
-                String::new()
-            } else {
-                format!(" [{}/{}]", fd.messages_processed, fd.total_messages)
-            };
-            format!(
-                " ↑/k: up  ↓/j: down  n: step  a: all  r: replay  Tab: focus  Esc: back{} ",
-                step_info
-            )
-        }
+        AppMode::Rendered => match fd.panel_focus {
+            PanelFocus::List => format!(
+                " [List ◄] ↑/↓: switch sample  Tab/Enter: focus surface  Esc: browser  q: quit {}",
+                step_info("")
+            ),
+            PanelFocus::Render => format!(
+                " [Surface ►] n: step  a: all  r: replay  Tab: cycle focus  Esc: back to list  q: quit {}",
+                step_info("")
+            ),
+        },
     };
 
     let paragraph = Paragraph::new(help_text)
