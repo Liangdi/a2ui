@@ -1,0 +1,30 @@
+[package]
+name = "a2ui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A TUI component library built on top of ratatui"
+
+[features]
+default = []
+# Forwarded to the tui backend. Required to build the 14_audio example.
+audio = ["a2ui-tui/audio"]
+
+[dependencies]
+a2ui-core = { workspace = true }
+a2ui-tui = { workspace = true }
+
+# Examples directly use these crates (the umbrella only re-exports core+tui).
+[dev-dependencies]
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+serde_json = { workspace = true }
+
+[[example]]
+name = "13_image"
+
+[[example]]
+name = "14_audio"
+required-features = ["audio"]

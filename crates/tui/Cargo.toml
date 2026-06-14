@@ -1,0 +1,27 @@
+[package]
+name = "a2ui-tui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "ratatui backend for A2UI"
+
+[features]
+default = []
+# Real audio playback via rodio. OFF by default: pulls in `rodio` and the ALSA
+# system dev library. See the root README for details.
+audio = ["dep:rodio"]
+
+[dependencies]
+a2ui-core = { workspace = true }
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+serde = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+unicode-width = { workspace = true }
+ratatui-image = { workspace = true }
+image = { workspace = true }
+serde_json = { workspace = true }
+rodio = { workspace = true, optional = true }

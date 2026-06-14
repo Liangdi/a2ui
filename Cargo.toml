@@ -1,22 +1,16 @@
-[package]
-name = "a2ui"
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/tui", "crates/gallery", "crates/a2ui"]
+
+[workspace.package]
 version = "0.1.2"
 edition = "2024"
 authors = ["Liangdi <wu@liangdi.me>"]
-description = "A TUI component library built on top of ratatui"
 license = "MIT"
 repository = "https://github.com/Liangdi/a2ui"
 
-[features]
-default = []
-# Real audio playback via rodio.
-# OFF by default: pulls in `rodio` and requires the ALSA system dev library
-# (`alsa-lib-devel` on Fedora / `libasound2-dev` on Debian).
-# Limitation: plays LOCAL file paths only (no HTTP fetch); playback runs on a
-# background thread and silently falls back to the placeholder on any failure.
-audio = ["dep:rodio"]
-
-[dependencies]
+[workspace.dependencies]
+# External crates — versions centralized here, consumed via `{ workspace = true }`.
 ratatui = "0.30.1"
 crossterm = "0.29"
 serde = { version = "1", features = ["derive"] }
@@ -31,18 +25,12 @@ image = "0.25"
 # Embed the A2UI specification tree into the binary at compile time so the
 # gallery is self-contained and distributable (no on-disk spec dir needed).
 include_dir = "0.7"
-rodio = { version = "0.22", optional = true }
+rodio = "0.22"
 
-# The audio example is only built when its feature is enabled, so the default
-# `cargo build`/`cargo test` is unaffected. 13_image builds by default (image
-# rendering is always available). Run with, e.g.:
-#   cargo run --example 13_image
-[[example]]
-name = "13_image"
-
-[[example]]
-name = "14_audio"
-required-features = ["audio"]
+# Internal crates — path dependencies shared across the workspace.
+a2ui-core = { path = "crates/core" }
+a2ui-tui = { path = "crates/tui" }
+a2ui-gallery = { path = "crates/gallery" }
 
 # --- Release profile: optimize for binary size --------------------------------
 # The gallery embeds the full spec tree, so we trim the distributed binary.

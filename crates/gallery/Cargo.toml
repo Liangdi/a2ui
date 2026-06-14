@@ -1,0 +1,28 @@
+[package]
+name = "a2ui-gallery"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A2UI gallery application (demonstrates the ratatui backend)"
+
+# Note: lib/bin *target* names must use underscores (Cargo rule); the package
+# name keeps its hyphen. The lib is exposed so the e2e integration test
+# (tests/e2e.rs) can reach `a2ui_gallery::sample_loader`.
+[lib]
+name = "a2ui_gallery"
+path = "src/lib.rs"
+
+[[bin]]
+name = "a2ui_gallery"
+path = "src/main.rs"
+
+[dependencies]
+a2ui-core = { workspace = true }
+a2ui-tui = { workspace = true }
+ratatui = { workspace = true }
+crossterm = { workspace = true }
+uuid = { workspace = true }
+include_dir = { workspace = true }
+serde_json = { workspace = true }
