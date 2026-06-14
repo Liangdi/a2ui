@@ -1,1 +1,13 @@
-pre-release-hook = ["git", "cliff", "-o", "CHANGELOG.md", "--tag", "{{version}}" ]
+# cargo-release 1.x workspace configuration.
+#
+# Root-level fields are workspace-wide defaults:
+# - consolidate-commits: ONE commit bumps all four crates (not one per crate).
+# - tag-name: ONE unified tag (v{{version}}) for the whole workspace.
+#
+# pre-release-hook is per-package in cargo-release 1.x, so it fires once per
+# crate. The command cd's to the repo root each time, so git-cliff processes
+# ALL commits and writes a single root CHANGELOG.md (identical each run).
+# No per-crate CHANGELOG.md is produced under crates/*.
+consolidate-commits = true
+tag-name = "v{{version}}"
+pre-release-hook = ['sh', '-c', 'cd "$(git rev-parse --show-toplevel)" && git cliff -o CHANGELOG.md --tag v{{version}}']

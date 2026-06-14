@@ -15,6 +15,9 @@ audio = ["a2ui-tui/audio"]
 [dependencies]
 a2ui-core = { workspace = true }
 a2ui-tui = { workspace = true }
+# The `a2ui` binary runs the gallery app, so `cargo install a2ui` keeps working
+# (mirrors the pre-split behavior where main.rs was the gallery).
+a2ui-gallery = { workspace = true }
 
 # Examples directly use these crates (the umbrella only re-exports core+tui).
 [dev-dependencies]
