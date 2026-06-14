@@ -1,0 +1,38 @@
+[package]
+name = "a2ui-slint"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Slint backend for A2UI"
+build = "build.rs"
+
+[features]
+default = []
+# Pull in the real Slint runtime + compiler. OFF by default so the workspace's
+# default build stays light (Slint brings a sizeable toolchain and, for windowed
+# rendering, system GUI libs). Enable with `--features backend`.
+#
+# `slint/backend-winit` + `slint/renderer-software`: a windowed backend that
+# works on any display without OpenGL drivers (CPU rasterization). Swap in
+# `slint/renderer-femtovg` later if GPU acceleration is wanted.
+backend = [
+    "dep:slint",
+    "dep:slint-build",
+    "slint/backend-winit",
+    "slint/renderer-software",
+]
+
+[dependencies]
+a2ui-core = { workspace = true }
+serde_json = { workspace = true }
+# Optional: the Slint runtime. `default-features = false` + `std` keeps the
+# surface minimal (core types: SharedString, Model, generated components). A
+# windowing backend/renderer is selected by the consumer (gallery) when launching.
+slint = { workspace = true, optional = true }
+
+[build-dependencies]
+# Compiles the `.slint` UI files (in `ui/`) into a Rust module consumed by
+# `slint::include_modules!()` in `src/ui.rs`.
+slint-build = { workspace = true, optional = true }

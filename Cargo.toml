@@ -1,6 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/tui", "crates/gallery", "crates/a2ui"]
+members = ["crates/core", "crates/tui", "crates/gallery", "crates/a2ui", "crates/slint", "crates/slint-gallery"]
+# `cargo build` / `cargo run` with no `-p` only compile the ratatui stack. The
+# Slint backend (`a2ui-slint`) is opt-in: it pulls a sizeable GUI toolchain, so
+# it is excluded from the default build and built explicitly with
+# `cargo build -p a2ui-slint --features backend`.
+default-members = ["crates/core", "crates/tui", "crates/gallery", "crates/a2ui"]
 
 [workspace.package]
 version = "0.1.2"
@@ -26,11 +31,21 @@ image = "0.25"
 # gallery is self-contained and distributable (no on-disk spec dir needed).
 include_dir = "0.7"
 rodio = "0.22"
+# Slint runtime for the `a2ui-slint` backend. `default-features = false` + `std`
+# give the core types (SharedString, Model, the `slint!` macro) without committing
+# to a windowing backend — consumers pick a renderer (e.g. `renderer-femtovg`,
+# `renderer-software`) when launching.
+slint = { version = "1.16", default-features = false, features = ["std", "compat-1-2"] }
+# Build-time compiler: turns `.slint` files into Rust modules via `slint_build`
+# in `build.rs`. (The inline `slint::slint!` macro rejects recursive components,
+# so the backend compiles real `.slint` files instead.)
+slint-build = { version = "1.16" }
 
 # Internal crates — path dependencies shared across the workspace.
 a2ui-core = { path = "crates/core" }
 a2ui-tui = { path = "crates/tui" }
 a2ui-gallery = { path = "crates/gallery" }
+a2ui-slint = { path = "crates/slint" }
 
 # --- Release profile: optimize for binary size --------------------------------
 # The gallery embeds the full spec tree, so we trim the distributed binary.

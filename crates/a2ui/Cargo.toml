@@ -11,10 +11,16 @@ description = "A TUI component library built on top of ratatui"
 default = []
 # Forwarded to the tui backend. Required to build the 14_audio example.
 audio = ["a2ui-tui/audio"]
+# Expose the Slint backend as `a2ui::slint`. Opt-in: pulls the Slint runtime
+# (heavy). Without it the umbrella only re-exports core + tui.
+slint = ["dep:a2ui-slint"]
 
 [dependencies]
 a2ui-core = { workspace = true }
 a2ui-tui = { workspace = true }
+# Optional: the Slint backend, re-exported as `a2ui::slint` under the `slint`
+# feature. The inner `backend` feature is what actually links the Slint runtime.
+a2ui-slint = { workspace = true, optional = true, features = ["backend"] }
 
 # Examples directly use these crates (the umbrella only re-exports core+tui).
 [dev-dependencies]
