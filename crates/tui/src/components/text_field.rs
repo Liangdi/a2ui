@@ -8,7 +8,6 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 
-use a2ui_core::event::{EventResult, InputEvent, InputKey};
 use a2ui_core::model::component_context::ComponentContext;
 use a2ui_core::protocol::common_types::DynamicString;
 use crate::component_impl::TuiComponent;
@@ -138,41 +137,7 @@ impl TuiComponent for TextFieldComponent {
         ctx: &ComponentContext,
         event: &a2ui_core::event::InputEvent,
     ) -> Option<a2ui_core::event::EventResult> {
-        let comp_model = ctx.components.get(&ctx.component_id)?;
-
-        // Get the value binding path.
-        let value_ds = comp_model.get_property::<DynamicString>("value")?;
-        let binding = match value_ds {
-            DynamicString::Binding(b) => b,
-            _ => return None,
-        };
-
-        let current = ctx.data_context.resolve_dynamic_string(
-            &DynamicString::Binding(binding.clone()),
-        );
-
-        match event {
-            InputEvent::KeyPress { key: InputKey::Char(c) } => {
-                let new_value = format!("{}{}", current, c);
-                Some(EventResult::DataUpdate {
-                    path: binding.path.clone(),
-                    value: serde_json::Value::String(new_value),
-                })
-            }
-            InputEvent::KeyPress { key: InputKey::Backspace } => {
-                let new_value = if let Some((idx, _)) = current.char_indices().next_back() {
-                    &current[..idx]
-                } else {
-                    ""
-                }
-                .to_string();
-                Some(EventResult::DataUpdate {
-                    path: binding.path.clone(),
-                    value: serde_json::Value::String(new_value),
-                })
-            }
-            _ => None,
-        }
+        a2ui_core::components::text_field::handle_event(ctx, event)
     }
 }
 

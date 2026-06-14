@@ -7,9 +7,7 @@ use ratatui::{
     widgets::{Block, Borders},
 };
 
-use a2ui_core::event::{EventResult, InputKey};
 use a2ui_core::model::component_context::ComponentContext;
-use a2ui_core::protocol::common_types::Action;
 use crate::component_impl::TuiComponent;
 
 /// Button component implementation.
@@ -139,35 +137,7 @@ impl TuiComponent for ButtonComponent {
         ctx: &ComponentContext,
         event: &a2ui_core::event::InputEvent,
     ) -> Option<a2ui_core::event::EventResult> {
-        let a2ui_core::event::InputEvent::KeyPress { key } = event;
-        if *key != InputKey::Enter {
-            return None;
-        }
-
-        let comp_model = ctx.components.get(&ctx.component_id)?;
-        let action = comp_model.action()?;
-
-        match action {
-            Action::Event { event: action_event } => {
-                let mut context = std::collections::HashMap::new();
-                for (k, dv) in &action_event.context {
-                    context.insert(k.clone(), ctx.data_context.resolve_dynamic_value(&dv));
-                }
-                Some(EventResult::Action {
-                    event_name: action_event.name.clone(),
-                    context,
-                    want_response: action_event.want_response,
-                    response_path: action_event.response_path.clone(),
-                })
-            }
-            Action::FunctionCall { function_call: fc } => {
-                // Execute local function call.
-                let _result = ctx.data_context.resolve_dynamic_value(
-                    &a2ui_core::protocol::common_types::DynamicValue::Function(fc),
-                );
-                Some(EventResult::Consumed)
-            }
-        }
+        a2ui_core::components::button::handle_event(ctx, event)
     }
 }
 

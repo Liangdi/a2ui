@@ -7,7 +7,6 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use a2ui_core::event::{EventResult, InputKey};
 use a2ui_core::model::component_context::ComponentContext;
 use a2ui_core::protocol::common_types::{DynamicBoolean, DynamicString};
 use crate::component_impl::TuiComponent;
@@ -87,18 +86,6 @@ impl TuiComponent for CheckBoxComponent {
         ctx: &ComponentContext,
         event: &a2ui_core::event::InputEvent,
     ) -> Option<a2ui_core::event::EventResult> {
-        let a2ui_core::event::InputEvent::KeyPress { key } = event;
-        if !matches!(key, InputKey::Enter | InputKey::Space) {
-            return None;
-        }
-
-        let comp_model = ctx.components.get(&ctx.component_id)?;
-
-        // Get the value binding to find the data path.
-        let value = comp_model.get_property::<DynamicBoolean>("value")?;
-        if let DynamicBoolean::Binding(binding) = value {
-            return Some(EventResult::Toggle { path: binding.path });
-        }
-        None
+        a2ui_core::components::checkbox::handle_event(ctx, event)
     }
 }

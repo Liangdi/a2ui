@@ -118,60 +118,11 @@ pub fn dispatch_to_focused(
 
 /// Apply an [`EventResult`] produced by a component to the processor's state.
 ///
-/// Replicates `gallery::app::process_event_result`. Returns `Some(path)` only
-/// for an [`EventResult::Action`] that expects a response — the path is where
-/// the eventual server response value should be written — so the caller can
-/// drive the action-response cycle. Every other variant returns `None`.
-pub fn apply_event_result(
-    processor: &mut MessageProcessor,
-    result: EventResult,
-) -> Option<String> {
-    match result {
-        EventResult::Action {
-            want_response,
-            response_path,
-            // event_name / context are intentionally ignored, matching the gallery.
-            ..
-        } => {
-            if want_response {
-                let surface_id = processor
-                    .model
-                    .surfaces()
-                    .next()
-                    .map(|s| s.id.clone());
-                if let Some(sid) = surface_id {
-                    let action_id = uuid::Uuid::new_v4().to_string();
-                    let _ = processor.register_action(&sid, &action_id, response_path.clone());
-                }
-                response_path
-            } else {
-                None
-            }
-        }
-        EventResult::DataUpdate { path, value } => {
-            if let Some(surface) = processor.model.surfaces_mut().next() {
-                surface.data_model.borrow_mut().set(&path, value);
-            }
-            None
-        }
-        EventResult::Toggle { path } => {
-            if let Some(surface) = processor.model.surfaces_mut().next() {
-                let current = surface
-                    .data_model
-                    .borrow()
-                    .get(&path)
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-                surface
-                    .data_model
-                    .borrow_mut()
-                    .set(&path, serde_json::json!(!current));
-            }
-            None
-        }
-        EventResult::Consumed => None,
-    }
-}
+/// Re-exported from [`a2ui_core::interaction::apply_event_result`]
+/// (framework-agnostic) so every backend shares one implementation. Kept here
+/// under the historical `a2ui_tui::interaction::apply_event_result` path so
+/// existing callers keep compiling.
+pub use a2ui_core::interaction::apply_event_result;
 
 /// The one-call keyboard pipeline: map a [`KeyCode`], dispatch it to the
 /// focused component, and apply the resulting [`EventResult`].
