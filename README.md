@@ -46,9 +46,15 @@
 
 ![Invitation Builder](screenshot/invitation-builder.png)
 
-**Sci-fi HUD**（赛博朋克战术 HUD，`17_scifi_hud` 示例：自定义 `TuiComponent` 面板组合成遥测 / 雷达 / 事件日志，仪表、扫描、事件等所有实时数据均通过 a2ui `updateDataModel` 协议推送驱动）
+**Sci-fi HUD — 后端对比**（同一份数据、同一套 `updateDataModel` 协议，换不同渲染器；仪表 / 雷达扫描 / 事件日志所有实时值均从 a2ui data model 读出）
 
-![Sci-fi HUD](screenshot/sci-fi-hud.png)
+| ratatui 终端（`a2ui` 的 `17_scifi_hud`） | Iced 桌面（`a2ui-iced` 的 `17_scifi_hud`） |
+|:---:|:---:|
+| ![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | ![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) |
+
+左侧 ratatui 版用自定义 `TuiComponent` 画 ASCII 仪表 + 字符网格雷达；右侧 Iced 版用 `progress_bar` 仪表 + `Canvas` 绘制的雷达扫描，渲染到原生窗口。两者架构一致——仅**数据**经协议流动，渲染层各自为政。
+
+> 目前 sci-fi HUD 在 **ratatui (TUI)** 与 **Iced** 两个后端实现；Slint / egui / Bevy 的 gallery 渲染标准 spec 样例，暂无 HUD 变体。
 
 ## 快速开始
 

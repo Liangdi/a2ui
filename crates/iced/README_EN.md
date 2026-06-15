@@ -37,6 +37,16 @@ cargo build -p a2ui-iced --features backend
 
 The renderer defaults to wgpu (GPU), with a tiny-skia software fallback.
 
+## Example
+
+`crates/iced/examples/17_scifi_hud.rs` is the Iced counterpart of the ratatui [`17_scifi_hud`](../a2ui/examples/17_scifi_hud.rs): same data, same "the data model is the only source of truth" architecture, rendered with Iced. It declares no component tree — **the layout *is* the `view` function** (`progress_bar` gauges, a `Canvas`-drawn radar sweep, a rolling event log), and every live value is read from the a2ui data model; only **data** flows through the protocol. Animation is driven by a background-thread `Subscription` (one `Tick` every ~80 ms — the Iced equivalent of the ratatui version's `event::poll`).
+
+```bash
+cargo run -p a2ui-iced --example 17_scifi_hud --features backend
+```
+
+> The example uses `iced::widget::canvas`, which is off in the workspace's lean default feature set, so the dev-dependency additionally enables iced's `canvas` feature.
+
 ## Why no state bridge is needed (implementation note)
 
 Iced is Elm: `view(&self)` borrows the surface's data model / components (read-only) and builds an element tree that **owns its data** (`text(String)`, `text_input(placeholder, value)`, and friends all **copy** the `&str` they receive into owned storage; the returned element's `'a` lifetime is bound only to the `on_*` closures, which capture owned `Message` values). User interaction is expressed as a `Message` attached to a widget, and `update(&mut self, msg)` applies it once `view`'s borrows are dropped.

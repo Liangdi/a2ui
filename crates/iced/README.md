@@ -37,6 +37,16 @@ cargo build -p a2ui-iced --features backend
 
 渲染器默认使用 wgpu(GPU),并提供 tiny-skia 软件渲染兜底。
 
+## 示例
+
+`crates/iced/examples/17_scifi_hud.rs` 是 ratatui 版 [`17_scifi_hud`](../a2ui/examples/17_scifi_hud.rs) 的 Iced 对应版:同一份数据、同样的「data model 是唯一真源」架构,换用 Iced 渲染。它不声明组件树 —— **布局就是 `view` 函数**(`progress_bar` 仪表、`Canvas` 画的雷达扫描、滚动事件日志),每个实时值都从 a2ui data model 读出;只有**数据**经由协议流动。动画由一条后台线程驱动的 `Subscription` 推进(每 ~80 ms 一个 `Tick`,等价于 ratatui 版的 `event::poll`)。
+
+```bash
+cargo run -p a2ui-iced --example 17_scifi_hud --features backend
+```
+
+> 示例用到了 `iced::widget::canvas`,它在 workspace 默认的精简 feature 集里是关闭的,所以 dev-dependency 额外打开了 iced 的 `canvas` feature。
+
 ## 为什么不需要状态桥(实现要点)
 
 Iced 是 Elm:`view(&self)` 借用 surface 的 data model / components(只读)构建一棵**拥有自己数据**的元素树(`text(String)`、`text_input(placeholder, value)` 等控件都把传入的 `&str` **拷贝**进自有存储,返回元素的 `'a` 生命周期只绑定到 `on_*` 闭包所捕获的 owned `Message`)。用户交互由控件附着的 `Message` 表达,`update(&mut self, msg)` 在 `view` 返回后(借用已释放)再回写。

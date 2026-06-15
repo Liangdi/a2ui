@@ -26,3 +26,17 @@ serde_json = { workspace = true }
 # links the wgpu + winit stack. `default-features = false` keeps the surface
 # minimal when the feature is off.
 iced = { workspace = true, optional = true }
+
+[dev-dependencies]
+# Examples read live values out of the data model and render them with Iced
+# widgets directly. `a2ui-tui` provides `build_basic_catalog`; `iced` is the
+# optional runtime dep made available to examples via the `backend` feature.
+# The extra `canvas` feature pulls in `iced::widget::canvas` for the radar
+# sweep in `17_scifi_hud` (it is off in the workspace's lean default set).
+a2ui-tui = { workspace = true }
+iced = { workspace = true, features = ["canvas"] }
+
+[[example]]
+name = "17_scifi_hud"
+# Needs the real Iced runtime (wgpu + winit) to open a window.
+required-features = ["backend"]

@@ -46,9 +46,15 @@ The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic c
 
 ![Invitation Builder](screenshot/invitation-builder.png)
 
-**Sci-fi HUD** (cyberpunk tactical HUD, `17_scifi_hud` example: custom `TuiComponent` panels compose telemetry / radar / event-log, with all live data — gauges, sweep, events — driven through the a2ui `updateDataModel` protocol)
+**Sci-fi HUD — backend comparison** (same data, same `updateDataModel` protocol, different renderer; every live value — gauges, radar sweep, event log — is read from the a2ui data model)
 
-![Sci-fi HUD](screenshot/sci-fi-hud.png)
+| ratatui terminal (`17_scifi_hud` in `a2ui`) | Iced desktop (`17_scifi_hud` in `a2ui-iced`) |
+|:---:|:---:|
+| ![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | ![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) |
+
+The ratatui version (left) uses custom `TuiComponent`s to draw ASCII gauges and a character-grid radar; the Iced version (right) uses `progress_bar` gauges and a `Canvas`-drawn radar sweep, rendered into a native window. The architecture is identical — only **data** flows through the protocol; the rendering layer is each backend's own.
+
+> The sci-fi HUD is currently realized for the **ratatui (TUI)** and **Iced** backends; the Slint / egui / Bevy galleries render the standard spec samples and do not yet have a HUD variant.
 
 ## Quick Start
 
