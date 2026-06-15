@@ -133,9 +133,14 @@ impl TuiComponent for AudioPlayerComponent {
         _available_width: u16,
         _measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
     ) -> Option<u16> {
-        // Deterministic floor; the full player UI only draws >=4 rows when
-        // there is room, so 3 is a safe intrinsic floor.
-        Some(3)
+        // The full player UI draws 4 rows (state / progress / volume / hints),
+        // and `render` wraps it in the standard 1-cell margin (+2 rows). So the
+        // rendered footprint is 6 — the measured natural height must match it,
+        // otherwise the layout (which trusts this number) under-sizes the root
+        // and the margin leaves <4 inner rows, collapsing the player to its
+        // degraded single-line status. When forced into less, `draw` degrades
+        // gracefully on its own.
+        Some(6)
     }
 
     /// Keyboard control of the live player (feature-gated). Without the
