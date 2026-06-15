@@ -1,4 +1,4 @@
-# A2UI — A2UI 协议的 Rust 实现(ratatui 终端 + Slint 桌面)
+# A2UI — A2UI 协议的 Rust 实现(ratatui 终端 + Slint / egui / Bevy / Iced 桌面后端)
 
 [![crates.io](https://img.shields.io/crates/v/a2ui.svg)](https://crates.io/crates/a2ui)
 [![docs.rs](https://docs.rs/a2ui/badge.svg)](https://docs.rs/a2ui)
@@ -6,11 +6,11 @@
 
 [English](README_EN.md) | 中文
 
-一个 Rust 实现的 [A2UI (Agent to UI) v1.0](https://github.com/a2ui-project/a2ui) 协议终端渲染器，基于 [ratatui](https://ratatui.rs/) 构建。
+[A2UI (Agent to UI) v1.0](https://github.com/a2ui-project/a2ui) 协议的 Rust 实现 —— 一个 JSON 流式 UI 协议,允许 AI Agent 动态生成并更新界面。
 
-A2UI 是一个 JSON 流式 UI 协议，允许 AI Agent 动态生成和更新终端用户界面。
+同一套框架无关的核心(`a2ui-base`)之上,提供了 **5 个渲染后端**:默认的终端后端 `a2ui-tui`(基于 [ratatui](https://ratatui.rs/)),以及四个**可选的**原生桌面后端 —— [Slint](https://slint.dev/)、[egui](https://github.com/emilk/egui)、[Bevy](https://bevyengine.org)、[Iced](https://github.com/iced-rs/iced)。各后端的渲染保真度与「真输入」能力见[「后端支持矩阵」](#后端支持矩阵)。
 
-项目组织为 Cargo workspace:`a2ui-base`(框架无关核心)+ `a2ui-tui`(ratatui backend)+ `a2ui-gallery`(展示 app)+ `a2ui`(umbrella，re-export 保持 `use a2ui::core::...` / `use a2ui::tui::...` 不破)。此外还有一个**可选的**第二后端 `a2ui-slint`,它把 A2UI 组件树渲染到原生桌面窗口(基于 [Slint](https://slint.dev/),pinned 1.16),详见下方[「Slint 桌面后端」](#slint-桌面后端)。
+项目组织为 Cargo workspace:`a2ui-base`(框架无关核心)+ 5 个后端(`a2ui-tui` / `a2ui-slint` / `a2ui-egui` / `a2ui-bevy` / `a2ui-iced`)+ 各自的 `*-gallery` 展示 app + `a2ui`(umbrella,re-export 保持 `use a2ui::core::...` / `use a2ui::tui::...` 等路径不破)。
 
 ## 特性
 
@@ -109,11 +109,12 @@ cargo run -p a2ui --example 12_handshake
 | Tabs | ✅ | 🟡 | 🟡 | 🟡 | 🟡 |
 | DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | 🟡 |
 | Icon | ✅ | 🟡 | 🟡 | 🟡 | 🟡 |
-| Image | ✅ 真实 | ⬜ | ⬜ | ⬜ | ⬜ |
+| Image | ✅² | ⬜ | ⬜ | ⬜ | ⬜ |
 | Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ |
 
 ¹ 需 `audio` 特性。
+² TUI 经 `ratatui-image` 真实解码并显示图像像素(kitty / iTerm2 / Sixel / Halfblocks 自动降级,仅本地路径);四个桌面后端目前仅渲染文本占位符。
 
 - **TUI 是参考实现**:18 组件全部完整渲染;图片默认开启(`ratatui-image`),音频需 `audio` 特性,视频始终为占位符。
 - **可交互输入控件(TextField / Slider / CheckBox / ChoicePicker)的「真输入」**:egui、Bevy、Iced 与 TUI 完整支持;**Slint 仅 Button / CheckBox 点击可交互**,TextField / Slider 渲染为只读值。

@@ -1,4 +1,4 @@
-# A2UI — Rust impl of the A2UI protocol (ratatui terminal + Slint desktop)
+# A2UI — Rust impl of the A2UI protocol (ratatui terminal + Slint / egui / Bevy / Iced desktop)
 
 [![crates.io](https://img.shields.io/crates/v/a2ui.svg)](https://crates.io/crates/a2ui)
 [![docs.rs](https://docs.rs/a2ui/badge.svg)](https://docs.rs/a2ui)
@@ -6,11 +6,11 @@
 
 English | [中文](README.md)
 
-A Rust implementation of the [A2UI (Agent to UI) v1.0](https://github.com/a2ui-project/a2ui) protocol terminal renderer, built on [ratatui](https://ratatui.rs/).
+A Rust implementation of the [A2UI (Agent to UI) v1.0](https://github.com/a2ui-project/a2ui) protocol — a JSON-based streaming UI protocol that lets AI Agents dynamically generate and update interfaces.
 
-A2UI is a JSON-based streaming UI protocol that allows AI Agents to dynamically generate and update terminal user interfaces.
+On top of a single framework-agnostic core (`a2ui-base`), it ships **5 rendering backends**: the default terminal backend `a2ui-tui` (built on [ratatui](https://ratatui.rs/)), plus four **optional** native-desktop backends — [Slint](https://slint.dev/), [egui](https://github.com/emilk/egui), [Bevy](https://bevyengine.org), and [Iced](https://github.com/iced-rs/iced). See the [Backend Support Matrix](#backend-support-matrix) for each backend's rendering fidelity and real-input capability.
 
-The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic core) + `a2ui-tui` (ratatui backend) + `a2ui-gallery` (demo app) + `a2ui` (umbrella that re-exports core+tui, keeping `use a2ui::core::...` / `use a2ui::tui::...` paths working). There is also an **optional** second backend, `a2ui-slint`, which renders A2UI component trees into a native desktop window (built on [Slint](https://slint.dev/), pinned to 1.16) — see [Slint Desktop Backend](#slint-desktop-backend) below.
+The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic core) + 5 backends (`a2ui-tui` / `a2ui-slint` / `a2ui-egui` / `a2ui-bevy` / `a2ui-iced`) + a matching `*-gallery` demo app for each + `a2ui` (an umbrella that re-exports them, keeping `use a2ui::core::...` / `use a2ui::tui::...` paths working).
 
 ## Features
 
@@ -109,11 +109,12 @@ All five backends share the same `a2ui-base` core (interaction logic / `dispatch
 | Tabs | ✅ | 🟡 | 🟡 | 🟡 | 🟡 |
 | DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | 🟡 |
 | Icon | ✅ | 🟡 | 🟡 | 🟡 | 🟡 |
-| Image | ✅ real | ⬜ | ⬜ | ⬜ | ⬜ |
+| Image | ✅² | ⬜ | ⬜ | ⬜ | ⬜ |
 | Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ |
 
 ¹ Needs the `audio` feature.
+² The TUI backend decodes and renders actual image pixels via `ratatui-image` (kitty / iTerm2 / Sixel / Halfblocks auto-degrade, local paths only); the four desktop backends currently render only a text placeholder.
 
 - **The TUI backend is the reference implementation** — all 18 components render fully; real images are on by default (`ratatui-image`), audio needs the `audio` feature, video is always a placeholder.
 - **Genuine input on the interactive widgets (TextField / Slider / CheckBox / ChoicePicker)**: full on egui, Bevy, Iced, and TUI. **On Slint only Button / CheckBox clicks are wired** — TextField and Slider render read-only.
