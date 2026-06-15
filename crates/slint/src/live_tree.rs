@@ -18,7 +18,7 @@
 //! Whenever the surface mutates, re-call [`build_nodes`] and push the result into
 //! the `Surface` component's `nodes` property — Slint redraws reactively.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use a2ui_base::catalog::function_api::FunctionImplementation;
 use a2ui_base::model::component_context::ComponentContext;
@@ -37,6 +37,7 @@ pub fn build_nodes(
     surface: &SurfaceModel,
     functions: &HashMap<String, Box<dyn FunctionImplementation>>,
     focused_id: Option<&str>,
+    open_modal_ids: &HashSet<String>,
 ) -> Vec<LiveNode> {
     let data_model = surface.data_model.borrow();
     let components = surface.components.borrow();
@@ -52,6 +53,49 @@ pub fn build_nodes(
         functions,
         &surface.id,
         focused_id,
+        open_modal_ids,
+    );
+    builder.nodes
+}
+
+/// Build the floating overlay for the first open Modal: a flat node array whose
+/// root is that Modal's `content` subtree, for the `Surface` window to render in
+/// a top-most overlay layer. Returns an empty `Vec` when no Modal is open.
+pub fn build_overlay_nodes(
+    surface: &SurfaceModel,
+    functions: &HashMap<String, Box<dyn FunctionImplementation>>,
+    focused_id: Option<&str>,
+    open_modal_ids: &HashSet<String>,
+) -> Vec<LiveNode> {
+    let data_model = surface.data_model.borrow();
+    let components = surface.components.borrow();
+
+    // First open Modal's content becomes the overlay root. A Modal counts as
+    // open when the host tracks it locally or its `isOpen` is a literal true.
+    let content_id = components.all().iter().find_map(|(_, m)| {
+        let open = open_modal_ids.contains(m.id.as_str())
+            || matches!(
+                m.get_property::<DynamicBoolean>("isOpen"),
+                Some(DynamicBoolean::Literal(true))
+            );
+        (m.component_type == "Modal" && open)
+            .then(|| m.get_property::<String>("content"))
+            .flatten()
+    });
+    let Some(content_id) = content_id else {
+        return Vec::new();
+    };
+
+    let mut builder = FlatBuilder { nodes: Vec::new() };
+    builder.add(
+        &content_id,
+        "",
+        &data_model,
+        &components,
+        functions,
+        &surface.id,
+        focused_id,
+        open_modal_ids,
     );
     builder.nodes
 }
@@ -74,6 +118,7 @@ impl FlatBuilder {
         functions: &HashMap<String, Box<dyn FunctionImplementation>>,
         surface_id: &str,
         focused_id: Option<&str>,
+        open_modal_ids: &HashSet<String>,
     ) -> Option<usize> {
         let model = components.get(id)?;
         let kind = model.component_type.clone();
@@ -91,7 +136,8 @@ impl FlatBuilder {
                 base_path,
                 focused_id.map(|s| s.to_string()),
             );
-            let (text, label, variant, checked, number, extra) = resolve_fields(&kind, &ctx, model);
+            let (text, label, variant, checked, number, extra) =
+                resolve_fields(&kind, &ctx, model, open_modal_ids);
             let plan = build_child_plan(model, &ctx);
             (text, label, variant, checked, number, extra, plan)
         };
@@ -102,9 +148,16 @@ impl FlatBuilder {
         self.nodes.push(empty_node());
         let mut child_indices: Vec<i32> = Vec::new();
         for (child_id, child_base) in child_plan {
-            if let Some(child_idx) =
-                self.add(&child_id, &child_base, data_model, components, functions, surface_id, focused_id)
-            {
+            if let Some(child_idx) = self.add(
+                &child_id,
+                &child_base,
+                data_model,
+                components,
+                functions,
+                surface_id,
+                focused_id,
+                open_modal_ids,
+            ) {
                 child_indices.push(child_idx as i32);
             }
         }
@@ -125,6 +178,23 @@ impl FlatBuilder {
     }
 }
 
+/// Whether a `Modal` component is currently open.
+///
+/// A Modal is open when its `isOpen` property resolves true **or** its id is in
+/// the host's locally-tracked `open_modal_ids` set (the gallery has no server to
+/// flip `isOpen`, so trigger interactions are recorded locally instead).
+fn modal_is_open(
+    model: &a2ui_base::model::component_model::ComponentModel,
+    ctx: &ComponentContext,
+    open_modal_ids: &HashSet<String>,
+) -> bool {
+    let prop = model
+        .get_property::<DynamicBoolean>("isOpen")
+        .map(|db| ctx.data_context.resolve_dynamic_boolean(&db))
+        .unwrap_or(false);
+    prop || open_modal_ids.contains(&model.id)
+}
+
 /// Extract the display fields for a component type, returning
 /// `(text, label, variant, checked, number, extra)`.
 ///
@@ -134,6 +204,7 @@ fn resolve_fields(
     kind: &str,
     ctx: &ComponentContext,
     model: &a2ui_base::model::component_model::ComponentModel,
+    open_modal_ids: &HashSet<String>,
 ) -> (String, String, String, bool, f64, String) {
     let variant: String = model.get_property::<String>("variant").unwrap_or_default();
     match kind {
@@ -217,10 +288,7 @@ fn resolve_fields(
             (String::new(), label, variant, false, 0.0, String::new())
         }
         "Modal" => {
-            let is_open = model
-                .get_property::<DynamicBoolean>("isOpen")
-                .map(|db| ctx.data_context.resolve_dynamic_boolean(&db))
-                .unwrap_or(false);
+            let is_open = modal_is_open(model, ctx, open_modal_ids);
             (String::new(), String::new(), variant, is_open, 0.0, String::new())
         }
         _ => (String::new(), String::new(), variant, false, 0.0, String::new()),
@@ -235,6 +303,16 @@ fn build_child_plan(
 ) -> Vec<(String, String)> {
     let mut plan = Vec::new();
     let base = ctx.data_context.base_path().to_string();
+
+    // Modal mounts only its trigger in-place; when open the content is shown as
+    // a floating overlay (built separately by [`build_overlay_nodes`]), not
+    // swapped in here — so the trigger keeps its place (and focus).
+    if model.component_type == "Modal" {
+        if let Some(trigger_id) = model.get_property::<String>("trigger") {
+            plan.push((trigger_id, base));
+        }
+        return plan;
+    }
 
     // Single child (Card / Button / wrappers).
     if let Some(child_id) = model.child() {
@@ -290,13 +368,11 @@ mod tests {
     use a2ui_base::message_processor::MessageProcessor;
     use slint::Model;
 
-    /// Build a surface from `components_json` (describing `root` + children),
-    /// optionally seeding `/data`, and return its flat node array.
-    fn build(
+    /// Build a processor seeded with `components_json` (+ optional `/data`).
+    fn setup(
         components_json: serde_json::Value,
         data: Option<serde_json::Value>,
-        focused_id: Option<&str>,
-    ) -> Vec<LiveNode> {
+    ) -> MessageProcessor {
         let mut processor = MessageProcessor::new(vec![Catalog::new(
             "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
         )]);
@@ -318,10 +394,40 @@ mod tests {
         processor
             .process_message(MessageProcessor::parse_message(&update.to_string()).unwrap())
             .unwrap();
+        processor
+    }
 
+    /// Main node tree for `components_json`'s surface (Modal always shows trigger).
+    fn build_open(
+        components_json: serde_json::Value,
+        data: Option<serde_json::Value>,
+        focused_id: Option<&str>,
+        open_modal_ids: &HashSet<String>,
+    ) -> Vec<LiveNode> {
+        let processor = setup(components_json, data);
         let surface = processor.model.get_surface("test").expect("surface exists");
-        let functions = HashMap::new();
-        build_nodes(surface, &functions, focused_id)
+        build_nodes(surface, &HashMap::new(), focused_id, open_modal_ids)
+    }
+
+    /// Overlay node tree (first open Modal's content) for the same surface.
+    fn build_overlay_open(
+        components_json: serde_json::Value,
+        data: Option<serde_json::Value>,
+        focused_id: Option<&str>,
+        open_modal_ids: &HashSet<String>,
+    ) -> Vec<LiveNode> {
+        let processor = setup(components_json, data);
+        let surface = processor.model.get_surface("test").expect("surface exists");
+        build_overlay_nodes(surface, &HashMap::new(), focused_id, open_modal_ids)
+    }
+
+    /// `build` with no locally-open modals (the common case in existing tests).
+    fn build(
+        components_json: serde_json::Value,
+        data: Option<serde_json::Value>,
+        focused_id: Option<&str>,
+    ) -> Vec<LiveNode> {
+        build_open(components_json, data, focused_id, &HashSet::new())
     }
 
     /// Child indices of `nodes[idx]` as a `Vec<i32>`.
@@ -340,7 +446,7 @@ mod tests {
             .process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
             .unwrap();
         let surface = processor.model.get_surface("s").unwrap();
-        assert!(build_nodes(surface, &HashMap::new(), None).is_empty());
+        assert!(build_nodes(surface, &HashMap::new(), None, &HashSet::new()).is_empty());
     }
 
     #[test]
@@ -468,5 +574,37 @@ mod tests {
         );
         assert_eq!(nodes[1].kind.to_string(), "Image");
         assert_eq!(nodes[1].extra.to_string(), "https://example.com/a.png");
+    }
+
+    #[test]
+    fn modal_mounts_trigger_inplace_and_content_as_overlay() {
+        let components = serde_json::json!([
+            { "id": "root", "component": "Column", "children": ["m"] },
+            { "id": "m", "component": "Modal", "trigger": "open-btn", "content": "body" },
+            { "id": "open-btn", "component": "Text", "text": "Open" },
+            { "id": "body", "component": "Text", "text": "Content" }
+        ]);
+
+        // Main tree always mounts the trigger, open or closed.
+        let main_closed = build_open(components.clone(), None, None, &HashSet::new());
+        let main_open = build_open(components.clone(), None, None, &HashSet::from(["m".to_string()]));
+        assert_eq!(main_closed[1].kind.to_string(), "Modal");
+        assert_eq!(child_ids(&main_closed, 1), vec![2]);
+        assert_eq!(main_closed[2].text.to_string(), "Open", "trigger in main tree when closed");
+        assert_eq!(main_open[2].text.to_string(), "Open", "trigger still in main tree when open");
+
+        // Overlay is empty when closed; the content subtree when open.
+        assert!(
+            build_overlay_open(components.clone(), None, None, &HashSet::new()).is_empty(),
+            "no overlay when closed"
+        );
+        let overlay =
+            build_overlay_open(components, None, None, &HashSet::from(["m".to_string()]));
+        assert!(!overlay.is_empty(), "overlay present when open");
+        assert_eq!(
+            overlay[0].text.to_string(),
+            "Content",
+            "overlay root is the Modal's content"
+        );
     }
 }

@@ -20,6 +20,7 @@ use a2ui_base::catalog::Catalog;
 use a2ui_base::event::{EventResult, InputEvent, InputKey};
 use a2ui_base::message_processor::MessageProcessor;
 use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::common_types::DynamicBoolean;
 use a2ui_base::protocol::server_to_client::A2uiMessage;
 use crate::sample_loader::{self, Sample};
 use a2ui_tui::catalogs::basic::{build_basic_catalog, build_basic_registry};
@@ -405,6 +406,56 @@ impl GalleryApp {
         drop(data_model);
         if let Some(result) = result {
             self.process_event_result(result);
+        }
+
+        // Modal open/close is handled locally: A2UI routes it through a server
+        // event the gallery can't answer, so when the focused node is some
+        // Modal's trigger we toggle that Modal's `isOpen` directly. The tui
+        // ModalComponent reads `isOpen` and swaps trigger↔content on the next
+        // render; pressing Enter again (focus stays on the trigger) closes it.
+        self.apply_modal_interaction(&focused_id);
+    }
+
+    /// Toggle a Modal's open state when its trigger is activated.
+    ///
+    /// `node_id` is the just-activated component. If it is some Modal's
+    /// `trigger`, that Modal's `isOpen` is flipped on its component model
+    /// (written as a `DynamicBoolean::Literal` so the value round-trips through
+    /// the tui render path without coupling to the serde tag layout by hand).
+    /// No-op for nodes that are no Modal's trigger.
+    fn apply_modal_interaction(&mut self, node_id: &str) {
+        let surface = match self.processor.model.surfaces().next() {
+            Some(s) => s,
+            None => return,
+        };
+
+        // Find the Modal whose trigger is `node_id`.
+        let modal_id = {
+            let components = surface.components.borrow();
+            components.all().iter().find_map(|(id, m)| {
+                if m.component_type == "Modal"
+                    && m.get_property::<String>("trigger").as_deref() == Some(node_id)
+                {
+                    Some(id.clone())
+                } else {
+                    None
+                }
+            })
+        };
+        let Some(modal_id) = modal_id else { return };
+
+        // Toggle `isOpen`. Only a previously-written `Literal(true)` counts as
+        // open; anything else (no property, a data binding, …) is the closed
+        // baseline, so the first activation always opens.
+        let mut components = surface.components.borrow_mut();
+        if let Some(m) = components.get_mut(&modal_id) {
+            let open = matches!(
+                m.get_property::<DynamicBoolean>("isOpen"),
+                Some(DynamicBoolean::Literal(true))
+            );
+            let next = serde_json::to_value(DynamicBoolean::Literal(!open))
+                .unwrap_or_else(|_| serde_json::json!({"Literal": false}));
+            m.properties.insert("isOpen".into(), next);
         }
     }
 

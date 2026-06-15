@@ -12,7 +12,7 @@
 //! single thread, so `Rc`/`RefCell` (not `Arc`/`Mutex`) are sufficient.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use slint::ComponentHandle;
@@ -26,7 +26,7 @@ use a2ui_base::message_processor::MessageProcessor;
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::protocol::server_to_client::A2uiMessage;
 
-use crate::live_tree::build_nodes;
+use crate::live_tree::{build_nodes, build_overlay_nodes};
 use crate::ui::{Events, LiveNode, SampleEntry, Surface};
 
 /// Owns a Slint window bound to a single A2UI surface.
@@ -44,6 +44,10 @@ struct HostState {
     focus: RefCell<FocusManager>,
     /// Gallery samples: `(name, messages)`. Selection replays a sample's messages.
     samples: RefCell<Vec<(String, Vec<A2uiMessage>)>>,
+    /// Locally-tracked open Modal component ids. The gallery has no server to
+    /// flip a Modal's `isOpen`, so trigger activations are recorded here and
+    /// surfaced to `build_nodes` as the open state. Cleared on sample switch.
+    open_modals: RefCell<HashSet<String>>,
 }
 
 impl SurfaceHost {
@@ -67,6 +71,7 @@ impl SurfaceHost {
             functions,
             focus: RefCell::new(focus),
             samples: RefCell::new(Vec::new()),
+            open_modals: RefCell::new(HashSet::new()),
         });
 
         // Route button presses → core dispatch.
@@ -83,6 +88,14 @@ impl SurfaceHost {
             state
                 .surface
                 .on_select_sample(move |idx| s.select(idx as usize));
+        }
+        // Clicking the modal overlay's backdrop closes any open modal.
+        {
+            let s = Rc::clone(&state);
+            state.surface.on_close_modal(move || {
+                s.open_modals.borrow_mut().clear();
+                s.redraw();
+            });
         }
 
         state.redraw();
@@ -143,8 +156,13 @@ impl HostState {
             return;
         };
         let focused = self.focus.borrow().focused_id().map(str::to_string);
-        let nodes = build_nodes(surface, &self.functions, focused.as_deref());
+        let open_modals = self.open_modals.borrow();
+        let nodes = build_nodes(surface, &self.functions, focused.as_deref(), &open_modals);
         self.surface.set_nodes(to_node_model(nodes));
+        let overlay_nodes =
+            build_overlay_nodes(surface, &self.functions, focused.as_deref(), &open_modals);
+        self.surface.set_overlay_visible(!overlay_nodes.is_empty());
+        self.surface.set_overlay_nodes(to_node_model(overlay_nodes));
     }
 
     /// A node was activated (button press): dispatch Enter to its `handle_event`
@@ -182,7 +200,59 @@ impl HostState {
             let mut proc = self.processor.borrow_mut();
             let _ = apply_event_result(&mut proc, result);
         }
+
+        // Modal open/close is handled locally (no server): activating a Modal's
+        // trigger opens it; activating a Modal node itself (the open panel is
+        // click-to-close) toggles it shut.
+        self.apply_modal_interaction(node_id);
         self.redraw();
+    }
+
+    /// Resolve a node activation into a local Modal state change, if any.
+    ///
+    /// Two cases, derived from the catalog's trigger/content semantics rather
+    /// than the (server-routed) event name: activating a component that is some
+    /// Modal's `trigger` opens that Modal; activating a Modal node directly
+    /// (e.g. clicking its open panel) toggles it closed.
+    fn apply_modal_interaction(&self, node_id: &str) {
+        let proc = self.processor.borrow();
+        let Some(surface) = proc.model.surfaces().next() else {
+            return;
+        };
+        let components = surface.components.borrow();
+
+        let is_modal = components
+            .get(node_id)
+            .map(|m| m.component_type == "Modal")
+            .unwrap_or(false);
+
+        // If this node is some Modal's trigger, that Modal should open.
+        let opened_by_trigger = if is_modal {
+            None
+        } else {
+            components.all().iter().find_map(|(id, m)| {
+                if m.component_type == "Modal"
+                    && m.get_property::<String>("trigger").as_deref() == Some(node_id)
+                {
+                    Some(id.clone())
+                } else {
+                    None
+                }
+            })
+        };
+
+        drop(components);
+        drop(proc);
+
+        let mut open = self.open_modals.borrow_mut();
+        if is_modal {
+            // Toggle: insert returns false when the id was already present.
+            if !open.insert(node_id.to_string()) {
+                open.remove(node_id);
+            }
+        } else if let Some(modal_id) = opened_by_trigger {
+            open.insert(modal_id);
+        }
     }
 
     /// Load sample `idx`: reset the processor (keeping catalogs), replay its
@@ -206,6 +276,7 @@ impl HostState {
         drop(proc);
 
         self.focus.borrow_mut().reset();
+        self.open_modals.borrow_mut().clear();
         {
             let proc = self.processor.borrow();
             if let Some(surface) = proc.model.surfaces().next() {

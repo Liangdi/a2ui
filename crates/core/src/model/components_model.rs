@@ -28,6 +28,11 @@ impl SurfaceComponentsModel {
         self.components.get(id)
     }
 
+    /// Get a mutable component by ID.
+    pub fn get_mut(&mut self, id: &str) -> Option<&mut ComponentModel> {
+        self.components.get_mut(id)
+    }
+
     /// Add or update a component.
     /// If the component already exists with a different type, replaces it.
     pub fn upsert(&mut self, component: ComponentModel) {

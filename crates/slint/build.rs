@@ -110,9 +110,12 @@ fn generate() -> String {
          \x20   preferred-width: 1000px;\n\
          \x20   preferred-height: 700px;\n\
          \x20   in property <[LiveNode]> nodes;\n\
+         \x20   in property <[LiveNode]> overlay-nodes;\n\
+         \x20   in property <bool> overlay-visible;\n\
          \x20   in property <[SampleEntry]> samples;\n\
          \x20   in property <int> selected-sample;\n\
          \x20   callback select-sample(int);\n\
+         \x20   callback close-modal();\n\
          \n\
          \x20   HorizontalLayout {{\n\
          \x20       // Left: sample browser.\n\
@@ -146,6 +149,31 @@ fn generate() -> String {
          \x20       Rectangle {{ width: 1px; background: #ddd; }}\n\
          \x20       // Right: the rendered A2UI surface.\n\
          \x20       Node{MAX_DEPTH} {{ all: nodes; idx: 0; }}\n\
+         \x20   }}\n\
+         \n\
+         \x20   // Top-most modal overlay: a dimmed backdrop with a centered dialog\n\
+         \x20   // holding the open Modal's content. Declared after the main layout so\n\
+         \x20   // it floats above it. Clicking the backdrop closes the modal.\n\
+         \x20   if root.overlay-visible : Rectangle {{\n\
+         \x20       background: #00000080;\n\
+         \x20       TouchArea {{ clicked => {{ root.close-modal(); }} }}\n\
+         \x20       HorizontalLayout {{\n\
+         \x20           alignment: center;\n\
+         \x20           VerticalLayout {{\n\
+         \x20               alignment: center;\n\
+         \x20               Rectangle {{\n\
+         \x20                   background: #fff;\n\
+         \x20                   border-radius: 10px;\n\
+         \x20                   border-width: 2px; border-color: #c0c0c0;\n\
+         \x20                   drop-shadow-blur: 10px; drop-shadow-color: #00000055;\n\
+         \x20                   min-width: 300px; min-height: 140px;\n\
+         \x20                   VerticalLayout {{\n\
+         \x20                       padding: 16px;\n\
+         \x20                       Node{MAX_DEPTH} {{ all: root.overlay-nodes; idx: 0; }}\n\
+         \x20                   }}\n\
+         \x20               }}\n\
+         \x20           }}\n\
+         \x20       }}\n\
          \x20   }}\n\
          }}\n",
     ));
@@ -259,13 +287,12 @@ fn node_body(k: usize, child_comp: Option<&str>) -> String {
          \x20       {render_children}\n\
          \x20   }}\n\
          \n\
-         \x20   // Modal — elevated panel; renders nothing when closed.\n\
-         \x20   if me.kind == \"Modal\" && me.checked : Rectangle {{\n\
-         \x20       background: #fff;\n\
-         \x20       border-radius: 8px;\n\
-         \x20       border-width: 2px; border-color: #bbb;\n\
-         \x20       drop-shadow-blur: 6px; drop-shadow-color: #0003;\n\
-         \x20       VerticalLayout {{ padding: 12px; {render_children} }}\n\
+         \x20   // Modal — always renders its trigger child in-place. When open the\n\
+         \x20   // content floats as a top-level overlay (see the Surface's overlay-*\n\
+         \x20   // properties), so the trigger keeps its place and focus.\n\
+         \x20   if me.kind == \"Modal\" : Rectangle {{\n\
+         \x20       background: transparent;\n\
+         \x20       {render_children}\n\
          \x20   }}\n\
          \n\
          \x20   // ChoicePicker — labeled box (display-only).\n\

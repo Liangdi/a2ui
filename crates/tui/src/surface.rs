@@ -4,8 +4,9 @@ use std::collections::HashMap;
 
 use ratatui::{
     Frame,
-    layout::Rect,
-    widgets::{Block, Paragraph},
+    layout::{Constraint, Direction, Layout, Margin, Rect},
+    style::{Color, Style},
+    widgets::{Block, Clear, Paragraph},
 };
 
 use a2ui_base::catalog::function_api::FunctionImplementation;
@@ -14,6 +15,7 @@ use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::model::components_model::SurfaceComponentsModel;
 use a2ui_base::model::data_model::DataModel;
 use a2ui_base::model::surface_model::SurfaceModel;
+use a2ui_base::protocol::common_types::DynamicBoolean;
 use super::component_impl::ComponentRegistry;
 use super::component_impl::TuiComponent;
 
@@ -105,6 +107,10 @@ impl<'a> SurfaceRenderer<'a> {
             &self.catalog.functions,
             focused_id,
         );
+
+        // Any open Modal floats its content as a centered overlay on top of the
+        // rendered tree — a real modal dialog rather than an inline swap.
+        self.render_modal_overlays(frame, area, surface_id, &data_model, &components, focused_id);
     }
 
     /// Measure the root component's natural content height (including its own
@@ -163,6 +169,85 @@ impl<'a> SurfaceRenderer<'a> {
             focused_id,
         );
     }
+
+    /// Draw each open Modal's `content` as a centered, bordered overlay on top of
+    /// the already-rendered surface (with a dimmed backdrop), so a modal reads as
+    /// a floating dialog rather than replacing its trigger inline.
+    fn render_modal_overlays(
+        &self,
+        frame: &mut Frame,
+        area: Rect,
+        surface_id: &str,
+        data_model: &DataModel,
+        components: &SurfaceComponentsModel,
+        focused_id: Option<&str>,
+    ) {
+        for (_, m) in components.all() {
+            if m.component_type != "Modal" || !is_modal_open(m) {
+                continue;
+            }
+            let Some(content_id) = m.get_property::<String>("content") else {
+                continue;
+            };
+
+            // Dimmed backdrop over the whole surface: Clear erases the
+            // underlying symbols (e.g. the trigger) first, then Block paints a
+            // dark background (Block sets bg but doesn't erase symbols alone).
+            frame.render_widget(Clear, area);
+            frame.render_widget(Block::default().style(Style::default().bg(Color::Black)), area);
+
+            // Centered dialog box.
+            let dialog = centered_rect(area, 60, 40);
+            frame.render_widget(Clear, dialog);
+            frame.render_widget(
+                Block::bordered().title(" Modal ").style(Style::default().bg(Color::Gray)),
+                dialog,
+            );
+            let inner = dialog.inner(Margin { horizontal: 1, vertical: 1 });
+            if inner.width > 0 && inner.height > 0 {
+                self.render_child_by_id(
+                    &content_id,
+                    surface_id,
+                    "",
+                    inner,
+                    frame,
+                    data_model,
+                    components,
+                    focused_id,
+                );
+            }
+        }
+    }
+}
+
+/// Whether a Modal's `isOpen` is a literal `true` — the form the gallery writes
+/// locally when a trigger is activated. Bindings would need a data context to
+/// resolve and aren't driven by the gallery's local interaction.
+fn is_modal_open(m: &a2ui_base::model::component_model::ComponentModel) -> bool {
+    matches!(
+        m.get_property::<DynamicBoolean>("isOpen"),
+        Some(DynamicBoolean::Literal(true))
+    )
+}
+
+/// A rect centered in `area`, `width_pct`% wide and `height_pct`% tall.
+fn centered_rect(area: Rect, width_pct: u16, height_pct: u16) -> Rect {
+    let pop = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - height_pct) / 2),
+            Constraint::Percentage(height_pct),
+            Constraint::Percentage((100 - height_pct) / 2),
+        ])
+        .split(area);
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - width_pct) / 2),
+            Constraint::Percentage(width_pct),
+            Constraint::Percentage((100 - width_pct) / 2),
+        ])
+        .split(pop[1])[1]
 }
 
 /// Recursively render a single component node.

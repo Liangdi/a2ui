@@ -1,16 +1,19 @@
-//! Modal component — renders either the trigger child or the content child.
+//! Modal component — always renders its trigger in-place; the open content is
+//! shown as a floating overlay by the surface renderer (a real modal dialog),
+//! not by swapping in here.
 
 use ratatui::{Frame, layout::Rect};
 
 use a2ui_base::model::component_context::ComponentContext;
-use a2ui_base::protocol::common_types::DynamicBoolean;
 use crate::component_impl::TuiComponent;
 
 /// Modal component implementation.
 ///
-/// In TUI, rendering a true modal overlay is complex. This component renders
-/// the `trigger` child when closed and the `content` child when open, switching
-/// between them based on the `isOpen` property (a `DynamicBoolean`).
+/// Always renders the `trigger` child in its layout position. When open, the
+/// `content` child is drawn as a centered overlay on top of the whole surface
+/// by [`crate::surface::SurfaceRenderer`] — so the trigger keeps its place
+/// (and focus) and the dialog actually floats above the UI instead of
+/// replacing the trigger inline.
 pub struct ModalComponent;
 
 impl TuiComponent for ModalComponent {
@@ -31,25 +34,11 @@ impl TuiComponent for ModalComponent {
             None => return,
         };
 
-        // Check if modal is open.
-        let is_open = comp_model
-            .get_property::<DynamicBoolean>("isOpen")
-            .map(|db| ctx.data_context.resolve_dynamic_boolean(&db))
-            .unwrap_or(false);
-
-        if is_open {
-            // Render content child.
-            if let Some(content_id) = comp_model.get_property::<String>("content") {
-                if area.width > 0 && area.height > 0 {
-                    render_child(&content_id, area, frame, "");
-                }
-            }
-        } else {
-            // Render trigger child.
-            if let Some(trigger_id) = comp_model.get_property::<String>("trigger") {
-                if area.width > 0 && area.height > 0 {
-                    render_child(&trigger_id, area, frame, "");
-                }
+        // The trigger always renders in-place; the open content is overlaid by
+        // the surface renderer, not here.
+        if let Some(trigger_id) = comp_model.get_property::<String>("trigger") {
+            if area.width > 0 && area.height > 0 {
+                render_child(&trigger_id, area, frame, "");
             }
         }
     }
@@ -61,11 +50,9 @@ impl TuiComponent for ModalComponent {
         measure_child: &mut dyn FnMut(&str, &str, u16) -> Option<u16>,
     ) -> Option<u16> {
         let comp_model = ctx.components.get(&ctx.component_id)?;
-        let is_open = comp_model
-            .get_property::<DynamicBoolean>("isOpen")
-            .map(|db| ctx.data_context.resolve_dynamic_boolean(&db))
-            .unwrap_or(false);
-        let child_id = comp_model.get_property::<String>(if is_open { "content" } else { "trigger" })?;
+        // Sizing follows the trigger (the in-place element); the overlay content
+        // is sized independently by the surface renderer.
+        let child_id = comp_model.get_property::<String>("trigger")?;
         measure_child(&child_id, "", available_width)
     }
 }
