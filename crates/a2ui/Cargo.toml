@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "A2UI (Agent to UI) — render JSON streaming UIs authored by AI agents (ratatui + Slint + egui + Bevy + Iced backends)"
+description = "A2UI (Agent to UI) — render JSON streaming UIs authored by AI agents (ratatui + Slint + egui + Bevy + Iced + Dioxus backends)"
 
 [features]
 default = []
@@ -23,6 +23,10 @@ bevy = ["dep:a2ui-bevy"]
 # Expose the Iced backend as `a2ui::iced`. Opt-in: pulls the Iced runtime
 # (wgpu + winit). Without it the umbrella only re-exports core + tui.
 iced = ["dep:a2ui-iced"]
+# Expose the Dioxus backend as `a2ui::dioxus`. Opt-in: pulls the Dioxus desktop
+# runtime (wry WebView + tao windowing). Without it the umbrella only re-exports
+# core + tui.
+dioxus = ["dep:a2ui-dioxus"]
 
 [dependencies]
 a2ui-base = { workspace = true }
@@ -39,6 +43,9 @@ a2ui-bevy = { workspace = true, optional = true, features = ["backend"] }
 # Optional: the Iced backend, re-exported as `a2ui::iced` under the `iced`
 # feature. The inner `backend` feature is what actually links the Iced runtime.
 a2ui-iced = { workspace = true, optional = true, features = ["backend"] }
+# Optional: the Dioxus backend, re-exported as `a2ui::dioxus` under the `dioxus`
+# feature. The inner `backend` feature is what actually links the Dioxus runtime.
+a2ui-dioxus = { workspace = true, optional = true, features = ["backend"] }
 
 # Examples directly use these crates (the umbrella only re-exports core+tui).
 [dev-dependencies]

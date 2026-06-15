@@ -4,8 +4,9 @@
 //!
 //! The Slint backend is available as `a2ui::slint` under the `slint` cargo
 //! feature, the egui backend as `a2ui::egui` under the `egui` cargo feature,
-//! the Bevy backend as `a2ui::bevy` under the `bevy` cargo feature, and the
-//! Iced backend as `a2ui::iced` under the `iced` cargo feature — all opt-in
+//! the Bevy backend as `a2ui::bevy` under the `bevy` cargo feature, the Iced
+//! backend as `a2ui::iced` under the `iced` cargo feature, and the Dioxus
+//! backend as `a2ui::dioxus` under the `dioxus` cargo feature — all opt-in
 //! because they pull their (heavy) GUI runtimes.
 
 pub use a2ui_base as core;
@@ -22,3 +23,6 @@ pub use a2ui_bevy as bevy;
 
 #[cfg(feature = "iced")]
 pub use a2ui_iced as iced;
+
+#[cfg(feature = "dioxus")]
+pub use a2ui_dioxus as dioxus;

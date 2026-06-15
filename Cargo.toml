@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/tui", "crates/gallery", "crates/a2ui", "crates/slint", "crates/slint-gallery", "crates/egui", "crates/egui-gallery", "crates/bevy", "crates/bevy-gallery", "crates/iced", "crates/iced-gallery"]
+members = ["crates/core", "crates/tui", "crates/gallery", "crates/a2ui", "crates/slint", "crates/slint-gallery", "crates/egui", "crates/egui-gallery", "crates/bevy", "crates/bevy-gallery", "crates/iced", "crates/iced-gallery", "crates/dioxus", "crates/dioxus-gallery"]
 # `cargo build` / `cargo run` with no `-p` only compile the ratatui stack. The
 # Slint backend (`a2ui-slint`) is opt-in: it pulls a sizeable GUI toolchain, so
 # it is excluded from the default build and built explicitly with
@@ -107,6 +107,30 @@ iced = { version = "0.14", default-features = false, features = [
     "x11",
     "wayland",
 ] }
+# Dioxus reactive RSX GUI runtime for the `a2ui-dioxus` backend. The sixth
+# renderer — and architecturally the most distinct of the bunch. Dioxus is a
+# *reactive-signals* framework whose desktop target renders to a system WebView
+# (WebKitGTK on Linux, WebView2 on Windows, WKWebView on macOS), so — unlike the
+# native-widget backends (Iced/egui/Bevy) — the A2UI tree maps to **HTML +
+# CSS**, and the bespoke dark theme is a stylesheet rather than a style-fn
+# palette. Recursion is idiomatic here: a single `A2uiNode` component renders
+# itself per node (Dioxus supports recursive components natively, unlike Slint's
+# bounded-depth codegen), and the `MessageProcessor` lives in a `Signal` at the
+# root so any write automatically re-renders the subscribers — no Iced-style
+# `Message` enum, no egui-style `EditBuffers` bridge. `default-features = false`
+# drops the devtools/fullstack/web stack; the explicit set keeps only what the
+# desktop backend needs: `desktop` (the wry/tao launcher), `launch`
+# (`LaunchBuilder`), `macro` (`rsx!`/`#[component]`), `html` (the element +
+# event DSL), `signals` (`Signal`/`use_signal`), `hooks` (`use_context`).
+# Pinned to 0.7 (latest stable line on crates.io as of 2026-06).
+dioxus = { version = "0.7", default-features = false, features = [
+    "desktop",
+    "launch",
+    "macro",
+    "html",
+    "signals",
+    "hooks",
+] }
 
 # Internal crates — path dependencies shared across the workspace. Each carries
 # a `version` (the workspace package version) so `cargo publish` can resolve them
@@ -119,6 +143,7 @@ a2ui-slint = { path = "crates/slint", version = "0.2.1" }
 a2ui-egui = { path = "crates/egui", version = "0.2.1" }
 a2ui-bevy = { path = "crates/bevy", version = "0.2.1" }
 a2ui-iced = { path = "crates/iced", version = "0.2.1" }
+a2ui-dioxus = { path = "crates/dioxus", version = "0.2.1" }
 
 # --- Release profile: optimize for binary size --------------------------------
 # The gallery embeds the full spec tree, so we trim the distributed binary.

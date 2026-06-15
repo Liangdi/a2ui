@@ -1,0 +1,22 @@
+[package]
+name = "a2ui-dioxus-gallery"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A2UI gallery — browse and render the sample specs in a Dioxus WebView window"
+
+[[bin]]
+name = "a2ui_dioxus_gallery"
+path = "src/main.rs"
+
+[dependencies]
+a2ui-base = { workspace = true }
+a2ui-tui = { workspace = true }          # build_basic_catalog / build_minimal_catalog
+a2ui-gallery = { workspace = true }      # sample_loader
+# The `backend` feature enables the Dioxus WebView backend (wry + tao). Without
+# it `Gallery` has no runtime, so it is required for this binary.
+a2ui-dioxus = { workspace = true, features = ["backend"] }
+dioxus = { workspace = true }
+serde_json = { workspace = true }

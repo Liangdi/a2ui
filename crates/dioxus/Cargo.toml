@@ -1,0 +1,45 @@
+[package]
+name = "a2ui-dioxus"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Dioxus reactive WebView GUI backend for A2UI (Agent to UI)"
+
+[features]
+default = []
+# Pull in the real Dioxus desktop runtime (wry WebView + tao windowing). OFF by
+# default so the workspace's default build stays light (dioxus brings the wry /
+# WebKitGTK stack). Enable with `--features backend`.
+#
+# Nothing extra is needed beyond the feature flag itself: the windowing + render
+# backends all come from the workspace `dioxus` dep (the lean `desktop` feature
+# set). On Linux this links WebKitGTK (webkit2gtk-4.1) + GTK 3, which must be
+# installed system-wide (mirrors the other native-window backends' GTK/X11 deps).
+backend = ["dep:dioxus"]
+
+[dependencies]
+a2ui-base = { workspace = true }
+serde_json = { workspace = true }
+# Optional: the Dioxus runtime. The `backend` feature is the single switch that
+# links the wry WebView + tao stack. `default-features = false` keeps the
+# surface minimal when the feature is off.
+dioxus = { workspace = true, optional = true }
+
+[dev-dependencies]
+# Examples read live values out of the data model and render them with Dioxus
+# directly. `a2ui-tui` provides `build_basic_catalog`; `dioxus` is the optional
+# runtime dep made available to examples via the `backend` feature.
+a2ui-tui = { workspace = true }
+dioxus = { workspace = true }
+# `tokio::time::sleep` drives the `17_scifi_hud` tick loop. dioxus-desktop ships
+# a tokio runtime (rt-multi-thread + `time`) by default, so the timer driver is
+# already active at runtime; this dep only brings the `time` API into scope.
+# Version follows dioxus-desktop's own tokio pin (1.48 line).
+tokio = { version = "1", features = ["time"] }
+
+[[example]]
+name = "17_scifi_hud"
+# Needs the real Dioxus desktop runtime (wry WebView + tao) to open a window.
+required-features = ["backend"]

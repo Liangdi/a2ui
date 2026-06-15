@@ -1,4 +1,4 @@
-# A2UI — Rust impl of the A2UI protocol (ratatui terminal + Slint / egui / Bevy / Iced desktop)
+# A2UI — Rust impl of the A2UI protocol (ratatui terminal + Slint / egui / Bevy / Iced / Dioxus desktop)
 
 [![crates.io](https://img.shields.io/crates/v/a2ui.svg)](https://crates.io/crates/a2ui)
 [![docs.rs](https://docs.rs/a2ui/badge.svg)](https://docs.rs/a2ui)
@@ -8,9 +8,9 @@ English | [中文](README.md)
 
 A Rust implementation of the [A2UI (Agent to UI) v1.0](https://github.com/a2ui-project/a2ui) protocol — a JSON-based streaming UI protocol that lets AI Agents dynamically generate and update interfaces.
 
-On top of a single framework-agnostic core (`a2ui-base`), it ships **5 rendering backends**: the default terminal backend `a2ui-tui` (built on [ratatui](https://ratatui.rs/)), plus four **optional** native-desktop backends — [Slint](https://slint.dev/), [egui](https://github.com/emilk/egui), [Bevy](https://bevyengine.org), and [Iced](https://github.com/iced-rs/iced). See the [Backend Support Matrix](#backend-support-matrix) for each backend's rendering fidelity and real-input capability.
+On top of a single framework-agnostic core (`a2ui-base`), it ships **6 rendering backends**: the default terminal backend `a2ui-tui` (built on [ratatui](https://ratatui.rs/)), plus five **optional** native-desktop backends — [Slint](https://slint.dev/), [egui](https://github.com/emilk/egui), [Bevy](https://bevyengine.org), [Iced](https://github.com/iced-rs/iced), and [Dioxus](https://github.com/DioxusLabs/dioxus). See the [Backend Support Matrix](#backend-support-matrix) for each backend's rendering fidelity and real-input capability.
 
-The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic core) + 5 backends (`a2ui-tui` / `a2ui-slint` / `a2ui-egui` / `a2ui-bevy` / `a2ui-iced`) + a matching `*-gallery` demo app for each + `a2ui` (an umbrella that re-exports them, keeping `use a2ui::core::...` / `use a2ui::tui::...` paths working).
+The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic core) + 6 backends (`a2ui-tui` / `a2ui-slint` / `a2ui-egui` / `a2ui-bevy` / `a2ui-iced` / `a2ui-dioxus`) + a matching `*-gallery` demo app for each + `a2ui` (an umbrella that re-exports them, keeping `use a2ui::core::...` / `use a2ui::tui::...` paths working).
 
 ## Features
 
@@ -48,13 +48,13 @@ The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic c
 
 **Sci-fi HUD — backend comparison** (same data, same `updateDataModel` protocol, different renderer; every live value — gauges, radar sweep, event log — is read from the a2ui data model)
 
-| ratatui terminal (`17_scifi_hud` in `a2ui`) | Iced desktop (`17_scifi_hud` in `a2ui-iced`) |
-|:---:|:---:|
-| ![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | ![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) |
+| ratatui terminal (`17_scifi_hud` in `a2ui`) | Iced desktop (`17_scifi_hud` in `a2ui-iced`) | Dioxus desktop (`17_scifi_hud` in `a2ui-dioxus`) |
+|:---:|:---:|:---:|
+| ![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | ![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) | ![Sci-fi HUD — Dioxus](screenshot/sci-fi-hud-dioxus.png) |
 
-The ratatui version (left) uses custom `TuiComponent`s to draw ASCII gauges and a character-grid radar; the Iced version (right) uses `progress_bar` gauges and a `Canvas`-drawn radar sweep, rendered into a native window. The architecture is identical — only **data** flows through the protocol; the rendering layer is each backend's own.
+The ratatui version uses custom `TuiComponent`s to draw ASCII gauges and a character-grid radar; the Iced version uses `progress_bar` gauges and a `Canvas`-drawn radar; the Dioxus version uses CSS-bar gauges and an **SVG** radar sweep, rendered into a system WebView. The architecture is identical — only **data** flows through the protocol; the rendering layer is each backend's own.
 
-> The sci-fi HUD is currently realized for the **ratatui (TUI)** and **Iced** backends; the Slint / egui / Bevy galleries render the standard spec samples and do not yet have a HUD variant.
+> The sci-fi HUD is currently realized for the **ratatui (TUI)**, **Iced**, and **Dioxus** backends; the Slint / egui / Bevy galleries render the standard spec samples and do not yet have a HUD variant.
 
 ## Quick Start
 
@@ -85,17 +85,17 @@ cargo run -p a2ui --example 12_handshake
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  apps:       a2ui-gallery (TUI)   a2ui-slint-gallery   a2ui-egui-gallery   a2ui-bevy-gallery   a2ui-iced-gallery (desktop)
+│  apps:       a2ui-gallery (TUI)   a2ui-{slint,egui,bevy,iced,dioxus}-gallery (desktop)
 ├──────────────────────────────────────────────────────────────┤
-│  umbrella:   a2ui  (re-export core + tui [+ slint] [+ egui] [+ bevy] [+ iced])
+│  umbrella:   a2ui  (re-export core + tui [+ slint] [+ egui] [+ bevy] [+ iced] [+ dioxus])
 ├──────────────────────────────────────────────────────────────┤
-│  backends:   a2ui-tui (ratatui)   a2ui-slint (Slint, opt-in)   a2ui-egui (egui, opt-in)   a2ui-bevy (Bevy, opt-in)   a2ui-iced (Iced, opt-in)
+│  backends:   a2ui-tui (ratatui)   a2ui-slint (Slint, opt-in)   a2ui-egui (egui, opt-in)   a2ui-bevy (Bevy, opt-in)   a2ui-iced (Iced, opt-in)   a2ui-dioxus (Dioxus, opt-in)
 ├──────────────────────────────────────────────────────────────┤
 │  a2ui-base (framework-agnostic: Protocol / Model / Catalog / Processor)
 └──────────────────────────────────────────────────────────────┘
 ```
 
-Dependencies flow upward: `a2ui-base` underpins five backends — `a2ui-tui` (ratatui, default), `a2ui-slint` (Slint desktop, optional), `a2ui-egui` (egui desktop, optional), `a2ui-bevy` (Bevy ECS UI desktop, optional), and `a2ui-iced` (Iced desktop, optional). Each backend has a matching `*-gallery` app; the `a2ui` umbrella depends on core + tui (slint / egui / bevy / iced each behind a same-named feature). `a2ui-base` has zero ratatui/slint/egui/bevy/iced dependency and can be used standalone by other backends.
+Dependencies flow upward: `a2ui-base` underpins six backends — `a2ui-tui` (ratatui, default), `a2ui-slint` (Slint desktop, optional), `a2ui-egui` (egui desktop, optional), `a2ui-bevy` (Bevy ECS UI desktop, optional), `a2ui-iced` (Iced desktop, optional), and `a2ui-dioxus` (Dioxus WebView desktop, optional). Each backend has a matching `*-gallery` app; the `a2ui` umbrella depends on core + tui (slint / egui / bevy / iced / dioxus each behind a same-named feature). `a2ui-base` has zero ratatui/slint/egui/bevy/iced/dioxus dependency and can be used standalone by other backends.
 
 ## Backend Support Matrix
 
@@ -103,29 +103,29 @@ All five backends share the same `a2ui-base` core (interaction logic / `dispatch
 
 > ✅ Full (rendered; interactive controls accept input) · 🟡 Best-effort (read-only / limited interaction) · ⬜ Placeholder
 
-| Component | TUI (ratatui) | Slint | egui | Bevy | Iced |
-|-----------|:---:|:---:|:---:|:---:|:---:|
-| Text / Row / Column / Card / List / Divider | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Button | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Modal | ✅ | ✅ | ✅ | ✅ | ✅ |
-| TextField | ✅ | 🟡 | ✅ | ✅ | ✅ |
-| CheckBox | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Slider | ✅ | 🟡 | ✅ | ✅ | ✅ |
-| ChoicePicker | ✅ | 🟡 | ✅ | ⬜ | ✅ |
-| Tabs | ✅ | 🟡 | 🟡 | 🟡 | 🟡 |
-| DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | 🟡 |
-| Icon | ✅ | 🟡 | 🟡 | 🟡 | 🟡 |
-| Image | ✅² | ⬜ | ⬜ | ⬜ | ⬜ |
-| Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ |
+| Component | TUI (ratatui) | Slint | egui | Bevy | Iced | Dioxus |
+|-----------|:---:|:---:|:---:|:---:|:---:|:---:|
+| Text / Row / Column / Card / List / Divider | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Button | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Modal | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| TextField | ✅ | 🟡 | ✅ | ✅ | ✅ | ✅ |
+| CheckBox | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Slider | ✅ | 🟡 | ✅ | ✅ | ✅ | ✅ |
+| ChoicePicker | ✅ | 🟡 | ✅ | ⬜ | ✅ | 🟡 |
+| Tabs | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | 🟡 |
+| DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | 🟡 |
+| Icon | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | 🟡 |
+| Image | ✅² | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 
 ¹ Needs the `audio` feature.
-² The TUI backend decodes and renders actual image pixels via `ratatui-image` (kitty / iTerm2 / Sixel / Halfblocks auto-degrade, local paths only); the four desktop backends currently render only a text placeholder.
+² The TUI backend decodes and renders actual image pixels via `ratatui-image` (kitty / iTerm2 / Sixel / Halfblocks auto-degrade, local paths only); the five desktop backends currently render only a text placeholder.
 
 - **The TUI backend is the reference implementation** — all 18 components render fully; real images are on by default (`ratatui-image`), audio needs the `audio` feature, video is always a placeholder.
-- **Genuine input on the interactive widgets (TextField / Slider / CheckBox / ChoicePicker)**: full on egui, Bevy, Iced, and TUI. **On Slint only Button / CheckBox clicks are wired** — TextField and Slider render read-only.
+- **Genuine input on the interactive widgets (TextField / Slider / CheckBox / ChoicePicker)**: full on egui, Bevy, Iced, Dioxus, and TUI (ChoicePicker is a placeholder badge on Dioxus for now). **On Slint only Button / CheckBox clicks are wired** — TextField and Slider render read-only.
 - **Bevy's ChoicePicker** is currently a text label (`[ChoicePicker: …]`); not yet wired to a native picker.
-- **Iced is the cleanest-mapping backend** (no state bridge, no diffing); all five interactive widgets are native.
+- **Iced is the cleanest-mapping backend** (no state bridge, no diffing); all five interactive widgets are native. **Dioxus is the most architecturally distinct** (reactive signals + WebView/CSS rendering).
 
 ## Slint Desktop Backend
 
@@ -189,6 +189,34 @@ The umbrella crate re-exports the backend as `a2ui::iced` under the `iced` cargo
 cargo run -p a2ui-iced-gallery             # the first sample
 cargo run -p a2ui-iced-gallery -- 3        # by 1-based index
 cargo run -p a2ui-iced-gallery -- login    # by case-insensitive name substring
+```
+
+## Dioxus Desktop Backend
+
+The project also ships **`a2ui-dioxus`**, which renders A2UI component trees into a native desktop **WebView** window (built on [Dioxus](https://github.com/DioxusLabs/dioxus), pinned to 0.7). **This is the most architecturally distinct of the six backends**:
+
+- **Reactive signals** — Dioxus is React-like: runtime state lives in a `Signal` at the root and the UI is a pure read of it. No Iced-style `Message` enum (Elm view/update) and no egui-style `EditBuffers` bridge. **No message enum, no state bridge** — the signal *is* the interaction channel; any write automatically re-renders the components that subscribed to it.
+- **Recursive components** — the whole tree is **one** `A2uiNode` component that renders itself per node (Dioxus supports recursive components natively, unlike Slint's bounded-depth codegen).
+- **WebView rendering** — it renders to a system WebView (WebKitGTK on Linux), so the dark theme is a **CSS stylesheet** (`theme::STYLESHEET`) rather than per-widget style functions, and A2UI component kinds map to ordinary HTML elements + classes.
+
+Button presses reuse the shared `core::components::dispatch_event` + `apply_event_result` (handed up to the root via an `Rc<dyn Fn(String)>` callback); Modals float as a centered panel over a dimmed scrim.
+
+**It is an optional dependency**: `a2ui-dioxus` is a **non-default** workspace member (it pulls the wry WebView + tao windowing stack). A plain `cargo build` only compiles the ratatui stack. Build it explicitly:
+
+```bash
+cargo build -p a2ui-dioxus --features backend
+```
+
+The umbrella crate re-exports it as `a2ui::dioxus` under the `dioxus` cargo feature. On Linux it requires **WebKitGTK (`webkit2gtk-4.1`) + GTK 3** installed system-wide.
+
+### Run the gallery (Dioxus)
+
+`a2ui-dioxus-gallery` loads the same embedded A2UI samples:
+
+```bash
+cargo run -p a2ui-dioxus-gallery             # the first sample
+cargo run -p a2ui-dioxus-gallery -- 3        # by 1-based index
+cargo run -p a2ui-dioxus-gallery -- login    # by case-insensitive name substring
 ```
 
 ## Protocol Overview

@@ -8,9 +8,9 @@
 
 [A2UI (Agent to UI) v1.0](https://github.com/a2ui-project/a2ui) 协议的 Rust 实现 —— 一个 JSON 流式 UI 协议,允许 AI Agent 动态生成并更新界面。
 
-同一套框架无关的核心(`a2ui-base`)之上,提供了 **5 个渲染后端**:默认的终端后端 `a2ui-tui`(基于 [ratatui](https://ratatui.rs/)),以及四个**可选的**原生桌面后端 —— [Slint](https://slint.dev/)、[egui](https://github.com/emilk/egui)、[Bevy](https://bevyengine.org)、[Iced](https://github.com/iced-rs/iced)。各后端的渲染保真度与「真输入」能力见[「后端支持矩阵」](#后端支持矩阵)。
+同一套框架无关的核心(`a2ui-base`)之上,提供了 **6 个渲染后端**:默认的终端后端 `a2ui-tui`(基于 [ratatui](https://ratatui.rs/)),以及五个**可选的**原生桌面后端 —— [Slint](https://slint.dev/)、[egui](https://github.com/emilk/egui)、[Bevy](https://bevyengine.org)、[Iced](https://github.com/iced-rs/iced)、[Dioxus](https://github.com/DioxusLabs/dioxus)。各后端的渲染保真度与「真输入」能力见[「后端支持矩阵」](#后端支持矩阵)。
 
-项目组织为 Cargo workspace:`a2ui-base`(框架无关核心)+ 5 个后端(`a2ui-tui` / `a2ui-slint` / `a2ui-egui` / `a2ui-bevy` / `a2ui-iced`)+ 各自的 `*-gallery` 展示 app + `a2ui`(umbrella,re-export 保持 `use a2ui::core::...` / `use a2ui::tui::...` 等路径不破)。
+项目组织为 Cargo workspace:`a2ui-base`(框架无关核心)+ 6 个后端(`a2ui-tui` / `a2ui-slint` / `a2ui-egui` / `a2ui-bevy` / `a2ui-iced` / `a2ui-dioxus`)+ 各自的 `*-gallery` 展示 app + `a2ui`(umbrella,re-export 保持 `use a2ui::core::...` / `use a2ui::tui::...` 等路径不破)。
 
 ## 特性
 
@@ -48,13 +48,13 @@
 
 **Sci-fi HUD — 后端对比**（同一份数据、同一套 `updateDataModel` 协议，换不同渲染器；仪表 / 雷达扫描 / 事件日志所有实时值均从 a2ui data model 读出）
 
-| ratatui 终端（`a2ui` 的 `17_scifi_hud`） | Iced 桌面（`a2ui-iced` 的 `17_scifi_hud`） |
-|:---:|:---:|
-| ![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | ![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) |
+| ratatui 终端（`a2ui` 的 `17_scifi_hud`） | Iced 桌面（`a2ui-iced` 的 `17_scifi_hud`） | Dioxus 桌面（`a2ui-dioxus` 的 `17_scifi_hud`） |
+|:---:|:---:|:---:|
+| ![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | ![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) | ![Sci-fi HUD — Dioxus](screenshot/sci-fi-hud-dioxus.png) |
 
-左侧 ratatui 版用自定义 `TuiComponent` 画 ASCII 仪表 + 字符网格雷达；右侧 Iced 版用 `progress_bar` 仪表 + `Canvas` 绘制的雷达扫描，渲染到原生窗口。两者架构一致——仅**数据**经协议流动，渲染层各自为政。
+ratatui 版用自定义 `TuiComponent` 画 ASCII 仪表 + 字符网格雷达；Iced 版用 `progress_bar` 仪表 + `Canvas` 雷达；Dioxus 版用 CSS 进度条 + **SVG** 雷达扫描,渲染到系统 WebView。三者架构一致——仅**数据**经协议流动,渲染层各自为政。
 
-> 目前 sci-fi HUD 在 **ratatui (TUI)** 与 **Iced** 两个后端实现；Slint / egui / Bevy 的 gallery 渲染标准 spec 样例，暂无 HUD 变体。
+> 目前 sci-fi HUD 在 **ratatui (TUI)**、**Iced**、**Dioxus** 三个后端实现;Slint / egui / Bevy 的 gallery 渲染标准 spec 样例,暂无 HUD 变体。
 
 ## 快速开始
 
@@ -85,17 +85,17 @@ cargo run -p a2ui --example 12_handshake
 
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
-│  apps:  a2ui-gallery (TUI)   a2ui-slint-gallery (桌面)   a2ui-egui-gallery (桌面)   a2ui-bevy-gallery (桌面)   a2ui-iced-gallery (桌面)│
+│  apps:  a2ui-gallery (TUI)   a2ui-{slint,egui,bevy,iced,dioxus}-gallery (桌面)│
 ├───────────────────────────────────────────────────────────────────────┤
-│  umbrella:   a2ui  (re-export core + tui [+ slint] [+ egui] [+ bevy] [+ iced]) │
+│  umbrella:   a2ui  (re-export core + tui [+ slint] [+ egui] [+ bevy] [+ iced] [+ dioxus]) │
 ├───────────────────────────────────────────────────────────────────────┤
-│  backends:   a2ui-tui (ratatui)   a2ui-slint (Slint, 可选)   a2ui-egui (egui, 可选)   a2ui-bevy (Bevy, 可选)   a2ui-iced (Iced, 可选)│
+│  backends:   a2ui-tui (ratatui)   a2ui-slint (Slint, 可选)   a2ui-egui (egui, 可选)   a2ui-bevy (Bevy, 可选)   a2ui-iced (Iced, 可选)   a2ui-dioxus (Dioxus, 可选)│
 ├───────────────────────────────────────────────────────────────────────┤
 │  a2ui-base (框架无关:Protocol / Model / Catalog / Processor)          │
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
-依赖自下而上:`a2ui-base` 同时支撑五个后端 —— `a2ui-tui`(ratatui,默认)、`a2ui-slint`(Slint 桌面,可选)、`a2ui-egui`(egui 桌面,可选)、`a2ui-bevy`(Bevy ECS UI 桌面,可选)与 `a2ui-iced`(Iced 桌面,可选)。`a2ui-tui` ← `a2ui-gallery`;`a2ui-slint` ← `a2ui-slint-gallery`;`a2ui-egui` ← `a2ui-egui-gallery`;`a2ui-bevy` ← `a2ui-bevy-gallery`;`a2ui-iced` ← `a2ui-iced-gallery`;`a2ui`(umbrella)依赖 core + tui(slint / egui / bevy / iced 分别在同名 feature 后)。`a2ui-base` 完全不依赖 ratatui/slint/egui/bevy/iced,可独立用于其他 backend。
+依赖自下而上:`a2ui-base` 同时支撑六个后端 —— `a2ui-tui`(ratatui,默认)、`a2ui-slint`(Slint 桌面,可选)、`a2ui-egui`(egui 桌面,可选)、`a2ui-bevy`(Bevy ECS UI 桌面,可选)、`a2ui-iced`(Iced 桌面,可选)与 `a2ui-dioxus`(Dioxus WebView 桌面,可选)。`a2ui-tui` ← `a2ui-gallery`;`a2ui-slint` ← `a2ui-slint-gallery`;`a2ui-egui` ← `a2ui-egui-gallery`;`a2ui-bevy` ← `a2ui-bevy-gallery`;`a2ui-iced` ← `a2ui-iced-gallery`;`a2ui-dioxus` ← `a2ui-dioxus-gallery`;`a2ui`(umbrella)依赖 core + tui(slint / egui / bevy / iced / dioxus 分别在同名 feature 后)。`a2ui-base` 完全不依赖 ratatui/slint/egui/bevy/iced/dioxus,可独立用于其他 backend。
 
 ## 后端支持矩阵
 
@@ -103,29 +103,29 @@ cargo run -p a2ui --example 12_handshake
 
 > ✅ 完整渲染(可交互控件接受输入) · 🟡 尽力渲染(只读 / 有限交互) · ⬜ 占位符
 
-| 组件 | TUI (ratatui) | Slint | egui | Bevy | Iced |
-|------|:---:|:---:|:---:|:---:|:---:|
-| Text / Row / Column / Card / List / Divider | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Button | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Modal | ✅ | ✅ | ✅ | ✅ | ✅ |
-| TextField | ✅ | 🟡 | ✅ | ✅ | ✅ |
-| CheckBox | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Slider | ✅ | 🟡 | ✅ | ✅ | ✅ |
-| ChoicePicker | ✅ | 🟡 | ✅ | ⬜ | ✅ |
-| Tabs | ✅ | 🟡 | 🟡 | 🟡 | 🟡 |
-| DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | 🟡 |
-| Icon | ✅ | 🟡 | 🟡 | 🟡 | 🟡 |
-| Image | ✅² | ⬜ | ⬜ | ⬜ | ⬜ |
-| Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ |
+| 组件 | TUI (ratatui) | Slint | egui | Bevy | Iced | Dioxus |
+|------|:---:|:---:|:---:|:---:|:---:|:---:|
+| Text / Row / Column / Card / List / Divider | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Button | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Modal | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| TextField | ✅ | 🟡 | ✅ | ✅ | ✅ | ✅ |
+| CheckBox | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Slider | ✅ | 🟡 | ✅ | ✅ | ✅ | ✅ |
+| ChoicePicker | ✅ | 🟡 | ✅ | ⬜ | ✅ | 🟡 |
+| Tabs | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | 🟡 |
+| DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | 🟡 |
+| Icon | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | 🟡 |
+| Image | ✅² | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 
 ¹ 需 `audio` 特性。
-² TUI 经 `ratatui-image` 真实解码并显示图像像素(kitty / iTerm2 / Sixel / Halfblocks 自动降级,仅本地路径);四个桌面后端目前仅渲染文本占位符。
+² TUI 经 `ratatui-image` 真实解码并显示图像像素(kitty / iTerm2 / Sixel / Halfblocks 自动降级,仅本地路径);五个桌面后端目前仅渲染文本占位符。
 
 - **TUI 是参考实现**:18 组件全部完整渲染;图片默认开启(`ratatui-image`),音频需 `audio` 特性,视频始终为占位符。
-- **可交互输入控件(TextField / Slider / CheckBox / ChoicePicker)的「真输入」**:egui、Bevy、Iced 与 TUI 完整支持;**Slint 仅 Button / CheckBox 点击可交互**,TextField / Slider 渲染为只读值。
+- **可交互输入控件(TextField / Slider / CheckBox / ChoicePicker)的「真输入」**:egui、Bevy、Iced、Dioxus 与 TUI 完整支持(ChoicePicker 在 Dioxus 暂为占位徽章);**Slint 仅 Button / CheckBox 点击可交互**,TextField / Slider 渲染为只读值。
 - **Bevy 的 ChoicePicker** 当前为文本标签(`[ChoicePicker: …]`),尚未接入原生选择控件。
-- **Iced 是映射最干净的后端**(无状态桥 / 无 diff),五个可交互控件全部原生。
+- **Iced 是映射最干净的后端**(无状态桥 / 无 diff),五个可交互控件全部原生;**Dioxus 架构最独特**(响应式 signals + WebView/CSS 渲染)。
 
 ## Slint 桌面后端
 
@@ -217,6 +217,34 @@ umbrella crate 也在 `iced` cargo feature 之后将后端 re-export 为 `a2ui::
 cargo run -p a2ui-iced-gallery             # 第一个样例
 cargo run -p a2ui-iced-gallery -- 3        # 按 1 起始的序号
 cargo run -p a2ui-iced-gallery -- login    # 按名称子串(大小写不敏感)
+```
+
+## Dioxus 桌面后端
+
+除上述后端外,项目还提供 **`a2ui-dioxus`**:它把 A2UI 组件树渲染到原生桌面 **WebView** 窗口,基于 [Dioxus](https://github.com/DioxusLabs/dioxus)(响应式 signals 架构,固定 0.7 版本)。**这是六个后端里架构最独特的一个**:
+
+- **响应式 signals** —— Dioxus 像 React:运行时状态放在根的 `Signal` 里,UI 是对它的纯读取。既不需要 Iced 的 `Message` 枚举(Elm view/update),也不需要 egui 的 `EditBuffers` 状态桥。**无消息枚举,无状态桥** —— 信号本身就是交互通道,任何写入自动重渲染订阅了它的组件。
+- **递归组件** —— 整棵树是**一个** `A2uiNode` 组件逐节点渲染自身(Dioxus 原生支持递归组件,不像 Slint 要 bounded-depth codegen)。
+- **WebView 渲染** —— 渲染到系统 WebView(Linux 用 WebKitGTK),所以深色主题是一份 **CSS 样式表**(`theme::STYLESHEET`),而非逐控件 style 函数;A2UI 组件映射到 HTML 元素 + class。
+
+Button 的点击同样复用共享的 `core::components::dispatch_event` + `apply_event_result`(经 `Rc<dyn Fn(String)>` 回调上交到根);Modal 用居中浮层 + 半透明遮罩呈现。
+
+**它是可选依赖**:`a2ui-dioxus` 是 workspace 的**非默认成员**(会拉取 wry WebView + tao 窗口栈)。普通的 `cargo build` 只编译 ratatui 栈。需要显式构建:
+
+```bash
+cargo build -p a2ui-dioxus --features backend
+```
+
+umbrella crate 也在 `dioxus` cargo feature 之后将后端 re-export 为 `a2ui::dioxus`。Linux 上需系统安装 **WebKitGTK(`webkit2gtk-4.1`)+ GTK 3**。
+
+### 运行 Gallery(dioxus 版)
+
+`a2ui-dioxus-gallery` 加载相同的内嵌 A2UI 样例:
+
+```bash
+cargo run -p a2ui-dioxus-gallery             # 第一个样例
+cargo run -p a2ui-dioxus-gallery -- 3        # 按 1 起始的序号
+cargo run -p a2ui-dioxus-gallery -- login    # 按名称子串(大小写不敏感)
 ```
 
 ## 协议概览
