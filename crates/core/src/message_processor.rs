@@ -25,6 +25,13 @@ pub struct MessageProcessor {
     catalogs: HashMap<String, Catalog>,
     /// Outgoing client-to-server messages produced during processing.
     outgoing_messages: Vec<ClientMessage>,
+    /// Validation config; `None` = validation fully OFF (the default, which
+    /// preserves the existing graceful-degradation behavior — bad refs / dup
+    /// ids / cycles are silently tolerated and components still load).
+    validation: Option<crate::validate::ValidationConfig>,
+    /// Accumulated validation diagnostics from the last batch of processed
+    /// messages. Drained via [`Self::drain_validation`].
+    pending_validation: crate::validate::ValidationReport,
 }
 
 impl MessageProcessor {
@@ -38,6 +45,8 @@ impl MessageProcessor {
             model: SurfaceGroupModel::new(),
             catalogs: catalog_map,
             outgoing_messages: Vec::new(),
+            validation: None,
+            pending_validation: crate::validate::ValidationReport::new(),
         }
     }
 
@@ -51,6 +60,7 @@ impl MessageProcessor {
     pub fn reset(&mut self) {
         self.model = SurfaceGroupModel::new();
         self.outgoing_messages.clear();
+        self.pending_validation = crate::validate::ValidationReport::new();
     }
 
     /// Parse a raw JSON string into an A2uiMessage.
@@ -103,6 +113,23 @@ impl MessageProcessor {
     /// be sent back to the server.
     pub fn drain_outgoing(&mut self) -> Vec<ClientMessage> {
         std::mem::take(&mut self.outgoing_messages)
+    }
+
+    /// Opt into payload validation (builder-style). When set, each
+    /// `createSurface` / `updateComponents` payload is run through integrity +
+    /// topology checks, and the findings accumulate in a report retrievable via
+    /// [`Self::drain_validation`]. Validation never blocks loading — components
+    /// are still added via graceful degradation.
+    pub fn with_validation(mut self, cfg: crate::validate::ValidationConfig) -> Self {
+        self.validation = Some(cfg);
+        self
+    }
+
+    /// Drain the accumulated validation diagnostics from the last batch of
+    /// processed messages. Returns an empty report when validation is off (the
+    /// default) or when no problems were found.
+    pub fn drain_validation(&mut self) -> crate::validate::ValidationReport {
+        std::mem::take(&mut self.pending_validation)
     }
 
     /// Check if a component type exists in any registered catalog.
@@ -215,6 +242,15 @@ impl MessageProcessor {
             surface.components.borrow_mut().add_from_json(components);
         }
 
+        // Opt-in validation: run integrity + topology against the incoming raw
+        // payload (NOT the internal model), accumulating diagnostics. This does
+        // NOT change whether components were loaded above.
+        if let Some(cfg) = self.validation {
+            if let Some(components) = &data.components {
+                self.run_payload_validation(components, cfg);
+            }
+        }
+
         self.model.add_surface(surface)
     }
 
@@ -227,6 +263,12 @@ impl MessageProcessor {
             .ok_or_else(|| A2uiError::SurfaceNotFound(data.surface_id.clone()))?;
 
         surface.components.borrow_mut().add_from_json(&data.components);
+
+        // Opt-in validation against the incoming raw payload.
+        if let Some(cfg) = self.validation {
+            self.run_payload_validation(&data.components, cfg);
+        }
+
         Ok(())
     }
 
@@ -376,6 +418,36 @@ impl MessageProcessor {
     /// Queue an outgoing client-to-server message.
     fn queue_outgoing(&mut self, msg: ClientMessage) {
         self.outgoing_messages.push(msg);
+    }
+
+    /// Run integrity + topology validation on a raw component payload slice and
+    /// merge the findings into `pending_validation`. Borrows only the `&[Value]`
+    /// data + a `Copy` config, so it is borrow-safe from within `&mut self`
+    /// handlers.
+    fn run_payload_validation(
+        &mut self,
+        components: &[serde_json::Value],
+        cfg: crate::validate::ValidationConfig,
+    ) {
+        use crate::validate::{RefFieldSpec, ROOT_ID};
+
+        let spec = RefFieldSpec::DEFAULT;
+        let mut report = crate::validate::validate_component_integrity(
+            components,
+            &spec,
+            ROOT_ID,
+            cfg.allow_dangling_references,
+            cfg.allow_missing_root,
+        );
+        let (_, topo) = crate::validate::analyze_topology(
+            components,
+            &spec,
+            ROOT_ID,
+            cfg.allow_orphan_components,
+            cfg.allow_missing_root,
+        );
+        report.extend(topo);
+        self.pending_validation.extend(report);
     }
 }
 
@@ -609,6 +681,85 @@ mod tests {
         let submit = components.get("submit_button").unwrap();
         assert_eq!(submit.component_type, "Button");
         assert!(submit.action().is_some());
+    }
+
+    #[test]
+    fn test_validation_hook_reports_and_still_loads() {
+        // With STRICT validation enabled: a dangling child ref should produce a
+        // non-empty report, AND the component must still be loaded (graceful
+        // degradation is unchanged).
+        let mut proc =
+            MessageProcessor::new(vec![]).with_validation(crate::validate::STRICT_VALIDATION);
+
+        let create = serde_json::json!({
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "s1",
+                "catalogId": "test",
+                "components": [
+                    {"id": "root", "component": "Column", "children": ["ghost"]}
+                ]
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
+
+        // Surface + root component were loaded despite the dangling ref.
+        assert!(proc.model.get_surface("s1").is_some());
+        let surface = proc.model.get_surface("s1").unwrap();
+        assert!(surface.components.borrow().contains("root"));
+
+        // The dangling reference is reported.
+        let report = proc.drain_validation();
+        assert!(!report.is_empty());
+        assert!(report.has_code(&crate::validate::ValidationErrorCode::DanglingReference));
+
+        // A follow-up updateComponents with another dangling ref accumulates.
+        let update = serde_json::json!({
+            "version": "v1.0",
+            "updateComponents": {
+                "surfaceId": "s1",
+                "components": [
+                    {"id": "root2", "component": "Column", "child": "also_ghost"}
+                ]
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&update.to_string()).unwrap())
+            .unwrap();
+        let report2 = proc.drain_validation();
+        assert!(!report2.is_empty());
+    }
+
+    #[test]
+    fn test_default_processor_has_empty_validation() {
+        // Default (no with_validation): drain_validation is always empty.
+        let mut proc = MessageProcessor::new(vec![]);
+
+        let create = serde_json::json!({
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "s1",
+                "catalogId": "test",
+                "components": [
+                    {"id": "root", "component": "Column", "children": ["ghost"]}
+                ]
+            }
+        });
+        proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
+
+        // Component still loaded (graceful degradation).
+        assert!(proc.model.get_surface("s1").is_some());
+        assert!(proc
+            .model
+            .get_surface("s1")
+            .unwrap()
+            .components
+            .borrow()
+            .contains("root"));
+
+        // No validation report produced.
+        assert!(proc.drain_validation().is_empty());
     }
 
 }

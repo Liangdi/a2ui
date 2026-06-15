@@ -6,6 +6,7 @@ pub mod observable;
 pub mod catalog;
 pub mod message_processor;
 pub mod capabilities;
+pub mod validate;
 // Framework-agnostic interaction layer, shared by every UI backend.
 // `focus` is keyboard-focus traversal over the component tree; `interaction`
 // applies a component's EventResult to the runtime state. Each backend maps its
