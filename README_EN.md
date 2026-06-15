@@ -78,17 +78,17 @@ cargo run -p a2ui --example 12_handshake
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  apps:       a2ui-gallery (TUI)   a2ui-slint-gallery   a2ui-egui-gallery   a2ui-bevy-gallery (desktop)
+│  apps:       a2ui-gallery (TUI)   a2ui-slint-gallery   a2ui-egui-gallery   a2ui-bevy-gallery   a2ui-iced-gallery (desktop)
 ├──────────────────────────────────────────────────────────────┤
-│  umbrella:   a2ui  (re-export core + tui [+ slint] [+ egui] [+ bevy])
+│  umbrella:   a2ui  (re-export core + tui [+ slint] [+ egui] [+ bevy] [+ iced])
 ├──────────────────────────────────────────────────────────────┤
-│  backends:   a2ui-tui (ratatui)   a2ui-slint (Slint, opt-in)   a2ui-egui (egui, opt-in)   a2ui-bevy (Bevy, opt-in)
+│  backends:   a2ui-tui (ratatui)   a2ui-slint (Slint, opt-in)   a2ui-egui (egui, opt-in)   a2ui-bevy (Bevy, opt-in)   a2ui-iced (Iced, opt-in)
 ├──────────────────────────────────────────────────────────────┤
 │  a2ui-base (framework-agnostic: Protocol / Model / Catalog / Processor)
 └──────────────────────────────────────────────────────────────┘
 ```
 
-Dependencies flow upward: `a2ui-base` underpins two backends — `a2ui-tui` (ratatui, default) and `a2ui-slint` (Slint desktop, optional). `a2ui-tui` ← `a2ui-gallery`; `a2ui-slint` ← `a2ui-slint-gallery`; the `a2ui` umbrella depends on core + tui (slint behind the `slint` feature). `a2ui-base` has zero ratatui/slint dependency and can be used standalone by other backends.
+Dependencies flow upward: `a2ui-base` underpins five backends — `a2ui-tui` (ratatui, default), `a2ui-slint` (Slint desktop, optional), `a2ui-egui` (egui desktop, optional), `a2ui-bevy` (Bevy ECS UI desktop, optional), and `a2ui-iced` (Iced desktop, optional). Each backend has a matching `*-gallery` app; the `a2ui` umbrella depends on core + tui (slint / egui / bevy / iced each behind a same-named feature). `a2ui-base` has zero ratatui/slint/egui/bevy/iced dependency and can be used standalone by other backends.
 
 ### Project Structure
 
@@ -117,7 +117,19 @@ crates/
 │   └── src/                      # live_tree (flat node array) / host / ui
 ├── slint-gallery/     # a2ui-slint-gallery: desktop Gallery App (bin, left list + right preview)
 │   └── src/main.rs
-└── a2ui/              # a2ui: umbrella, re-exports core+tui [+slint]
+├── egui/              # a2ui-egui: egui immediate-mode desktop backend (optional, non-default member)
+│   └── src/                      # walker / app / edit_state / interaction
+├── egui-gallery/      # a2ui-egui-gallery: desktop Gallery App (bin, left list + right preview)
+│   └── src/main.rs
+├── bevy/              # a2ui-bevy: Bevy ECS UI desktop backend (optional, non-default member, reconciler diff/patch)
+│   └── src/                      # reconcile / render / interaction / plugin / state
+├── bevy-gallery/      # a2ui-bevy-gallery: desktop Gallery App (bin, left list + right preview)
+│   └── src/main.rs
+├── iced/              # a2ui-iced: Iced Elm desktop backend (optional, non-default member, view/update)
+│   └── src/                      # walker / app / components / message
+├── iced-gallery/      # a2ui-iced-gallery: desktop Gallery App (bin, left list + right preview)
+│   └── src/main.rs
+└── a2ui/              # a2ui: umbrella, re-exports core+tui [+slint] [+egui] [+bevy] [+iced]
     ├── src/lib.rs
     └── examples/                  # 17 examples
 ```
@@ -163,6 +175,28 @@ Slint **cannot express recursion** (neither recursive structs nor self-referenci
 - Trees deeper than 7 levels truncate;
 - TextField shows its value but isn't wired to a native editable input yet;
 - Tabs / ChoicePicker / DateTimeInput render, but their keyboard handlers aren't in the shared core dispatch (interaction beyond Button / CheckBox is not yet wired on the Slint side).
+
+## Iced Desktop Backend
+
+The project also ships **`a2ui-iced`**, which renders A2UI component trees into a **native desktop window** (built on [Iced](https://github.com/iced-rs/iced), pinned to 0.14). **This is the cleanest mapping of the five backends** — Iced is Elm: `view(&state)` returns an immutable `Element` tree and `update(&mut state, msg)` mutates state. So interactive widgets read straight from the data model in `view` and write back through a `Message` in `update`: no egui-style `EditBuffers` state bridge and no bevy-style reconciler. **No state bridge, no diffing.** Button presses reuse the shared `core::components::dispatch_event` + `apply_event_result`; Modals float as a centered overlay layered via a `Stack`.
+
+**It is an optional dependency**: `a2ui-iced` is a **non-default workspace member** (it pulls wgpu + winit). Plain `cargo build` only compiles the ratatui stack — build it explicitly:
+
+```bash
+cargo build -p a2ui-iced --features backend
+```
+
+The umbrella crate re-exports the backend as `a2ui::iced` under the `iced` cargo feature. The renderer defaults to wgpu (GPU), with a tiny-skia software fallback.
+
+### Run the Gallery (Iced)
+
+`a2ui-iced-gallery` loads the same embedded A2UI samples:
+
+```bash
+cargo run -p a2ui-iced-gallery             # the first sample
+cargo run -p a2ui-iced-gallery -- 3        # by 1-based index
+cargo run -p a2ui-iced-gallery -- login    # by case-insensitive name substring
+```
 
 ## Protocol Overview
 

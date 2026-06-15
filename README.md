@@ -78,17 +78,17 @@ cargo run -p a2ui --example 12_handshake
 
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
-│  apps:  a2ui-gallery (TUI)   a2ui-slint-gallery (桌面)   a2ui-egui-gallery (桌面)   a2ui-bevy-gallery (桌面)│
+│  apps:  a2ui-gallery (TUI)   a2ui-slint-gallery (桌面)   a2ui-egui-gallery (桌面)   a2ui-bevy-gallery (桌面)   a2ui-iced-gallery (桌面)│
 ├───────────────────────────────────────────────────────────────────────┤
-│  umbrella:   a2ui  (re-export core + tui [+ slint] [+ egui] [+ bevy]) │
+│  umbrella:   a2ui  (re-export core + tui [+ slint] [+ egui] [+ bevy] [+ iced]) │
 ├───────────────────────────────────────────────────────────────────────┤
-│  backends:   a2ui-tui (ratatui)   a2ui-slint (Slint, 可选)   a2ui-egui (egui, 可选)   a2ui-bevy (Bevy, 可选)│
+│  backends:   a2ui-tui (ratatui)   a2ui-slint (Slint, 可选)   a2ui-egui (egui, 可选)   a2ui-bevy (Bevy, 可选)   a2ui-iced (Iced, 可选)│
 ├───────────────────────────────────────────────────────────────────────┤
 │  a2ui-base (框架无关:Protocol / Model / Catalog / Processor)          │
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
-依赖自下而上:`a2ui-base` 同时支撑四个后端 —— `a2ui-tui`(ratatui,默认)、`a2ui-slint`(Slint 桌面,可选)、`a2ui-egui`(egui 桌面,可选)与 `a2ui-bevy`(Bevy ECS UI 桌面,可选)。`a2ui-tui` ← `a2ui-gallery`;`a2ui-slint` ← `a2ui-slint-gallery`;`a2ui-egui` ← `a2ui-egui-gallery`;`a2ui-bevy` ← `a2ui-bevy-gallery`;`a2ui`(umbrella)依赖 core + tui(slint / egui / bevy 分别在同名 feature 后)。`a2ui-base` 完全不依赖 ratatui/slint/egui/bevy,可独立用于其他 backend。
+依赖自下而上:`a2ui-base` 同时支撑五个后端 —— `a2ui-tui`(ratatui,默认)、`a2ui-slint`(Slint 桌面,可选)、`a2ui-egui`(egui 桌面,可选)、`a2ui-bevy`(Bevy ECS UI 桌面,可选)与 `a2ui-iced`(Iced 桌面,可选)。`a2ui-tui` ← `a2ui-gallery`;`a2ui-slint` ← `a2ui-slint-gallery`;`a2ui-egui` ← `a2ui-egui-gallery`;`a2ui-bevy` ← `a2ui-bevy-gallery`;`a2ui-iced` ← `a2ui-iced-gallery`;`a2ui`(umbrella)依赖 core + tui(slint / egui / bevy / iced 分别在同名 feature 后)。`a2ui-base` 完全不依赖 ratatui/slint/egui/bevy/iced,可独立用于其他 backend。
 
 ### 项目结构
 
@@ -125,7 +125,11 @@ crates/
 │   └── src/                      # reconcile(保留式同步) / render / interaction / plugin / state
 ├── bevy-gallery/      # a2ui-bevy-gallery：桌面 Gallery App (bin,左列表 + 右预览)
 │   └── src/main.rs
-└── a2ui/              # a2ui：umbrella，re-export core+tui [+slint] [+egui] [+bevy]
+├── iced/              # a2ui-iced：Iced Elm 架构桌面后端(可选,非默认成员,view/update)
+│   └── src/                      # walker(构建 Element 树) / app / components / message
+├── iced-gallery/      # a2ui-iced-gallery：桌面 Gallery App (bin,左列表 + 右预览)
+│   └── src/main.rs
+└── a2ui/              # a2ui：umbrella，re-export core+tui [+slint] [+egui] [+bevy] [+iced]
     ├── src/lib.rs
     └── examples/                  # 17 个示例
 ```
@@ -199,6 +203,28 @@ cargo run -p a2ui-egui-gallery -- login    # 按名称子串(大小写不敏感)
 ```
 
 渲染器使用 glow(OpenGL),需要 GL 栈但无需专用 GPU 驱动。
+
+## Iced 桌面后端
+
+除上述后端外,项目还提供 **`a2ui-iced`**:它把 A2UI 组件树渲染到原生桌面窗口,基于 [Iced](https://github.com/iced-rs/iced)(Elm 架构,固定 0.14 版本)。**这是五个后端里最干净的映射** —— Iced 是 Elm:`view(&state)` 返回一棵不可变的 `Element` 树,`update(&mut state, msg)` 改状态。所以可交互控件在 `view` 里直接读 data model,在 `update` 里通过 `Message` 回写:既不需要 egui 的 `EditBuffers` 状态桥,也不需要 bevy 的 reconciler。**无状态桥,无 diff**。Button 的点击同样复用共享的 `core::components::dispatch_event` + `apply_event_result`;Modal 用 `Stack` 叠加的居中浮层呈现。
+
+**它是可选依赖**:`a2ui-iced` 是 workspace 的**非默认成员**(会拉取 wgpu + winit)。普通的 `cargo build` 只编译 ratatui 栈。需要显式构建:
+
+```bash
+cargo build -p a2ui-iced --features backend
+```
+
+umbrella crate 也在 `iced` cargo feature 之后将后端 re-export 为 `a2ui::iced`。渲染器默认使用 wgpu(GPU),并提供 tiny-skia 软件渲染兜底。
+
+### 运行 Gallery(iced 版)
+
+`a2ui-iced-gallery` 加载相同的内嵌 A2UI 样例:
+
+```bash
+cargo run -p a2ui-iced-gallery             # 第一个样例
+cargo run -p a2ui-iced-gallery -- 3        # 按 1 起始的序号
+cargo run -p a2ui-iced-gallery -- login    # 按名称子串(大小写不敏感)
+```
 
 ## 协议概览
 

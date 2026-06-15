@@ -1,0 +1,28 @@
+[package]
+name = "a2ui-iced"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Iced Elm-architecture GUI backend for A2UI (Agent to UI)"
+
+[features]
+default = []
+# Pull in the real Iced runtime (wgpu renderer + winit windowing backend). OFF
+# by default so the workspace's default build stays light (iced brings wgpu +
+# winit). Enable with `--features backend`.
+#
+# The feature set mirrors the workspace `iced` dep: `wgpu` (GPU renderer),
+# `tiny-skia` (software fallback), `thread-pool` (the native futures executor
+# iced requires), and `x11`/`wayland` (Linux display servers). Nothing extra is
+# needed here — the windowing/render backends all come from the workspace dep.
+backend = ["dep:iced"]
+
+[dependencies]
+a2ui-base = { workspace = true }
+serde_json = { workspace = true }
+# Optional: the Iced runtime. The `backend` feature is the single switch that
+# links the wgpu + winit stack. `default-features = false` keeps the surface
+# minimal when the feature is off.
+iced = { workspace = true, optional = true }
