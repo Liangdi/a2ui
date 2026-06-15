@@ -427,7 +427,7 @@ fn chip<'a>(glyph: &str, label: &str) -> Element<'a, Message> {
     let row = Row::new()
         .spacing(8.0)
         .align_y(iced::alignment::Vertical::Center)
-        .push(text(glyph.to_string()).color(style::BLUE).size(13.0))
+        .push(text(glyph.to_string()).color(style::ACCENT).size(13.0))
         .push(text(label.to_string()).color(style::SUBTEXT0).size(12.0));
     container(row).style(style::chip).padding([6.0, 12.0]).into()
 }

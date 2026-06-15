@@ -1,15 +1,15 @@
-//! Bespoke visual theme for the Iced gallery — a cohesive dark
-//! "Catppuccin Mocha"-derived palette plus a set of style functions used by
-//! [`crate::IcedApp`] and [`crate::components`] to give the gallery a modern,
-//! polished look (rounded cards, an indented sidebar, a dimmed modal scrim,
-//! etc.).
+//! Bespoke visual theme for the Iced gallery — a cohesive dark palette with a
+//! green accent, plus a set of style functions used by [`crate::IcedApp`] and
+//! [`crate::components`] to give the gallery a modern, polished look (rounded
+//! cards, an indented sidebar, a dimmed modal scrim, etc.).
 //!
-//! The base [`Theme`] is the built-in **Catppuccin Mocha**, so every native
-//! widget the backend does not explicitly restyle (slider, checkbox,
-//! scrollbar, rule, …) inherits its harmonious dark palette for free. The
-//! constants and style fns here layer bespoke chrome on top where the gallery
-//! wants deliberate control: the sidebar, the surface background, cards, the
-//! modal dialog, the breadcrumb bar, list rows, buttons and inputs.
+//! The base [`Theme`] is a custom palette built on the same dark neutrals as
+//! Catppuccin Mocha but with a **green primary**, so every native widget the
+//! backend does not explicitly restyle (slider, checkbox, scrollbar, rule, …)
+//! inherits the green accent too — the bespoke chrome and the native widgets
+//! agree. The constants and style fns here layer bespoke chrome on top where
+//! the gallery wants deliberate control: the sidebar, the surface background,
+//! cards, the modal dialog, the breadcrumb bar, list rows, buttons and inputs.
 //!
 //! Each style fn has the signature a widget's `.style(…)` expects —
 //! `fn(&Theme) -> container::Style`, `fn(&Theme, button::Status) ->
@@ -56,12 +56,12 @@ pub(crate) const SUBTEXT0: Color = rgb(0xA6, 0xAD, 0xC8);
 /// Tertiary text — hints, captions.
 pub(crate) const SUBTEXT1: Color = rgb(0x93, 0x99, 0xB0);
 
-/// Accent (Mauve) — the gallery's brand color; primary buttons + selection.
-pub(crate) const ACCENT: Color = rgb(0xCB, 0xA6, 0xF7);
+/// Accent (green) — the gallery's brand color; primary buttons + selection.
+pub(crate) const ACCENT: Color = rgb(0x3D, 0xD6, 0x8C);
 /// Brighter accent for hover states.
-pub(crate) const ACCENT_HI: Color = rgb(0xD7, 0xB9, 0xFA);
+pub(crate) const ACCENT_HI: Color = rgb(0x6B, 0xE9, 0xB0);
 /// Translucent accent — selected-row washes, focus rings.
-pub(crate) const ACCENT_WASH: Color = rgba(0xCB, 0xA6, 0xF7, 0.16);
+pub(crate) const ACCENT_WASH: Color = rgba(0x3D, 0xD6, 0x8C, 0.16);
 
 /// Semantic hues (kept as constants so widget fns can tint by meaning). Some
 /// are not yet referenced — they form the palette future widget states (success
@@ -72,12 +72,24 @@ pub(crate) const GREEN: Color = rgb(0xA6, 0xE3, 0xA1);
 pub(crate) const RED: Color = rgb(0xF3, 0x8B, 0xA8);
 #[allow(dead_code)]
 pub(crate) const PEACH: Color = rgb(0xFA, 0xB3, 0x87);
-pub(crate) const BLUE: Color = rgb(0x89, 0xB4, 0xFA);
 
-/// The gallery's base [`Theme`] — built-in Catppuccin Mocha, so native widgets
-/// inherit a cohesive dark palette without per-widget work.
+/// The gallery's base [`Theme`] — a custom dark palette with a green primary,
+/// built on the same dark neutrals as Catppuccin Mocha. Using a custom
+/// [`Palette`] (rather than `Theme::CatppuccinMocha`) makes every native widget
+/// the backend does not restyle (slider, checkbox, scrollbar, rule, …) inherit
+/// the green primary too, so the bespoke chrome and the native widgets agree.
 pub fn theme() -> Theme {
-    Theme::CatppuccinMocha
+    Theme::custom(
+        "A2UI Green",
+        iced::theme::Palette {
+            background: BASE,
+            text: TEXT,
+            primary: ACCENT,
+            success: GREEN,
+            warning: PEACH,
+            danger: RED,
+        },
+    )
 }
 
 // ===========================================================================
@@ -160,7 +172,7 @@ pub(crate) fn index_pill(_: &Theme) -> container::Style {
     container::Style {
         background: Some(Background::Color(ACCENT_WASH)),
         border: Border {
-            color: rgba(0xCB, 0xA6, 0xF7, 0.25),
+            color: rgba(0x3D, 0xD6, 0x8C, 0.25),
             width: 1.0,
             radius: 999.0.into(),
         },
@@ -254,7 +266,7 @@ pub(crate) fn primary(_: &Theme, status: button::Status) -> button::Style {
             radius: 9.0.into(),
         },
         shadow: Shadow {
-            color: rgba(0xCB, 0xA6, 0xF7, 0.30),
+            color: rgba(0x3D, 0xD6, 0x8C, 0.30),
             offset: Vector::new(0.0, 2.0),
             blur_radius: 8.0,
         },

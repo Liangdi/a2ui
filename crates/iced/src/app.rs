@@ -200,7 +200,7 @@ impl IcedApp {
             } else {
                 style::SUBTEXT0
             };
-            let idx = text(format!("{i:>2}"))
+            let idx = text(format!("{:>2}", i + 1))
                 .size(11.0)
                 .color(idx_color)
                 .font(Font::MONOSPACE)
