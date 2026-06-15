@@ -11,10 +11,11 @@ use ratatui::{
     Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::Style,
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph, Wrap},
+    widgets::Paragraph,
 };
+use ratatui_sci_fi::{Divider, Level, Panel, ScanList, ScanListState, Theme, Value};
 
 use a2ui_base::catalog::Catalog;
 use a2ui_base::event::{EventResult, InputEvent, InputKey};
@@ -28,6 +29,11 @@ use a2ui_tui::catalogs::minimal::build_minimal_catalog;
 use a2ui_tui::component_impl::ComponentRegistry;
 use a2ui_tui::focus_manager::FocusManager;
 use a2ui_tui::surface::SurfaceRenderer;
+
+/// Rows consumed by a [`Panel`] frame: 2 border + 2 one-cell padding.
+const PANEL_CHROME_ROWS: usize = 4;
+/// Buffer rows each [`ScanList`] item occupies: the text row + its scanline.
+const SCANLIST_ROW_STRIDE: usize = 2;
 
 /// Load the sample examples for a catalog (e.g. `"minimal"`, `"basic"`).
 ///
@@ -78,6 +84,12 @@ struct FrameData {
     focused_id: Option<String>,
     /// Which split-view panel is focused (only meaningful in `Rendered` mode).
     panel_focus: PanelFocus,
+    /// Active sci-fi theme — drives every chrome color this frame.
+    theme: Theme,
+    /// Top index of the visible [`ScanList`] window (it does not self-scroll).
+    list_scroll: usize,
+    /// Animation clock; feeds [`ScanListState::tick`] so the cursor blinks.
+    frame_tick: u64,
 }
 
 /// The gallery application.
@@ -106,8 +118,12 @@ pub struct GalleryApp {
     mode: AppMode,
     /// Which split-view panel owns keyboard input (only used in `Rendered` mode).
     panel_focus: PanelFocus,
-    /// List state for ratatui List widget highlighting.
-    list_state: ListState,
+    /// Active sci-fi theme (cycled live with `t`).
+    theme: Theme,
+    /// Top index of the visible [`ScanList`] window.
+    list_scroll: usize,
+    /// Per-frame animation clock for blinking cursors.
+    frame_tick: u64,
 }
 
 impl GalleryApp {
@@ -123,13 +139,11 @@ impl GalleryApp {
         let processor = MessageProcessor::new(vec![basic_catalog, minimal_catalog]);
 
         // Load samples from both minimal and basic directories.
-        let mut samples = load_catalog_samples("minimal");
-        samples.extend(load_catalog_samples("basic"));
-
-        let mut list_state = ListState::default();
-        if !samples.is_empty() {
-            list_state.select(Some(0));
-        }
+        let samples = {
+            let mut s = load_catalog_samples("minimal");
+            s.extend(load_catalog_samples("basic"));
+            s
+        };
 
         Ok(Self {
             terminal,
@@ -144,7 +158,10 @@ impl GalleryApp {
             running: true,
             mode: AppMode::SampleList,
             panel_focus: PanelFocus::Render,
-            list_state,
+            // Green phosphor is the default look; `t` cycles the other 7.
+            theme: Theme::Fallout,
+            list_scroll: 0,
+            frame_tick: 0,
         })
     }
 
@@ -155,34 +172,44 @@ impl GalleryApp {
         self.terminal.clear()?;
 
         while self.running {
+            // ScanList doesn't scroll — it paints item i at area.y + i*2 — so the
+            // gallery owns the window offset, recomputed each frame from the live
+            // terminal size and the active layout.
+            let area = self.terminal.size()?;
+            let cap = match self.mode {
+                // Full-screen list: the Panel fills the frame.
+                AppMode::SampleList => {
+                    (area.height as usize).saturating_sub(PANEL_CHROME_ROWS) / SCANLIST_ROW_STRIDE
+                }
+                // Split view: the left panel sits in the 95% column.
+                AppMode::Rendered => {
+                    let panel_h = (area.height as usize * 95 / 100).max(1);
+                    panel_h.saturating_sub(PANEL_CHROME_ROWS) / SCANLIST_ROW_STRIDE
+                }
+            };
+            self.ensure_list_visible(cap);
+            self.frame_tick = self.frame_tick.wrapping_add(1);
+
             // Extract frame data before drawing to avoid borrow conflicts.
             let fd = self.snapshot_frame_data();
 
             let registry = &self.registry;
             let catalog = &self.catalog;
-            let list_state = &mut self.list_state;
 
             // We need a reference to the surface for rendering.
             // Safety: we only read from processor.model during the draw.
             let surface_ref = self.processor.model.surfaces().next();
 
-            self.terminal.draw(|frame| {
-                match fd.mode {
-                    AppMode::SampleList => {
-                        render_sample_list(frame, &fd, list_state);
-                    }
-                    AppMode::Rendered => {
-                        render_split_view(
-                            frame,
-                            &fd,
-                            list_state,
-                            surface_ref,
-                            registry,
-                            catalog,
-                            fd.focused_id.as_deref(),
-                        );
-                    }
-                }
+            self.terminal.draw(|frame| match fd.mode {
+                AppMode::SampleList => render_sample_list(frame, &fd),
+                AppMode::Rendered => render_split_view(
+                    frame,
+                    &fd,
+                    surface_ref,
+                    registry,
+                    catalog,
+                    fd.focused_id.as_deref(),
+                ),
             })?;
 
             if event::poll(std::time::Duration::from_millis(100))? {
@@ -214,6 +241,9 @@ impl GalleryApp {
             total_messages: self.current_messages.len(),
             focused_id: self.focus_manager.focused_id().map(|s| s.to_string()),
             panel_focus: self.panel_focus,
+            theme: self.theme,
+            list_scroll: self.list_scroll,
+            frame_tick: self.frame_tick,
         }
     }
 
@@ -237,19 +267,16 @@ impl GalleryApp {
 
     fn handle_sample_list_key(&mut self, code: KeyCode) {
         match code {
-            KeyCode::Char('q') | KeyCode::Esc => {
-                self.running = false;
-            }
+            KeyCode::Char('q') | KeyCode::Esc => self.running = false,
+            KeyCode::Char('t') => self.cycle_theme(),
             KeyCode::Up | KeyCode::Char('k') => {
                 if self.selected_sample > 0 {
                     self.selected_sample -= 1;
-                    self.list_state.select(Some(self.selected_sample));
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 if !self.samples.is_empty() && self.selected_sample < self.samples.len() - 1 {
                     self.selected_sample += 1;
-                    self.list_state.select(Some(self.selected_sample));
                 }
             }
             KeyCode::Enter => {
@@ -273,6 +300,9 @@ impl GalleryApp {
             KeyCode::Char('q') => self.running = false,
             // Esc steps back: list focus → full-screen sample browser.
             KeyCode::Esc => self.mode = AppMode::SampleList,
+            // `t` cycles the theme; only bound here (not in surface focus) so a
+            // focused A2UI TextInput still receives a typed 't'.
+            KeyCode::Char('t') => self.cycle_theme(),
             KeyCode::Up | KeyCode::Char('k') => {
                 if self.selected_sample > 0 {
                     self.load_sample(self.selected_sample - 1);
@@ -514,7 +544,6 @@ impl GalleryApp {
     // -----------------------------------------------------------------------
 
     /// Select a sample, switch to rendered mode, and process all messages.
-    /// Select a sample, switch to rendered mode, and process all messages.
     fn select_sample(&mut self, index: usize) {
         if index >= self.samples.len() {
             return;
@@ -543,7 +572,6 @@ impl GalleryApp {
         self.messages_processed = 0;
         self.focus_manager.reset();
         self.selected_sample = index;
-        self.list_state.select(Some(index));
 
         // Process all messages at once.
         self.process_remaining_messages();
@@ -578,61 +606,65 @@ impl GalleryApp {
             self.focus_manager.rebuild_from_components(&components);
         }
     }
+
+    // -----------------------------------------------------------------------
+    // Theming & list windowing
+    // -----------------------------------------------------------------------
+
+    /// Advance to the next sci-fi theme (Cyberpunk → … → Sentinel → Cyberpunk).
+    fn cycle_theme(&mut self) {
+        self.theme = match self.theme {
+            Theme::Cyberpunk => Theme::Fallout,
+            Theme::Fallout => Theme::Weyland,
+            Theme::Weyland => Theme::DeepSpace,
+            Theme::DeepSpace => Theme::Bloodmoon,
+            Theme::Bloodmoon => Theme::Nebula,
+            Theme::Nebula => Theme::Arctic,
+            Theme::Arctic => Theme::Sentinel,
+            Theme::Sentinel => Theme::Cyberpunk,
+        };
+    }
+
+    /// Keep `list_scroll` pinned so `selected_sample` stays inside the window.
+    ///
+    /// `capacity` is how many [`ScanList`] items fit the current panel; the
+    /// offset only moves when the selection escapes the window, so short walks
+    /// don't jitter the list.
+    fn ensure_list_visible(&mut self, capacity: usize) {
+        self.list_scroll = compute_list_scroll(
+            self.selected_sample,
+            self.samples.len(),
+            capacity,
+            self.list_scroll,
+        );
+    }
 }
 
 // ---------------------------------------------------------------------------
 // Free rendering functions (operate on extracted data, not on GalleryApp)
 // ---------------------------------------------------------------------------
 
-/// Render the sample list (full screen).
-fn render_sample_list(
-    frame: &mut ratatui::Frame,
-    fd: &FrameData,
-    list_state: &mut ListState,
-) {
+/// Render the sample list (full screen) inside a themed [`Panel`].
+fn render_sample_list(frame: &mut ratatui::Frame, fd: &FrameData) {
     let area = frame.area();
-    let items: Vec<ListItem> = fd
-        .samples
-        .iter()
-        .enumerate()
-        .map(|(i, (name, desc))| {
-            let text_style = if i == fd.selected_sample {
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default()
-            };
-            // Index is always dim so the row number stays scannable regardless
-            // of selection; the name/description carry the selection styling.
-            let line = Line::from(vec![
-                Span::styled(format!(" {:>2}. ", i + 1), Style::default().fg(Color::DarkGray)),
-                Span::styled(format!("{} — {}", name, desc), text_style),
-            ]);
-            ListItem::new(line)
-        })
-        .collect();
+    let panel = Panel::new()
+        .title(format!(" A2UI GALLERY // {} ", theme_name(fd.theme)))
+        .theme(fd.theme);
+    let inner = panel.inner(area);
+    frame.render_widget(panel, area);
 
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" A2UI Gallery — Sample Browser "),
-        )
-        .highlight_style(
-            Style::default()
-                .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
-        );
-
-    frame.render_stateful_widget(list, area, list_state);
+    let rows = sample_rows(&fd.samples, fd.list_scroll, inner.height, true);
+    let mut state = ScanListState {
+        selected: fd.selected_sample.saturating_sub(fd.list_scroll),
+        tick: fd.frame_tick,
+    };
+    frame.render_stateful_widget(ScanList::new(rows).theme(fd.theme), inner, &mut state);
 }
 
 /// Render the split view: sample list on the left, surface on the right.
 fn render_split_view(
     frame: &mut ratatui::Frame,
     fd: &FrameData,
-    list_state: &mut ListState,
     surface: Option<&a2ui_base::model::surface_model::SurfaceModel>,
     registry: &ComponentRegistry,
     catalog: &Catalog,
@@ -640,10 +672,10 @@ fn render_split_view(
 ) {
     let area = frame.area();
 
-    // Split into: main panels (95%) and bottom bar (min 1 row)
+    // Main panels (95%) + a 2-row footer (divider + help line).
     let outer = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(95), Constraint::Min(1)])
+        .constraints([Constraint::Percentage(95), Constraint::Length(2)])
         .split(area);
 
     let panels = Layout::default()
@@ -652,71 +684,78 @@ fn render_split_view(
         .split(outer[0]);
 
     // Left: compact sample list.
-    render_sample_list_panel(frame, fd, panels[0], list_state, fd.panel_focus == PanelFocus::List);
+    render_sample_list_panel(frame, fd, panels[0], fd.panel_focus == PanelFocus::List);
 
-    // Right: rendered surface.
-    render_surface_panel(frame, panels[1], surface, registry, catalog, focused_id, fd.panel_focus == PanelFocus::Render);
+    // Right: rendered surface (content unchanged; only the frame is themed).
+    render_surface_panel(
+        frame,
+        panels[1],
+        surface,
+        registry,
+        catalog,
+        focused_id,
+        fd.panel_focus == PanelFocus::Render,
+        fd.theme,
+    );
 
-    // Bottom: controls help.
+    // Bottom: themed divider + help line.
     render_help_bar(frame, outer[1], fd);
 }
 
-/// Render the sample list in a side panel (compact).
+/// Render the sample list in a side panel (compact rows, no description).
 fn render_sample_list_panel(
     frame: &mut ratatui::Frame,
     fd: &FrameData,
     area: Rect,
-    list_state: &mut ListState,
     focused: bool,
 ) {
-    let items: Vec<ListItem> = fd
-        .samples
-        .iter()
-        .enumerate()
-        .map(|(i, (name, _desc))| {
-            let text_style = if i == fd.selected_sample {
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default()
-            };
-            let line = Line::from(vec![
-                Span::styled(format!("{:>2}. ", i + 1), Style::default().fg(Color::DarkGray)),
-                Span::styled(name.clone(), text_style),
-            ]);
-            ListItem::new(line)
-        })
-        .collect();
+    let title = if focused { " ◄ SAMPLES " } else { " SAMPLES " };
+    let panel = Panel::new().title(title).theme(fd.theme);
+    let inner = panel.inner(area);
+    frame.render_widget(panel, area);
 
-    let border_style = if focused {
-        Style::default().fg(Color::Yellow)
-    } else {
-        Style::default()
+    let rows = sample_rows(&fd.samples, fd.list_scroll, inner.height, false);
+    let mut state = ScanListState {
+        selected: fd.selected_sample.saturating_sub(fd.list_scroll),
+        tick: fd.frame_tick,
     };
-    let title = if focused { " ◄ Samples " } else { " Samples " };
-
-    let list = List::new(items)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(border_style)
-                .title(title),
-        )
-        .highlight_style(
-            Style::default()
-                .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
-        );
-
-    frame.render_stateful_widget(list, area, list_state);
+    frame.render_stateful_widget(ScanList::new(rows).theme(fd.theme), inner, &mut state);
 }
 
-/// Render the current surface using SurfaceRenderer.
+/// Build the windowed, formatted rows for a [`ScanList`].
 ///
-/// A bordered frame is always drawn so the panel's focus state is visible
-/// (yellow border + ` Surface ► ` title when focused); the surface itself is
-/// rendered into the inner area so it never overwrites the border.
+/// [`ScanList`] draws item `i` at `area.y + i*2` and never scrolls, so a visible
+/// window is sliced out of `samples` starting at `offset`. `with_desc` includes
+/// the `— description` suffix (full-screen browser only).
+fn sample_rows(
+    samples: &[(String, String)],
+    offset: usize,
+    area_height: u16,
+    with_desc: bool,
+) -> Vec<String> {
+    let cap = ((area_height as usize) / SCANLIST_ROW_STRIDE).max(1);
+    let start = offset.min(samples.len());
+    let end = (start + cap).min(samples.len());
+    samples[start..end]
+        .iter()
+        .enumerate()
+        .map(|(i, (name, desc))| {
+            let idx = start + i + 1;
+            if with_desc {
+                format!("{idx:>2}. {name} — {desc}")
+            } else {
+                format!("{idx:>2}. {name}")
+            }
+        })
+        .collect()
+}
+
+/// Render the current surface inside a themed [`Panel`].
+///
+/// A bordered frame is always drawn so the panel's focus state is visible (the
+/// `►` title marker when focused); the surface itself is rendered into the
+/// inner area via [`SurfaceRenderer`] so it — the A2UI sample being previewed —
+/// is never restyled by the gallery chrome.
 fn render_surface_panel(
     frame: &mut ratatui::Frame,
     area: Rect,
@@ -725,57 +764,217 @@ fn render_surface_panel(
     catalog: &Catalog,
     focused_id: Option<&str>,
     focused: bool,
+    theme: Theme,
 ) {
-    let border_style = if focused {
-        Style::default().fg(Color::Yellow)
-    } else {
-        Style::default()
-    };
-    let title = if focused { " Surface ► " } else { " Surface " };
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(border_style)
-        .title(title);
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
+    let title = if focused { " SURFACE ► " } else { " SURFACE " };
+    let panel = Panel::new().title(title).theme(theme);
+    let inner = panel.inner(area);
+    frame.render_widget(panel, area);
 
     if let Some(surface) = surface {
         let renderer = SurfaceRenderer::new(surface, registry, catalog);
         renderer.render(frame, inner, focused_id);
     } else {
-        let paragraph = Paragraph::new("No surface loaded.\nPress 'n' to step through messages.");
+        let palette = theme.palette();
+        let paragraph = Paragraph::new("No surface loaded.\nPress 'n' to step through messages.")
+            .style(Style::default().fg(palette.muted.color()));
         frame.render_widget(paragraph, inner);
     }
 }
 
-/// Render the bottom help bar.
+/// Render the bottom help bar: a themed [`Divider`] rule above a one-line hint
+/// row (key hints on the left, a telemetry [`Value`] readout on the right).
 fn render_help_bar(frame: &mut ratatui::Frame, area: Rect, fd: &FrameData) {
-    let step_info = |prefix: &str| -> String {
-        if fd.total_messages == 0 {
-            String::new()
-        } else {
-            format!("{}[{}/{}] ", prefix, fd.messages_processed, fd.total_messages)
-        }
-    };
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(1), Constraint::Length(1)])
+        .split(area);
 
-    let help_text: String = match fd.mode {
-        AppMode::SampleList => {
-            " ↑/k: up  ↓/j: down  Enter: select  q/Esc: quit ".to_string()
-        }
+    frame.render_widget(Divider::new().theme(fd.theme), rows[0]);
+
+    let palette = fd.theme.palette();
+    let accent = Style::default().fg(palette.accent.color());
+    let muted = Style::default().fg(palette.muted.color());
+
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(75), Constraint::Percentage(25)])
+        .split(rows[1]);
+
+    frame.render_widget(Paragraph::new(help_line(fd, accent, muted)), cols[0]);
+    frame.render_widget(help_readout(fd), cols[1]);
+}
+
+/// The contextual one-line key hint for the help bar (active tag in accent,
+/// the rest muted). `t:theme` appears only in the browsing contexts.
+fn help_line(fd: &FrameData, accent: Style, muted: Style) -> Line<'static> {
+    match fd.mode {
+        AppMode::SampleList => Line::from(vec![
+            Span::styled(" A2UI GALLERY ", accent),
+            Span::styled(" ↑/k up · ↓/j down · Enter select · t theme · q/Esc quit", muted),
+        ]),
         AppMode::Rendered => match fd.panel_focus {
-            PanelFocus::List => format!(
-                " [List ◄] ↑/↓: switch sample  Tab/Enter: focus surface  Esc: browser  q: quit {}",
-                step_info("")
-            ),
-            PanelFocus::Render => format!(
-                " [Surface ►] n: step  a: all  r: replay  Tab: cycle focus  Esc: back to list  q: quit {}",
-                step_info("")
-            ),
+            PanelFocus::List => Line::from(vec![
+                Span::styled(" [List ◄] ", accent),
+                Span::styled(" ↑/↓ sample · Tab/Enter surface · Esc browser · t theme · q quit", muted),
+            ]),
+            PanelFocus::Render => Line::from(vec![
+                Span::styled(" [Surface ►] ", accent),
+                Span::styled(" n step · a all · r replay · Tab focus · Esc list · q quit", muted),
+            ]),
         },
-    };
+    }
+}
 
-    let paragraph = Paragraph::new(help_text)
-        .style(Style::default().fg(Color::DarkGray))
-        .wrap(Wrap { trim: false });
-    frame.render_widget(paragraph, area);
+/// The right-hand telemetry readout for the help bar: the live theme name in
+/// the browser, or the message stepper `processed/total` (Ok once complete).
+fn help_readout(fd: &FrameData) -> Value {
+    match fd.mode {
+        AppMode::SampleList => Value::new(theme_name(fd.theme)).label("THEME").theme(fd.theme),
+        AppMode::Rendered => {
+            if fd.total_messages == 0 {
+                Value::new("—").label("MSG").theme(fd.theme)
+            } else {
+                let done = fd.messages_processed >= fd.total_messages;
+                Value::new(format!("{}/{}", fd.messages_processed, fd.total_messages))
+                    .label("MSG")
+                    .state(if done { Level::Ok } else { Level::Warn })
+                    .theme(fd.theme)
+            }
+        }
+    }
+}
+
+/// Pure scroll-offset rule: keep `selected` inside `[offset, offset+cap)`,
+/// moving `offset` only when the selection escapes. Shared by
+/// [`GalleryApp::ensure_list_visible`] (runtime) and the unit tests.
+fn compute_list_scroll(selected: usize, len: usize, cap: usize, prev_offset: usize) -> usize {
+    let cap = cap.max(1);
+    if len == 0 {
+        return 0;
+    }
+    let mut offset = prev_offset;
+    if selected < offset {
+        offset = selected;
+    } else if selected >= offset + cap {
+        offset = selected - cap + 1;
+    }
+    if offset + cap > len {
+        offset = len.saturating_sub(cap);
+    }
+    offset
+}
+
+/// Upcased display name of a theme, for titles and the THEME readout.
+fn theme_name(theme: Theme) -> &'static str {
+    match theme {
+        Theme::Cyberpunk => "CYBERPUNK",
+        Theme::Fallout => "FALLOUT",
+        Theme::Weyland => "WEYLAND",
+        Theme::DeepSpace => "DEEP SPACE",
+        Theme::Bloodmoon => "BLOODMOON",
+        Theme::Nebula => "NEBULA",
+        Theme::Arctic => "ARCTIC",
+        Theme::Sentinel => "SENTINEL",
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::{backend::TestBackend, layout::Rect};
+
+    /// A throwaway [`FrameData`] for render tests: 6 samples, SampleList mode.
+    fn fd(selected: usize, scroll: usize, tick: u64) -> FrameData {
+        let samples: Vec<(String, String)> =
+            (0..6).map(|i| (format!("sample{i}"), format!("desc{i}"))).collect();
+        FrameData {
+            mode: AppMode::SampleList,
+            samples,
+            selected_sample: selected,
+            messages_processed: 0,
+            total_messages: 0,
+            focused_id: None,
+            panel_focus: PanelFocus::List,
+            theme: Theme::Cyberpunk,
+            list_scroll: scroll,
+            frame_tick: tick,
+        }
+    }
+
+    /// Render the full-screen sample list into an offscreen buffer and return it.
+    fn draw_sample_list(width: u16, height: u16, data: &FrameData) -> ratatui::buffer::Buffer {
+        let backend = TestBackend::new(width, height);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| render_sample_list(f, data)).unwrap();
+        terminal.backend().buffer().clone()
+    }
+
+    #[test]
+    fn full_screen_panel_uses_double_border() {
+        let buf = draw_sample_list(40, 20, &fd(0, 0, 0));
+        assert_eq!(
+            buf[(0, 0)].symbol(),
+            "╔",
+            "Panel top-left must be a double-line corner"
+        );
+    }
+
+    #[test]
+    fn scanlist_cursor_blinks() {
+        // The cursor sits at the Panel inner origin (border + 1-cell padding).
+        let inner = Panel::new().theme(Theme::Cyberpunk).inner(Rect::new(0, 0, 40, 20));
+        let on = draw_sample_list(40, 20, &fd(0, 0, 0));
+        assert_eq!(on[(inner.x, inner.y)].symbol(), "█", "cursor visible at tick 0");
+        let off = draw_sample_list(40, 20, &fd(0, 0, 15));
+        assert_eq!(off[(inner.x, inner.y)].symbol(), " ", "cursor hidden at tick 15");
+    }
+
+    #[test]
+    fn scroll_rule_tracks_selection() {
+        // 6 items, cap 4: selections 0..3 keep offset 0; 4 → 1; 5 → 2.
+        assert_eq!(compute_list_scroll(0, 6, 4, 0), 0);
+        assert_eq!(compute_list_scroll(3, 6, 4, 0), 0);
+        assert_eq!(compute_list_scroll(4, 6, 4, 0), 1);
+        assert_eq!(compute_list_scroll(5, 6, 4, 0), 2);
+        // Walking back up follows the selection down.
+        assert_eq!(compute_list_scroll(1, 6, 4, 2), 1);
+        // An empty list never scrolls.
+        assert_eq!(compute_list_scroll(99, 0, 4, 5), 0);
+    }
+
+    #[test]
+    fn scanlist_renders_scrolled_selection() {
+        // 6 samples in a 20x12 frame → Panel inner height 8 → 4 visible items.
+        let inner = Panel::new().theme(Theme::Cyberpunk).inner(Rect::new(0, 0, 20, 12));
+        let cap = (inner.height as usize) / SCANLIST_ROW_STRIDE;
+        let selected = 5;
+        let scroll = compute_list_scroll(selected, 6, cap, 0);
+        assert_eq!(scroll, 2, "item 5 should scroll the window to offset 2");
+
+        let buf = draw_sample_list(20, 12, &fd(selected, scroll, 0));
+        let relative = selected - scroll;
+        let row_y = inner.y + (relative as u16) * 2;
+        assert_eq!(
+            buf[(inner.x, row_y)].symbol(),
+            "█",
+            "the scrolled selection's row must carry the cursor"
+        );
+    }
+
+    #[test]
+    fn help_bar_renders_divider_rule() {
+        let backend = TestBackend::new(24, 2);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let data = fd(0, 0, 0);
+        terminal.draw(|f| render_help_bar(f, f.area(), &data)).unwrap();
+        let buf = terminal.backend().buffer();
+        for x in 0..24 {
+            assert_eq!(
+                buf[(x, 0)].symbol(),
+                "─",
+                "divider row x={x} must be the rule glyph"
+            );
+        }
+    }
 }

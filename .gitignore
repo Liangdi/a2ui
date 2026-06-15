@@ -1,2 +1,6 @@
 /target
 target/
+
+# Python (capture/verify scripts)
+__pycache__/
+*.pyc
