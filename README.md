@@ -111,21 +111,23 @@ cargo run -p a2ui --example 12_handshake
 | TextField | ✅ | 🟡 | ✅ | ✅ | ✅ | ✅ |
 | CheckBox | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Slider | ✅ | 🟡 | ✅ | ✅ | ✅ | ✅ |
-| ChoicePicker | ✅ | 🟡 | ✅ | ⬜ | ✅ | 🟡 |
-| Tabs | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | 🟡 |
-| DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | 🟡 |
-| Icon | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | 🟡 |
-| Image | ✅² | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| ChoicePicker | ✅ | 🟡 | ✅ | ⬜ | ✅ | ✅ |
+| Tabs | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | ✅ |
+| DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | ✅ |
+| Icon | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | ✅ |
+| Image | ✅² | ⬜ | ⬜ | ⬜ | ⬜ | ✅³ |
+| Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
+| AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
 
 ¹ 需 `audio` 特性。
-² TUI 经 `ratatui-image` 真实解码并显示图像像素(kitty / iTerm2 / Sixel / Halfblocks 自动降级,仅本地路径);五个桌面后端目前仅渲染文本占位符。
+² TUI 经 `ratatui-image` 真实解码并显示图像像素(kitty / iTerm2 / Sixel / Halfblocks 自动降级,仅本地路径);Slint / egui / Bevy / Iced 四个桌面后端目前仅渲染文本占位符。
+³ Dioxus 经 WebView 原生 `<img>` 显示图像(支持 `file://` / `http(s)` / `data:` URL)。
+⁴ Dioxus 经 WebView 原生 `<audio>` / `<video>` 元素真实播放(浏览器提供播放/暂停/进度/音量/全屏等完整传输控件)——这是终端及其它桌面后端做不到的。
 
 - **TUI 是参考实现**:18 组件全部完整渲染;图片默认开启(`ratatui-image`),音频需 `audio` 特性,视频始终为占位符。
-- **可交互输入控件(TextField / Slider / CheckBox / ChoicePicker)的「真输入」**:egui、Bevy、Iced、Dioxus 与 TUI 完整支持(ChoicePicker 在 Dioxus 暂为占位徽章);**Slint 仅 Button / CheckBox 点击可交互**,TextField / Slider 渲染为只读值。
+- **可交互输入控件(TextField / Slider / CheckBox / ChoicePicker)的「真输入」**:egui、Bevy、Iced、Dioxus 与 TUI 完整支持;**Slint 仅 Button / CheckBox 点击可交互**,TextField / Slider 渲染为只读值。
 - **Bevy 的 ChoicePicker** 当前为文本标签(`[ChoicePicker: …]`),尚未接入原生选择控件。
-- **Iced 是映射最干净的后端**(无状态桥 / 无 diff),五个可交互控件全部原生;**Dioxus 架构最独特**(响应式 signals + WebView/CSS 渲染)。
+- **Iced 是映射最干净的后端**(无状态桥 / 无 diff),五个可交互控件全部原生;**Dioxus 架构最独特**(响应式 signals + WebView/CSS 渲染),且借 WebView 之力,Image / Video / AudioPlayer 均用原生 HTML 媒体元素真实渲染——**它是唯一覆盖全部 18 个 A2UI 组件的后端**(连 TUI 的 Video 都是占位符,终端无法播放视频)。
 
 ## Slint 桌面后端
 
@@ -228,6 +230,10 @@ cargo run -p a2ui-iced-gallery -- login    # 按名称子串(大小写不敏感)
 - **WebView 渲染** —— 渲染到系统 WebView(Linux 用 WebKitGTK),所以深色主题是一份 **CSS 样式表**(`theme::STYLESHEET`),而非逐控件 style 函数;A2UI 组件映射到 HTML 元素 + class。
 
 Button 的点击同样复用共享的 `core::components::dispatch_event` + `apply_event_result`(经 `Rc<dyn Fn(String)>` 回调上交到根);Modal 用居中浮层 + 半透明遮罩呈现。
+
+### 组件覆盖
+
+借 WebView 之力,**Dioxus 后端是六个里唯一覆盖全部 18 个 A2UI 组件的后端**(连 TUI 的 Video 都是占位符)。交互控件均为原生 HTML 元素,接受真实输入并写回 data model —— TextField(`<input>`)/ CheckBox / Slider(`<input type="range">`)/ ChoicePicker(单选原生 `<select>`、多选 checkbox 组)/ DateTimeInput(原生 `<input type="date|time|datetime-local">`);Tabs 渲染可点击 tab 栏 + 内容面板(读 `tabs` 属性,点击切换写回 `activeTab`);Icon 直接显示 emoji(映射表与 TUI 一致);Image 用原生 `<img>`(`file://` / `http(s)` / `data:` URL);Video / AudioPlayer 用原生 `<video>` / `<audio>`(浏览器提供播放/暂停/进度/音量/全屏等完整传输控件,终端及其它桌面后端无法播放)。
 
 **它是可选依赖**:`a2ui-dioxus` 是 workspace 的**非默认成员**(会拉取 wry WebView + tao 窗口栈)。普通的 `cargo build` 只编译 ratatui 栈。需要显式构建:
 

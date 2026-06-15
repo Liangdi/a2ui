@@ -165,4 +165,75 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 12px 0; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--s0); border-radius: 999px; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ── Icon ─────────────────────────────────────────────────────── */
+.icon { color: var(--acc); font-size: 18px; line-height: 1; }
+
+/* ── Image ────────────────────────────────────────────────────── */
+.image { display: flex; flex-direction: column; gap: 6px; margin: 0; width: 100%; }
+.image__img {
+  display: block; max-width: 100%; height: auto;
+  border-radius: 12px; background: var(--mantle);
+  border: 1px solid var(--edge);
+}
+.image__cap { font-size: 11px; color: var(--sub0); line-height: 1.4; }
+
+/* ── Video / AudioPlayer — native <video> / <audio> ────────────── */
+.video { display: flex; flex-direction: column; gap: 6px; margin: 0; width: 100%; }
+.video__el {
+  display: block; width: 100%; max-height: 60vh;
+  border-radius: 12px; background: #000; border: 1px solid var(--edge);
+}
+.video__cap { font-size: 11px; color: var(--sub0); line-height: 1.4; }
+.audio { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.audio__label { font-size: 12px; color: var(--sub0); }
+.audio__el { width: 100%; }
+.field > input[type="date"],
+
+/* ── Tabs ─────────────────────────────────────────────────────── */
+.tabs { display: flex; flex-direction: column; gap: 0; width: 100%; }
+.tabs__bar {
+  display: flex; flex-direction: row; gap: 2px;
+  border-bottom: 1px solid var(--edge); padding: 0 2px;
+}
+.tab {
+  appearance: none; border: 0; cursor: pointer; font: inherit;
+  padding: 9px 16px; border-radius: 9px 9px 0 0;
+  color: var(--sub0); background: transparent;
+  border-bottom: 2px solid transparent;
+  transition: background .12s, color .12s;
+}
+.tab:hover { background: var(--s0); color: var(--text); }
+.tab--active {
+  color: var(--acc); font-weight: 600; background: var(--s0);
+  border-bottom: 2px solid var(--acc);
+}
+.tabs__panel {
+  background: var(--s0); border: 1px solid var(--edge); border-top: 0;
+  border-radius: 0 0 12px 12px; padding: 18px; width: 100%;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.30);
+}
+
+/* ── ChoicePicker ─────────────────────────────────────────────── */
+.choice { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.choice__select {
+  font: inherit; color: var(--text); padding: 9px 12px;
+  background: var(--mantle); border: 1px solid var(--edge); border-radius: 9px;
+  width: 100%; outline: none; cursor: pointer;
+}
+.choice__select:focus { border-color: var(--acc); box-shadow: 0 0 0 1.5px var(--acc); background: var(--s0); }
+.choice__select:disabled { opacity: .55; cursor: not-allowed; }
+.choice__select option { background: var(--mantle); color: var(--text); }
+
+/* ── DateTimeInput — native date/time pickers ───────────────────
+   Inherits the recessed dark input from `.field > input` (same green
+   ring on focus); these rules only recolor the native picker glyph. */
+.field > input[type="date"],
+.field > input[type="datetime-local"],
+.field > input[type="time"] { color-scheme: dark; }
+.field > input[type="date"]::-webkit-calendar-picker-indicator,
+.field > input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+.field > input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.9); cursor: pointer; opacity: 0.85;
+}
 "#;

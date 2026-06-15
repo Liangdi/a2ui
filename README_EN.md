@@ -111,21 +111,23 @@ All five backends share the same `a2ui-base` core (interaction logic / `dispatch
 | TextField | ✅ | 🟡 | ✅ | ✅ | ✅ | ✅ |
 | CheckBox | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Slider | ✅ | 🟡 | ✅ | ✅ | ✅ | ✅ |
-| ChoicePicker | ✅ | 🟡 | ✅ | ⬜ | ✅ | 🟡 |
-| Tabs | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | 🟡 |
-| DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | 🟡 |
-| Icon | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | 🟡 |
-| Image | ✅² | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| ChoicePicker | ✅ | 🟡 | ✅ | ⬜ | ✅ | ✅ |
+| Tabs | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | ✅ |
+| DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | ✅ |
+| Icon | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | ✅ |
+| Image | ✅² | ⬜ | ⬜ | ⬜ | ⬜ | ✅³ |
+| Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
+| AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
 
 ¹ Needs the `audio` feature.
-² The TUI backend decodes and renders actual image pixels via `ratatui-image` (kitty / iTerm2 / Sixel / Halfblocks auto-degrade, local paths only); the five desktop backends currently render only a text placeholder.
+² The TUI backend decodes and renders actual image pixels via `ratatui-image` (kitty / iTerm2 / Sixel / Halfblocks auto-degrade, local paths only); the Slint / egui / Bevy / Iced desktop backends currently render only a text placeholder.
+³ The Dioxus backend renders images via the native WebView `<img>` (supports `file://` / `http(s)` / `data:` URLs).
+⁴ The Dioxus backend plays real media via the native WebView `<audio>` / `<video>` elements (the browser supplies full transport controls — play/pause/seek/volume/fullscreen) — something the terminal and other desktop backends cannot do.
 
 - **The TUI backend is the reference implementation** — all 18 components render fully; real images are on by default (`ratatui-image`), audio needs the `audio` feature, video is always a placeholder.
-- **Genuine input on the interactive widgets (TextField / Slider / CheckBox / ChoicePicker)**: full on egui, Bevy, Iced, Dioxus, and TUI (ChoicePicker is a placeholder badge on Dioxus for now). **On Slint only Button / CheckBox clicks are wired** — TextField and Slider render read-only.
+- **Genuine input on the interactive widgets (TextField / Slider / CheckBox / ChoicePicker)**: full on egui, Bevy, Iced, Dioxus, and TUI. **On Slint only Button / CheckBox clicks are wired** — TextField and Slider render read-only.
 - **Bevy's ChoicePicker** is currently a text label (`[ChoicePicker: …]`); not yet wired to a native picker.
-- **Iced is the cleanest-mapping backend** (no state bridge, no diffing); all five interactive widgets are native. **Dioxus is the most architecturally distinct** (reactive signals + WebView/CSS rendering).
+- **Iced is the cleanest-mapping backend** (no state bridge, no diffing); all five interactive widgets are native. **Dioxus is the most architecturally distinct** (reactive signals + WebView/CSS rendering), and thanks to the WebView, Image / Video / AudioPlayer render via native HTML media elements too — **it is the only backend to cover all 18 A2UI components** (even the TUI's Video is a placeholder, since a terminal cannot play video).
 
 ## Slint Desktop Backend
 
@@ -200,6 +202,10 @@ The project also ships **`a2ui-dioxus`**, which renders A2UI component trees int
 - **WebView rendering** — it renders to a system WebView (WebKitGTK on Linux), so the dark theme is a **CSS stylesheet** (`theme::STYLESHEET`) rather than per-widget style functions, and A2UI component kinds map to ordinary HTML elements + classes.
 
 Button presses reuse the shared `core::components::dispatch_event` + `apply_event_result` (handed up to the root via an `Rc<dyn Fn(String)>` callback); Modals float as a centered panel over a dimmed scrim.
+
+### Component coverage
+
+Thanks to the WebView, **the Dioxus backend is the only one of the six to cover all 18 A2UI components** (even the TUI's Video is a placeholder). The interactive ones are native HTML elements that accept real input and write back to the data model — TextField (`<input>`) / CheckBox / Slider (`<input type="range">`) / ChoicePicker (a native `<select>` for single/`mutuallyExclusive`, a checkbox group for `multipleSelection`) / DateTimeInput (native `<input type="date|time|datetime-local">`); Tabs renders a clickable tab bar + content panel (reads the `tabs` property, click switches and writes back `activeTab`); Icon shows an emoji directly (the mapping matches the TUI); Image uses a native `<img>` (`file://` / `http(s)` / `data:` URLs); Video / AudioPlayer use native `<video>` / `<audio>` (the browser supplies full transport controls — play/pause/seek/volume/fullscreen — which the terminal and other desktop backends cannot do).
 
 **It is an optional dependency**: `a2ui-dioxus` is a **non-default** workspace member (it pulls the wry WebView + tao windowing stack). A plain `cargo build` only compiles the ratatui stack. Build it explicitly:
 

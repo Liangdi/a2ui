@@ -60,6 +60,7 @@ dependencies = [
  "a2ui-base",
  "a2ui-tui",
  "dioxus",
+ "serde",
  "serde_json",
  "tokio",
 ]

@@ -21,6 +21,7 @@ backend = ["dep:dioxus"]
 
 [dependencies]
 a2ui-base = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 # Optional: the Dioxus runtime. The `backend` feature is the single switch that
 # links the wry WebView + tao stack. `default-features = false` keeps the
