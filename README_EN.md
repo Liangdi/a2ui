@@ -78,11 +78,11 @@ cargo run -p a2ui --example 12_handshake
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  apps:       a2ui-gallery (TUI)        a2ui-slint-gallery (desktop)
+│  apps:       a2ui-gallery (TUI)   a2ui-slint-gallery   a2ui-egui-gallery   a2ui-bevy-gallery (desktop)
 ├──────────────────────────────────────────────────────────────┤
-│  umbrella:   a2ui  (re-export core + tui [+ slint])           │
+│  umbrella:   a2ui  (re-export core + tui [+ slint] [+ egui] [+ bevy])
 ├──────────────────────────────────────────────────────────────┤
-│  backends:   a2ui-tui (ratatui)        a2ui-slint (Slint, opt-in)
+│  backends:   a2ui-tui (ratatui)   a2ui-slint (Slint, opt-in)   a2ui-egui (egui, opt-in)   a2ui-bevy (Bevy, opt-in)
 ├──────────────────────────────────────────────────────────────┤
 │  a2ui-base (framework-agnostic: Protocol / Model / Catalog / Processor)
 └──────────────────────────────────────────────────────────────┘

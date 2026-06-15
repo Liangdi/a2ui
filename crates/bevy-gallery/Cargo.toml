@@ -1,0 +1,23 @@
+[package]
+name = "a2ui-bevy-gallery"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A2UI gallery — browse and render the sample specs in a Bevy window"
+
+[[bin]]
+name = "a2ui_bevy_gallery"
+path = "src/main.rs"
+
+[dependencies]
+a2ui-base = { workspace = true }
+a2ui-tui = { workspace = true }          # build_basic_catalog / build_minimal_catalog
+a2ui-gallery = { workspace = true }      # sample_loader
+# The `backend` feature enables the Bevy UI runtime (wgpu + winit).
+# Without it `A2uiPlugin` has no runtime, so it is required for this binary.
+a2ui-bevy = { workspace = true, features = ["backend"] }
+bevy = { workspace = true }
+bevy_ui_text_input = { workspace = true }
+serde_json = { workspace = true }

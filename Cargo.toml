@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/tui", "crates/gallery", "crates/a2ui", "crates/slint", "crates/slint-gallery", "crates/egui", "crates/egui-gallery"]
+members = ["crates/core", "crates/tui", "crates/gallery", "crates/a2ui", "crates/slint", "crates/slint-gallery", "crates/egui", "crates/egui-gallery", "crates/bevy", "crates/bevy-gallery"]
 # `cargo build` / `cargo run` with no `-p` only compile the ratatui stack. The
 # Slint backend (`a2ui-slint`) is opt-in: it pulls a sizeable GUI toolchain, so
 # it is excluded from the default build and built explicitly with
@@ -49,6 +49,45 @@ slint-build = { version = "1.16" }
 # Pinned to 0.33 (latest stable line on crates.io as of 2026-06).
 egui = { version = "0.34", default-features = false }
 eframe = "0.34"
+# Bevy ECS + UI runtime for the `a2ui-bevy` backend. The fourth renderer,
+# targeting game/embedded runtimes. Bevy UI is ECS retained-mode, so (unlike
+# egui's per-frame rebuild) the backend keeps a stable entity tree and
+# diff/patches it each frame. `default-features = false` + the explicit feature
+# set below pull only the UI stack (layout, text, windowing, picking, input
+# focus, the experimental `bevy_ui_widgets` headless widgets, and the wgpu UI
+# render path) — skipping the heavy 3D/audio/subset that `bevy/default` would
+# drag in. `ui_bevy_render` is what actually wires the wgpu render backend for
+# UI nodes; the windowing backend comes from `bevy_winit`.
+bevy = { version = "0.18", default-features = false, features = [
+    "bevy_ui",
+    "bevy_text",
+    "bevy_winit",
+    "bevy_input_focus",
+    "bevy_picking",
+    # UI picking backend: without it, UI nodes don't emit `Pointer<Click>` /
+    # drag events, so `bevy_ui_widgets` Button `Activate` and our sample-list
+    # click observer never fire (the `picking` feature pulls this in by default,
+    # but we set `default-features = false`).
+    "ui_picking",
+    "ui_bevy_render",
+    "experimental_bevy_ui_widgets",
+    # Bundle the built-in FiraMono-subset.ttf as the default font. `default_font`
+    # is on in `bevy/default`, but we set `default-features = false`, so without
+    # this `TextFont::default()` resolves to no font and **no text renders** —
+    # the sample list (and every label) would be blank.
+    "default_font",
+    # Windowing backends for Linux. `bevy_winit` ships neither by default, so
+    # winit fails to compile on a headless feature set — opt into both so the
+    # gallery runs under either display server. (egui's eframe enables these
+    # via its own defaults; here we name them explicitly.)
+    "wayland",
+    "x11",
+] }
+# External text-input widget (Bevy 0.18 has no first-party TextInput). Built on
+# cosmic_text; the entity persists across frames so the reconciler keeps cursor
+# + edit state alive — no egui-style EditBuffers map is needed. 0.7 is the
+# latest line compatible with bevy 0.18 as of 2026-06.
+bevy_ui_text_input = "0.7"
 
 # Internal crates — path dependencies shared across the workspace. Each carries
 # a `version` (the workspace package version) so `cargo publish` can resolve them
@@ -59,6 +98,7 @@ a2ui-tui = { path = "crates/tui", version = "0.2.1" }
 a2ui-gallery = { path = "crates/gallery", version = "0.2.1" }
 a2ui-slint = { path = "crates/slint", version = "0.2.1" }
 a2ui-egui = { path = "crates/egui", version = "0.2.1" }
+a2ui-bevy = { path = "crates/bevy", version = "0.2.1" }
 
 # --- Release profile: optimize for binary size --------------------------------
 # The gallery embeds the full spec tree, so we trim the distributed binary.

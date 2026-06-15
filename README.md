@@ -78,17 +78,17 @@ cargo run -p a2ui --example 12_handshake
 
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
-│  apps:  a2ui-gallery (TUI)   a2ui-slint-gallery (桌面)   a2ui-egui-gallery (桌面)│
+│  apps:  a2ui-gallery (TUI)   a2ui-slint-gallery (桌面)   a2ui-egui-gallery (桌面)   a2ui-bevy-gallery (桌面)│
 ├───────────────────────────────────────────────────────────────────────┤
-│  umbrella:   a2ui  (re-export core + tui [+ slint] [+ egui])          │
+│  umbrella:   a2ui  (re-export core + tui [+ slint] [+ egui] [+ bevy]) │
 ├───────────────────────────────────────────────────────────────────────┤
-│  backends:   a2ui-tui (ratatui)   a2ui-slint (Slint, 可选)   a2ui-egui (egui, 可选)│
+│  backends:   a2ui-tui (ratatui)   a2ui-slint (Slint, 可选)   a2ui-egui (egui, 可选)   a2ui-bevy (Bevy, 可选)│
 ├───────────────────────────────────────────────────────────────────────┤
 │  a2ui-base (框架无关:Protocol / Model / Catalog / Processor)          │
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
-依赖自下而上:`a2ui-base` 同时支撑三个后端 —— `a2ui-tui`(ratatui,默认)、`a2ui-slint`(Slint 桌面,可选)与 `a2ui-egui`(egui 桌面,可选)。`a2ui-tui` ← `a2ui-gallery`;`a2ui-slint` ← `a2ui-slint-gallery`;`a2ui-egui` ← `a2ui-egui-gallery`;`a2ui`(umbrella)依赖 core + tui(slint / egui 分别在 `slint` / `egui` feature 后)。`a2ui-base` 完全不依赖 ratatui/slint/egui,可独立用于其他 backend。
+依赖自下而上:`a2ui-base` 同时支撑四个后端 —— `a2ui-tui`(ratatui,默认)、`a2ui-slint`(Slint 桌面,可选)、`a2ui-egui`(egui 桌面,可选)与 `a2ui-bevy`(Bevy ECS UI 桌面,可选)。`a2ui-tui` ← `a2ui-gallery`;`a2ui-slint` ← `a2ui-slint-gallery`;`a2ui-egui` ← `a2ui-egui-gallery`;`a2ui-bevy` ← `a2ui-bevy-gallery`;`a2ui`(umbrella)依赖 core + tui(slint / egui / bevy 分别在同名 feature 后)。`a2ui-base` 完全不依赖 ratatui/slint/egui/bevy,可独立用于其他 backend。
 
 ### 项目结构
 
@@ -121,7 +121,11 @@ crates/
 │   └── src/                      # walker(递归渲染) / app / edit_state / interaction
 ├── egui-gallery/      # a2ui-egui-gallery：桌面 Gallery App (bin,左列表 + 右预览)
 │   └── src/main.rs
-└── a2ui/              # a2ui：umbrella，re-export core+tui [+slint] [+egui]
+├── bevy/              # a2ui-bevy：Bevy ECS UI 桌面后端(可选,非默认成员,reconciler diff/patch)
+│   └── src/                      # reconcile(保留式同步) / render / interaction / plugin / state
+├── bevy-gallery/      # a2ui-bevy-gallery：桌面 Gallery App (bin,左列表 + 右预览)
+│   └── src/main.rs
+└── a2ui/              # a2ui：umbrella，re-export core+tui [+slint] [+egui] [+bevy]
     ├── src/lib.rs
     └── examples/                  # 17 个示例
 ```

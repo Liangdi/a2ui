@@ -1,0 +1,27 @@
+[package]
+name = "a2ui-bevy"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Bevy ECS UI backend for A2UI (Agent to UI)"
+
+[features]
+default = []
+# Pull in the Bevy runtime + the external text-input widget. OFF by default so
+# the workspace's default build stays light (Bevy's wgpu + windowing toolchain
+# is sizable). Enable with `--features backend`.
+#
+# The workspace `bevy` dep is already configured with the minimal UI feature set
+# (layout, text, windowing via winit, picking, input focus, the experimental
+# `bevy_ui_widgets` headless widgets, and the wgpu UI render path).
+backend = ["dep:bevy", "dep:bevy_ui_text_input"]
+
+[dependencies]
+a2ui-base = { workspace = true }
+serde_json = { workspace = true }
+# Optional: the Bevy runtime (UI stack only — see the workspace dep comment).
+bevy = { workspace = true, optional = true }
+# Optional: external text-input widget (Bevy 0.18 has no first-party one).
+bevy_ui_text_input = { workspace = true, optional = true }
