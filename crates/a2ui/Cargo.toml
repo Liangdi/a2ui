@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "A2UI (Agent to UI) — render JSON streaming UIs authored by AI agents (ratatui + Slint backends)"
+description = "A2UI (Agent to UI) — render JSON streaming UIs authored by AI agents (ratatui + Slint + egui backends)"
 
 [features]
 default = []
@@ -14,6 +14,9 @@ audio = ["a2ui-tui/audio"]
 # Expose the Slint backend as `a2ui::slint`. Opt-in: pulls the Slint runtime
 # (heavy). Without it the umbrella only re-exports core + tui.
 slint = ["dep:a2ui-slint"]
+# Expose the egui backend as `a2ui::egui`. Opt-in: pulls the egui + eframe
+# runtime (winit + glow). Without it the umbrella only re-exports core + tui.
+egui = ["dep:a2ui-egui"]
 
 [dependencies]
 a2ui-base = { workspace = true }
@@ -21,6 +24,9 @@ a2ui-tui = { workspace = true }
 # Optional: the Slint backend, re-exported as `a2ui::slint` under the `slint`
 # feature. The inner `backend` feature is what actually links the Slint runtime.
 a2ui-slint = { workspace = true, optional = true, features = ["backend"] }
+# Optional: the egui backend, re-exported as `a2ui::egui` under the `egui`
+# feature. The inner `backend` feature is what actually links the egui runtime.
+a2ui-egui = { workspace = true, optional = true, features = ["backend"] }
 
 # Examples directly use these crates (the umbrella only re-exports core+tui).
 [dev-dependencies]

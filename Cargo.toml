@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/tui", "crates/gallery", "crates/a2ui", "crates/slint", "crates/slint-gallery"]
+members = ["crates/core", "crates/tui", "crates/gallery", "crates/a2ui", "crates/slint", "crates/slint-gallery", "crates/egui", "crates/egui-gallery"]
 # `cargo build` / `cargo run` with no `-p` only compile the ratatui stack. The
 # Slint backend (`a2ui-slint`) is opt-in: it pulls a sizeable GUI toolchain, so
 # it is excluded from the default build and built explicitly with
@@ -40,6 +40,15 @@ slint = { version = "1.16", default-features = false, features = ["std", "compat
 # in `build.rs`. (The inline `slint::slint!` macro rejects recursive components,
 # so the backend compiles real `.slint` files instead.)
 slint-build = { version = "1.16" }
+# egui immediate-mode GUI runtime for the `a2ui-egui` backend. Unlike Slint,
+# egui is native-recursive and pure-Rust (winit + glow, no system GUI libs), so
+# the backend needs no `build.rs`. `egui` is kept default-less (core types only);
+# `eframe` carries its defaults (glow renderer + the winit X11/Wayland backends
+# + default fonts) so it links a working windowing backend on Linux. The
+# windowing deps are pulled in by the `backend` feature in `a2ui-egui`.
+# Pinned to 0.33 (latest stable line on crates.io as of 2026-06).
+egui = { version = "0.34", default-features = false }
+eframe = "0.34"
 
 # Internal crates — path dependencies shared across the workspace. Each carries
 # a `version` (the workspace package version) so `cargo publish` can resolve them
@@ -49,6 +58,7 @@ a2ui-base = { path = "crates/core", version = "0.2.1" }
 a2ui-tui = { path = "crates/tui", version = "0.2.1" }
 a2ui-gallery = { path = "crates/gallery", version = "0.2.1" }
 a2ui-slint = { path = "crates/slint", version = "0.2.1" }
+a2ui-egui = { path = "crates/egui", version = "0.2.1" }
 
 # --- Release profile: optimize for binary size --------------------------------
 # The gallery embeds the full spec tree, so we trim the distributed binary.

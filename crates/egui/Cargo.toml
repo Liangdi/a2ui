@@ -1,0 +1,34 @@
+[package]
+name = "a2ui-egui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "egui immediate-mode GUI backend for A2UI (Agent to UI)"
+
+[features]
+default = []
+# Pull in the real egui runtime + eframe windowing backend. OFF by default so the
+# workspace's default build stays light (egui brings winit + glow). Enable with
+# `--features backend`.
+#
+# `eframe/glow` + `eframe/default_fonts`: a windowed backend using the OpenGL
+# (glow) renderer. eframe's own `default` feature set (carried via the workspace
+# dep) supplies the winit X11/Wayland backends; we just opt into the glow
+# renderer + default fonts explicitly here. Swap in `eframe/wgpu` later if GPU
+# acceleration is wanted.
+backend = [
+    "dep:egui",
+    "dep:eframe",
+    "eframe/glow",
+    "eframe/default_fonts",
+]
+
+[dependencies]
+a2ui-base = { workspace = true }
+serde_json = { workspace = true }
+# Optional: the egui runtime. `default-features = false` keeps the surface
+# minimal. A windowing backend/renderer is selected by the `backend` feature.
+egui = { workspace = true, optional = true }
+eframe = { workspace = true, optional = true }
