@@ -132,8 +132,9 @@ fn main() -> ExitCode {
         IcedApp::update,
         IcedApp::view,
     )
-    .title(|_state: &IcedApp| "A2UI Iced Gallery".to_string())
-    .window_size(iced::Size::new(1000.0, 700.0))
+    .title(|_state: &IcedApp| "A2UI · Iced Gallery".to_string())
+    .theme(|_state: &IcedApp| a2ui_iced::style::theme())
+    .window_size(iced::Size::new(1080.0, 740.0))
     .resizable(true)
     .run();
     if let Err(err) = run_result {

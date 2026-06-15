@@ -7,8 +7,11 @@
 //! interaction), the gallery samples, and the locally-tracked [`open_modals`]
 //! set (the gallery has no server to flip a Modal's `isOpen`).
 //!
-//! `view()` draws a left-hand sample browser + the rendered surface, then a
-//! centered overlay panel for each open Modal (layered via a [`Stack`]).
+//! `view()` draws a dark, modern chrome: a branded sidebar sample browser + a
+//! breadcrumb-topped preview pane, then a dimmed-scrim centered overlay panel
+//! for each open Modal (layered via a [`Stack`]). The palette + widget styles
+//! live in [`crate::style`].
+//!
 //! Widget interactions are [`Message`]s attached in `view` and applied by
 //! [`update`] — because Iced is Elm, `view` and `update` never overlap, so no
 //! collect-then-apply buffer is needed (unlike the egui backend's
@@ -29,10 +32,11 @@ use a2ui_base::message_processor::MessageProcessor;
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::protocol::server_to_client::A2uiMessage;
 
-use iced::widget::{Column, Stack, button, container, scrollable, text};
-use iced::{Element, Fill, Length, Task};
+use iced::widget::{Column, Stack, button, container, rule, scrollable, text};
+use iced::{Element, Fill, Font, Length, Task};
 
 use crate::message::Message;
+use crate::style;
 use crate::walker::render_node;
 
 /// The Iced app state — owns all runtime state, exposes the Elm
@@ -126,15 +130,19 @@ impl IcedApp {
         Task::none()
     }
 
-    /// Build the current UI: a left-hand sample browser + the rendered surface,
-    /// with any open Modals layered on top via a [`Stack`].
+    /// Build the current UI: a branded sidebar + the breadcrumb-topped preview
+    /// pane, with any open Modals layered on top via a [`Stack`] (each behind a
+    /// dimmed scrim).
     pub fn view(&self) -> Element<'_, Message> {
         let sidebar = self.render_sidebar();
-        let main = self.render_surface();
+        let main = self.render_main();
         let content = iced::widget::row![sidebar, main]
             .spacing(0.0)
             .width(Fill)
             .height(Fill);
+        // Paint the crust backdrop behind the whole window so any sub-pixel gap
+        // between sidebar / preview reads as intentional rather than white.
+        let content = container(content).style(style::app_bg).width(Fill).height(Fill);
 
         if self.open_modals.is_empty() {
             content.into()
@@ -156,95 +164,251 @@ impl IcedApp {
     // View helpers
     // -----------------------------------------------------------------------
 
-    /// Left-hand sample browser — a scrollable list of selectable sample names.
+    /// Left-hand sample browser — a branded header, a scrollable list of
+    /// selectable sample rows (index + name), and a count footer.
     fn render_sidebar(&self) -> Element<'_, Message> {
-        let mut col = Column::new().spacing(3.0);
-        col = col.push(text("Samples").size(16.0));
+        // ── Brand header ───────────────────────────────────────────────────
+        let mark = text("◆").color(style::ACCENT).size(18.0);
+        let title = iced::widget::column![
+            text("A2UI").size(15.0).color(style::TEXT),
+            text("Iced Gallery").size(11.0).color(style::SUBTEXT1),
+        ]
+        .spacing(0.0);
+        let brand = iced::widget::row![mark, title]
+            .spacing(10.0)
+            .align_y(iced::alignment::Vertical::Center)
+            .width(Fill);
+        let header = container(brand).width(Fill).padding([2.0, 0.0]);
+
+        // ── Section label ──────────────────────────────────────────────────
+        let section = text("SAMPLES")
+            .size(10.0)
+            .color(style::SUBTEXT1)
+            .font(Font::MONOSPACE);
+
+        // ── Sample rows ────────────────────────────────────────────────────
+        let mut list = Column::new().spacing(4.0);
         for (i, (name, _)) in self.samples.iter().enumerate() {
             let is_sel = i == self.selected_sample;
-            let btn = button(text(name.clone()))
+            let idx_color = if is_sel {
+                style::ACCENT
+            } else {
+                style::SUBTEXT1
+            };
+            let name_color = if is_sel {
+                style::TEXT
+            } else {
+                style::SUBTEXT0
+            };
+            let idx = text(format!("{i:>2}"))
+                .size(11.0)
+                .color(idx_color)
+                .font(Font::MONOSPACE)
+                .width(Length::Fixed(20.0));
+            let label = text(name.clone()).size(13.0).color(name_color);
+            let row_item = iced::widget::row![idx, label]
+                .spacing(10.0)
+                .align_y(iced::alignment::Vertical::Center)
+                .width(Fill);
+            let btn = button(row_item)
+                .style(style::sample_row(is_sel))
                 .on_press(Message::SelectSample(i))
-                .style(if is_sel { button::primary } else { button::secondary });
-            col = col.push(btn);
+                .padding(8.0)
+                .width(Fill);
+            list = list.push(btn);
         }
-        container(scrollable(col))
-            .width(Length::Fixed(220.0))
+
+        // ── Footer ─────────────────────────────────────────────────────────
+        let footer = text(format!("{} samples", self.samples.len()))
+            .size(10.0)
+            .color(style::SUBTEXT1)
+            .font(Font::MONOSPACE);
+
+        let body = Column::new()
+            .push(header)
+            .push(rule::horizontal(1.0).style(style::divider))
+            .push(section)
+            .push(scrollable(list).width(Fill).height(Fill))
+            .push(rule::horizontal(1.0).style(style::divider))
+            .push(footer)
+            .spacing(12.0)
+            .width(Fill)
+            .height(Fill);
+
+        container(body)
+            .style(style::sidebar)
+            .width(Length::Fixed(248.0))
             .height(Fill)
-            .padding(8.0)
+            .padding(16.0)
             .into()
     }
 
-    /// The rendered surface — a scrollable walk of the `root` component tree.
-    fn render_surface(&self) -> Element<'_, Message> {
+    /// The main pane — a breadcrumb top bar (Preview / <sample> · index chip)
+    /// over the rendered preview surface.
+    fn render_main(&self) -> Element<'_, Message> {
+        let (sel, count) = (self.selected_sample, self.samples.len());
+        let name = self
+            .samples
+            .get(sel)
+            .map(|(n, _)| n.clone())
+            .unwrap_or_default();
+
+        let crumb = text("Preview")
+            .size(12.0)
+            .color(style::SUBTEXT1)
+            .font(Font::MONOSPACE);
+        let sep = text("›").size(12.0).color(style::SUBTEXT1);
+        let title = text(name).size(14.0).color(style::TEXT);
+        let chip = container(
+            text(format!("{} / {count}", sel + 1))
+                .size(11.0)
+                .color(style::ACCENT)
+                .font(Font::MONOSPACE),
+        )
+        .style(style::index_pill)
+        .padding([3.0, 8.0]);
+
+        let bar = iced::widget::row![
+            crumb,
+            sep,
+            title,
+            iced::widget::Space::new().width(Fill),
+            chip,
+        ]
+        .align_y(iced::alignment::Vertical::Center)
+        .spacing(8.0)
+        .width(Fill);
+        let top_bar = container(bar).style(style::top_bar).padding([14.0, 20.0]).width(Fill);
+
+        let preview = self.render_preview();
+
+        Column::new()
+            .push(top_bar)
+            .push(rule::horizontal(1.0).style(style::divider))
+            .push(preview)
+            .width(Fill)
+            .height(Fill)
+            .into()
+    }
+
+    /// The rendered surface — a scrollable walk of the `root` component tree on
+    /// the base surface fill.
+    fn render_preview(&self) -> Element<'_, Message> {
+        let tree = self.render_tree("root");
+        container(scrollable(tree))
+            .style(style::surface)
+            .width(Fill)
+            .height(Fill)
+            .padding(24.0)
+            .into()
+    }
+
+    /// Walk a component subtree into an [`Element`] tree. Returns a muted
+    /// placeholder when the surface / root is missing.
+    fn render_tree(&self, root_id: &str) -> Element<'_, Message> {
         let Some(surface) = self.processor.model.surfaces().next() else {
-            return text("No surface loaded.").into();
+            return text("No surface loaded.").color(style::SUBTEXT1).into();
         };
-        if !surface.components.borrow().contains("root") {
-            return text("No root component").into();
+        if !surface.components.borrow().contains(root_id) {
+            return text("No root component").color(style::SUBTEXT1).into();
         }
 
         let data_model = surface.data_model.borrow();
         let components = surface.components.borrow();
         let focused_id = self.focus.focused_id().map(str::to_string);
-        let tree = render_node(
-            "root",
+        render_node(
+            root_id,
             &surface.id,
             "",
             &data_model,
             &components,
             &self.functions,
             focused_id.as_deref(),
-        );
-        container(scrollable(tree)).width(Fill).height(Fill).padding(16.0).into()
+        )
     }
 
-    /// One open Modal's `content` subtree in a centered bordered overlay panel,
-    /// with a close button. Layered over the main surface by `view`'s [`Stack`].
+    /// One open Modal's `content` subtree in a centered elevated panel with a
+    /// title bar + close button, layered over a dimmed click-to-dismiss scrim.
+    /// Built as an inner [`Stack`] so the scrim catches clicks that miss the
+    /// panel while the panel stays interactive.
     fn render_modal_overlay(&self, modal_id: &str) -> Option<Element<'_, Message>> {
         let surface = self.processor.model.surfaces().next()?;
-        let content_id = {
+
+        // Resolve the modal's content id + optional title in one borrow.
+        let (content_id, title): (Option<String>, String) = {
             let components = surface.components.borrow();
-            components.get(modal_id).and_then(|m| {
-                (m.component_type == "Modal")
-                    .then(|| m.get_property::<String>("content"))
-                    .flatten()
+            let Some(m) = components.get(modal_id) else {
+                return None;
+            };
+            if m.component_type != "Modal" {
+                return None;
+            }
+            let content = m.get_property::<String>("content");
+            let title = m
+                .get_property::<String>("title")
+                .unwrap_or_else(|| "Dialog".to_string());
+            (content, title)
+        };
+        let content_id = content_id?;
+
+        let content_tree = {
+            let data_model = surface.data_model.borrow();
+            let components = surface.components.borrow();
+            let focused_id = self.focus.focused_id().map(str::to_string);
+            render_node(
+                &content_id,
+                &surface.id,
+                "",
+                &data_model,
+                &components,
+                &self.functions,
+                focused_id.as_deref(),
+            )
+        };
+
+        // ── Panel chrome: title row + divider + content ────────────────────
+        let close = button(text("✕").size(13.0).color(style::SUBTEXT0))
+            .style(style::borderless)
+            .on_press(Message::ModalClose {
+                modal_id: modal_id.to_string(),
             })
-        }?;
+            .padding(4.0);
+        let title_row = iced::widget::row![
+            text(title).size(14.0).color(style::TEXT),
+            iced::widget::Space::new().width(Fill),
+            close,
+        ]
+        .align_y(iced::alignment::Vertical::Center)
+        .width(Fill);
+        let panel_body = Column::new()
+            .push(title_row)
+            .push(rule::horizontal(1.0).style(style::divider))
+            .push(content_tree)
+            .spacing(14.0)
+            .width(Fill);
 
-        let data_model = surface.data_model.borrow();
-        let components = surface.components.borrow();
-        let focused_id = self.focus.focused_id().map(str::to_string);
-        let content_tree = render_node(
-            &content_id,
-            &surface.id,
-            "",
-            &data_model,
-            &components,
-            &self.functions,
-            focused_id.as_deref(),
-        );
+        let panel = container(panel_body)
+            .style(style::modal_panel)
+            .padding(24.0)
+            .width(Length::Fixed(480.0))
+            .max_width(560.0);
 
-        let close = button(text("✕ Close"))
-            .on_press(Message::ModalClose { modal_id: modal_id.to_string() });
-        let panel = container(
-            Column::new()
-                .spacing(8.0)
-                .push(close)
-                .push(content_tree),
-        )
-        .padding(16.0)
-        .width(Length::Fixed(440.0))
-        .style(container::bordered_box);
+        // Center the panel; the scrim button behind it fills the viewport and
+        // dismisses the modal when the click lands outside the panel.
+        let scrim = button(iced::widget::Space::new().width(Fill).height(Fill))
+            .style(style::scrim)
+            .on_press(Message::ModalClose {
+                modal_id: modal_id.to_string(),
+            })
+            .width(Fill)
+            .height(Fill);
+        let centered = container(panel)
+            .width(Fill)
+            .height(Fill)
+            .center_x(Fill)
+            .center_y(Fill);
 
-        // Full-fill container that centers the panel over the viewport.
-        Some(
-            container(panel)
-                .width(Fill)
-                .height(Fill)
-                .center_x(Fill)
-                .center_y(Fill)
-                .into(),
-        )
+        Some(Stack::new().push(scrim).push(centered).into())
     }
 
     // -----------------------------------------------------------------------

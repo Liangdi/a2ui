@@ -37,6 +37,8 @@ pub mod components;
 #[cfg(feature = "backend")]
 pub mod message;
 #[cfg(feature = "backend")]
+pub mod style;
+#[cfg(feature = "backend")]
 pub mod walker;
 
 /// The Iced app — owns the surface state and drives the Elm

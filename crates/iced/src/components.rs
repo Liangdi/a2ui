@@ -30,9 +30,10 @@ use a2ui_base::protocol::common_types::{ChildList, DynamicBoolean, DynamicNumber
 
 use iced::widget::{Column, Row};
 use iced::widget::{button, checkbox, container, rule, slider, text, text_input};
-use iced::{Color, Element, Fill};
+use iced::{Element, Fill};
 
 use crate::message::Message;
+use crate::style;
 use crate::walker::render_node;
 
 /// Shared read-only context threaded through every render function. This is
@@ -128,16 +129,16 @@ pub(super) fn render_row<'a>(
         .into()
 }
 
-/// Card — bordered panel wrapping its children.
+/// Card — a rounded, softly-elevated panel wrapping its children.
 pub(super) fn render_card<'a>(
     walk: &Walk<'_>, ctx: &ComponentContext, model: &ComponentModel,
 ) -> Element<'a, Message> {
     let children = build_children(walk, model, ctx);
-    let inner = Column::with_children(children).spacing(6.0);
+    let inner = Column::with_children(children).spacing(10.0);
     container(inner)
-        .padding(10.0)
+        .padding(18.0)
         .width(Fill)
-        .style(container::bordered_box)
+        .style(style::card)
         .into()
 }
 
@@ -192,21 +193,21 @@ pub(super) fn render_text<'a>(ctx: &ComponentContext, model: &ComponentModel) ->
     t.into()
 }
 
-/// Divider — thin horizontal rule.
+/// Divider — a faint horizontal rule matching the dark palette.
 pub(super) fn render_divider<'a>() -> Element<'a, Message> {
-    rule::horizontal(1.0).into()
+    rule::horizontal(1.0).style(style::divider).into()
 }
 
-/// Icon — labeled box (no icon font); placeholder.
+/// Icon — a chip badge showing the icon name (no icon font yet; P3 wires one).
 pub(super) fn render_icon<'a>(ctx: &ComponentContext, model: &ComponentModel) -> Element<'a, Message> {
     let name = model
         .get_property::<DynamicString>("name")
         .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
         .unwrap_or_default();
-    text(format!("[icon: {name}]")).into()
+    chip("◈", &format!("icon · {name}"))
 }
 
-/// DateTimeInput — bordered field showing label + value (P2 full impl).
+/// DateTimeInput — muted label + bound value (P2 full impl).
 pub(super) fn render_date_time_input<'a>(
     ctx: &ComponentContext, model: &ComponentModel,
 ) -> Element<'a, Message> {
@@ -218,10 +219,15 @@ pub(super) fn render_date_time_input<'a>(
         .get_property::<DynamicString>("value")
         .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
         .unwrap_or_default();
-    text(format!("{label}: {value}")).into()
+    let mut col = Column::new().spacing(6.0);
+    if !label.is_empty() {
+        col = col.push(text(label).size(12.0).color(style::SUBTEXT0));
+    }
+    col = col.push(text(value).size(13.0).color(style::TEXT));
+    col.into()
 }
 
-/// Image / Video / AudioPlayer — labeled placeholder (real texture/audio in P3).
+/// Image / Video / AudioPlayer — a chip badge (real texture/audio in P3).
 pub(super) fn render_media_placeholder<'a>(
     kind: &str, ctx: &ComponentContext, model: &ComponentModel,
 ) -> Element<'a, Message> {
@@ -229,7 +235,13 @@ pub(super) fn render_media_placeholder<'a>(
         .get_property::<DynamicString>("url")
         .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
         .unwrap_or_default();
-    text(format!("[{kind}: {url}]")).into()
+    let glyph = match kind {
+        "Image" => "▣",
+        "Video" => "▷",
+        "Audio" => "♪",
+        _ => "◆",
+    };
+    chip(glyph, &format!("{kind} · {url}"))
 }
 
 // ===========================================================================
@@ -253,11 +265,11 @@ pub(super) fn render_button<'a>(
     let variant: Option<String> = model.get_property("variant");
     let checks_pass = evaluate_checks(ctx, model);
 
-    let btn = button(text(label));
+    let btn = button(text(label)).padding([9.0, 16.0]);
     let btn = match variant.as_deref() {
-        Some("primary") => btn.style(button::primary),
-        Some("borderless") => btn.style(button::text),
-        _ => btn,
+        Some("primary") => btn.style(style::primary),
+        Some("borderless") => btn.style(style::borderless),
+        _ => btn.style(style::secondary),
     };
     // Disable the press target when any `checks` rule fails. A non-pressable
     // button still renders its label (iced handles the disabled appearance).
@@ -298,15 +310,20 @@ pub(super) fn render_text_field<'a>(
         _ => None,
     };
 
-    let mut col = Column::new().spacing(2.0);
+    let mut col = Column::new().spacing(6.0);
     if !label.is_empty() {
         col = col.push(
             text(label.clone())
                 .size(12.0)
-                .color(Color::from_rgb(0.45, 0.45, 0.45)),
+                .color(style::SUBTEXT0),
         );
     }
-    col = col.push(text_input(&label, &resolved).on_input_maybe(on_change));
+    col = col.push(
+        text_input(&label, &resolved)
+            .on_input_maybe(on_change)
+            .padding([9.0, 12.0])
+            .style(style::text_field),
+    );
     col.into()
 }
 
@@ -367,16 +384,16 @@ pub(super) fn render_slider<'a>(
         value: serde_json::json!(v as f64),
     });
 
-    let mut col = Column::new().spacing(2.0);
+    let mut col = Column::new().spacing(6.0);
     if !label.is_empty() {
-        col = col.push(text(label).size(12.0).color(Color::from_rgb(0.45, 0.45, 0.45)));
+        col = col.push(text(label).size(12.0).color(style::SUBTEXT0));
     }
     col = col.push(track);
     col.into()
 }
 
-/// ChoicePicker — placeholder label (P2 wires a native `pick_list`). Matches
-/// the egui backend's P1 scope.
+/// ChoicePicker — a chip badge (P2 wires a native `pick_list`). Matches the
+/// egui backend's P1 scope.
 pub(super) fn render_choice_picker<'a>(
     ctx: &ComponentContext, model: &ComponentModel,
 ) -> Element<'a, Message> {
@@ -384,15 +401,15 @@ pub(super) fn render_choice_picker<'a>(
         .get_property::<DynamicString>("label")
         .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
         .unwrap_or_default();
-    text(format!("[ChoicePicker: {label}]")).into()
+    chip("▾", &format!("select · {label}"))
 }
 
 /// Unknown / not-yet-implemented kind — show the kind name + recurse children.
 pub(super) fn render_unknown<'a>(
     walk: &Walk<'_>, ctx: &ComponentContext, model: &ComponentModel,
 ) -> Element<'a, Message> {
-    let header = text(format!("[{}]", model.component_type));
-    let mut col = Column::new().spacing(4.0).push(header);
+    let header = chip("?", &format!("{} · unknown", model.component_type));
+    let mut col = Column::new().spacing(10.0).push(header);
     for child in build_children(walk, model, ctx) {
         col = col.push(child);
     }
@@ -402,6 +419,18 @@ pub(super) fn render_unknown<'a>(
 // ===========================================================================
 // Field helpers
 // ===========================================================================
+
+/// A small rounded "chip" badge — used to render placeholder components
+/// (Icon / Image / Video / AudioPlayer / ChoicePicker / unknown kinds) so they
+/// read as intentional pills rather than bracket text.
+fn chip<'a>(glyph: &str, label: &str) -> Element<'a, Message> {
+    let row = Row::new()
+        .spacing(8.0)
+        .align_y(iced::alignment::Vertical::Center)
+        .push(text(glyph.to_string()).color(style::BLUE).size(13.0))
+        .push(text(label.to_string()).color(style::SUBTEXT0).size(12.0));
+    container(row).style(style::chip).padding([6.0, 12.0]).into()
+}
 
 /// Resolve a Button's child Text label (if its `child` is a Text component).
 fn resolve_child_text(ctx: &ComponentContext, model: &ComponentModel) -> Option<String> {
