@@ -22,10 +22,11 @@ The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic c
 - ✅ **Inline catalogs**: the server can declare `acceptsInlineCatalogs`; the client parses and validates inline catalog JSON (UAX#31 identifier checks) and registers schema-only functions at runtime.
 - ✅ **Generic fallback renderer**: unknown / inline-custom component types render as a visible labeled box (type + properties + children) instead of a bare "unknown" error.
 - ✅ **14 client-side functions**: required, regex, length, numeric, email, and/or/not, formatString, formatNumber, formatCurrency, formatDate, pluralize, openUrl
+- ✅ **Payload validation**: integrity / topology / recursion & path checks plus a fault-tolerant `parse_and_fix` (auto-heals malformed JSON like smart quotes and trailing commas), ported from the Python SDK. Opt-in on `MessageProcessor` (`with_validation(cfg)` + `drain_validation()`), OFF by default and never blocks component loading — for untrusted or LLM-generated payloads.
 - ✅ **Modular Cargo workspace architecture** (`a2ui-base` framework-agnostic / `a2ui-tui` ratatui backend / `a2ui-gallery` demo app / `a2ui` umbrella)
 - ✅ JSON Pointer data binding with reactive state management
 - ✅ Gallery App sample browser with progressive message rendering
-- ✅ **182 unit/integration tests** (core 91 + tui 61 + gallery e2e 21 + slint 9), including end-to-end tests with A2UI specification examples
+- ✅ **219 unit/integration tests** (core 127 + tui 61 + gallery e2e 21 + slint 10), including end-to-end tests with A2UI specification examples
 
 ## Screenshots
 
@@ -90,49 +91,34 @@ cargo run -p a2ui --example 12_handshake
 
 Dependencies flow upward: `a2ui-base` underpins five backends — `a2ui-tui` (ratatui, default), `a2ui-slint` (Slint desktop, optional), `a2ui-egui` (egui desktop, optional), `a2ui-bevy` (Bevy ECS UI desktop, optional), and `a2ui-iced` (Iced desktop, optional). Each backend has a matching `*-gallery` app; the `a2ui` umbrella depends on core + tui (slint / egui / bevy / iced each behind a same-named feature). `a2ui-base` has zero ratatui/slint/egui/bevy/iced dependency and can be used standalone by other backends.
 
-### Project Structure
+## Backend Support Matrix
 
-```
-crates/
-├── core/              # a2ui-base: framework-agnostic layer
-│   └── src/
-│       ├── protocol/ model/ catalog/ observable/
-│       ├── message_processor.rs   # JSON parse → state mutation
-│       ├── capabilities.rs        # Capabilities negotiation + inline-catalog parsing
-│       └── error.rs event.rs
-├── tui/               # a2ui-tui: ratatui rendering layer
-│   └── src/
-│       ├── surface.rs             # Recursive rendering entry point
-│       ├── component_impl.rs      # TuiComponent trait + registry
-│       ├── layout_engine.rs       # Weighted split / alignment
-│       ├── focus_manager.rs       # Keyboard focus management
-│       ├── components/            # 18 component implementations
-│       └── catalogs/              # Minimal + Basic Catalog assembly
-├── gallery/           # a2ui-gallery: Gallery App (bin + lib)
-│   ├── src/                       # app.rs / sample_loader.rs / main.rs
-│   ├── tests/e2e.rs               # End-to-end tests (loads spec samples)
-│   └── a2ui/specification/        # Spec tree embedded at build time
-├── slint/             # a2ui-slint: Slint desktop backend (optional, non-default member)
-│   ├── build.rs                  # generates bounded-depth Node0..N7 (Slint can't recurse)
-│   └── src/                      # live_tree (flat node array) / host / ui
-├── slint-gallery/     # a2ui-slint-gallery: desktop Gallery App (bin, left list + right preview)
-│   └── src/main.rs
-├── egui/              # a2ui-egui: egui immediate-mode desktop backend (optional, non-default member)
-│   └── src/                      # walker / app / edit_state / interaction
-├── egui-gallery/      # a2ui-egui-gallery: desktop Gallery App (bin, left list + right preview)
-│   └── src/main.rs
-├── bevy/              # a2ui-bevy: Bevy ECS UI desktop backend (optional, non-default member, reconciler diff/patch)
-│   └── src/                      # reconcile / render / interaction / plugin / state
-├── bevy-gallery/      # a2ui-bevy-gallery: desktop Gallery App (bin, left list + right preview)
-│   └── src/main.rs
-├── iced/              # a2ui-iced: Iced Elm desktop backend (optional, non-default member, view/update)
-│   └── src/                      # walker / app / components / message
-├── iced-gallery/      # a2ui-iced-gallery: desktop Gallery App (bin, left list + right preview)
-│   └── src/main.rs
-└── a2ui/              # a2ui: umbrella, re-exports core+tui [+slint] [+egui] [+bevy] [+iced]
-    ├── src/lib.rs
-    └── examples/                  # 17 examples
-```
+All five backends share the same `a2ui-base` core (interaction logic / `dispatch_event` / `apply_event_result`), but rendering fidelity and "real input" capability vary by GUI framework:
+
+> ✅ Full (rendered; interactive controls accept input) · 🟡 Best-effort (read-only / limited interaction) · ⬜ Placeholder
+
+| Component | TUI (ratatui) | Slint | egui | Bevy | Iced |
+|-----------|:---:|:---:|:---:|:---:|:---:|
+| Text / Row / Column / Card / List / Divider | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Button | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Modal | ✅ | ✅ | ✅ | ✅ | ✅ |
+| TextField | ✅ | 🟡 | ✅ | ✅ | ✅ |
+| CheckBox | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Slider | ✅ | 🟡 | ✅ | ✅ | ✅ |
+| ChoicePicker | ✅ | 🟡 | ✅ | ⬜ | ✅ |
+| Tabs | ✅ | 🟡 | 🟡 | 🟡 | 🟡 |
+| DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | 🟡 |
+| Icon | ✅ | 🟡 | 🟡 | 🟡 | 🟡 |
+| Image | ✅ real | ⬜ | ⬜ | ⬜ | ⬜ |
+| Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ |
+
+¹ Needs the `audio` feature.
+
+- **The TUI backend is the reference implementation** — all 18 components render fully; real images are on by default (`ratatui-image`), audio needs the `audio` feature, video is always a placeholder.
+- **Genuine input on the interactive widgets (TextField / Slider / CheckBox / ChoicePicker)**: full on egui, Bevy, Iced, and TUI. **On Slint only Button / CheckBox clicks are wired** — TextField and Slider render read-only.
+- **Bevy's ChoicePicker** is currently a text label (`[ChoicePicker: …]`); not yet wired to a native picker.
+- **Iced is the cleanest-mapping backend** (no state bridge, no diffing); all five interactive widgets are native.
 
 ## Slint Desktop Backend
 
@@ -221,6 +207,14 @@ A2UI uses a JSON streaming message format to drive UI rendering:
 | `06_call_function` | Server-initiated `callFunction` & `functionResponse` | `cargo run -p a2ui --example 06_call_function` |
 | `07_action_response` | `actionResponse` with `responsePath` reactive updates | `cargo run -p a2ui --example 07_action_response` |
 | `12_handshake` | Capabilities-negotiation handshake | `cargo run -p a2ui --example 12_handshake` |
+| `13_image` | Real image rendering (kitty / iTerm2 / Sixel / Halfblocks auto-degrade) | `cargo run -p a2ui --example 13_image` |
+| `14_audio` | Interactive AudioPlayer (needs the `audio` feature) | `cargo run -p a2ui --example 14_audio` |
+| `15_date_time_input` | Interactive DateTimeInput | `cargo run -p a2ui --example 15_date_time_input` |
+| `16_custom_component` | Custom component — implementing the `TuiComponent` trait | `cargo run -p a2ui --example 16_custom_component` |
+| `17_scifi_hud` | a2ui-driven cyberpunk HUD (see screenshot above) | `cargo run -p a2ui --example 17_scifi_hud` |
+| `18_validate` | Payload validation: integrity / topology / `parse_and_fix`, STRICT vs RELAXED | `cargo run -p a2ui --example 18_validate` |
+
+> 20 examples in total (including the `07b` / `07c` debug variants) — full list in `crates/a2ui/examples/`.
 
 ## Optional Features
 
