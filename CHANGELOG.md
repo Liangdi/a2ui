@@ -1,3 +1,21 @@
+## [0.2.1] - 2026-06-15
+
+### 🚀 Features
+
+- *(core)* Add validate module ported from Python SDK
+
+### 🐛 Bug Fixes
+
+- *(workspace)* Add version to internal path deps for publish
+- *(slint)* Cfg-gate build.rs so the crate publishes without `backend`
+
+### 🚜 Refactor
+
+- Rename a2ui-core -> a2ui-base (name taken on crates.io)
+
+### 📚 Documentation
+
+- Refresh READMEs for the dual-backend reality
 ## [0.2.0] - 2026-06-14
 
 ### 🚀 Features
@@ -28,6 +46,7 @@
 ### ⚙️ Miscellaneous Tasks
 
 - Publish a2ui-slint + a2ui-slint-gallery in dependency order
+- Release
 
 ### ◀️ Revert
 
