@@ -43,3 +43,15 @@ image = { workspace = true, optional = true }
 # Optional: sync HTTP client for remote `http(s)` `Image` URLs (same version the
 # Iced / Slint backends use).
 ureq = { workspace = true, optional = true }
+
+[dev-dependencies]
+# Examples read live values out of the data model and render them with egui
+# widgets directly. `a2ui-tui` provides `build_basic_catalog`; `egui`/`eframe`/
+# `image` are the optional runtime deps made available to examples via the
+# `backend` feature (same pattern as the Iced/Bevy/Slint examples).
+a2ui-tui = { workspace = true }
+
+[[example]]
+name = "17_scifi_hud"
+# Needs the real egui runtime (eframe + glow) to open a window.
+required-features = ["backend"]

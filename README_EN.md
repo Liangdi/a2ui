@@ -48,17 +48,18 @@ The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic c
 
 **Sci-fi HUD — backend comparison** (same data, same `updateDataModel` protocol, different renderer; every live value — gauges, radar sweep, event log — is read from the a2ui data model)
 
-|  |  |
-|:---:|:---:|
-| **ratatui terminal** (`17_scifi_hud` in `a2ui`)<br>![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | **Slint desktop** (`17_scifi_hud` in `a2ui-slint`)<br>![Sci-fi HUD — Slint](screenshot/sci-fi-hud-slint.png) |
-| **Iced desktop** (`17_scifi_hud` in `a2ui-iced`)<br>![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) | **Dioxus desktop** (`17_scifi_hud` in `a2ui-dioxus`)<br>![Sci-fi HUD — Dioxus](screenshot/sci-fi-hud-dioxus.png) |
-| **Bevy desktop** (`17_scifi_hud` in `a2ui-bevy`)<br>![Sci-fi HUD — Bevy](screenshot/sci-fi-hud-bevy.png) | five backends, one protocol payload — only **data** flows through the protocol; each renders its own way |
+|  |  |  |
+|:---:|:---:|:---:|
+| **ratatui terminal** (`17_scifi_hud` in `a2ui`)<br>![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | **Slint desktop** (`17_scifi_hud` in `a2ui-slint`)<br>![Sci-fi HUD — Slint](screenshot/sci-fi-hud-slint.png) | **egui desktop** (`17_scifi_hud` in `a2ui-egui`)<br>![Sci-fi HUD — egui](screenshot/sci-fi-hud-egui.png) |
+| **Iced desktop** (`17_scifi_hud` in `a2ui-iced`)<br>![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) | **Dioxus desktop** (`17_scifi_hud` in `a2ui-dioxus`)<br>![Sci-fi HUD — Dioxus](screenshot/sci-fi-hud-dioxus.png) | **Bevy desktop** (`17_scifi_hud` in `a2ui-bevy`)<br>![Sci-fi HUD — Bevy](screenshot/sci-fi-hud-bevy.png) |
 
-The ratatui version uses custom `TuiComponent`s to draw ASCII gauges and a character-grid radar; the Slint version uses an inline `slint!` component with flex-bar gauges and an ASCII character-grid radar (echoing the ratatui original); the Iced version uses `progress_bar` gauges and a `Canvas`-drawn radar; the Dioxus version uses CSS-bar gauges and an **SVG** radar sweep, rendered into a system WebView; the Bevy version uses **native Bevy UI nodes** (retained ECS: the entity tree is spawned once, then mutated in place each frame — `Text`/`Node`/colors) with flex-bar gauges and an ASCII character-grid radar. The architecture is identical across all five — only **data** flows through the protocol; the rendering layer is each backend's own.
+Six backends, one protocol payload — only **data** flows through the protocol; each renders its own way.
 
-> The sci-fi HUD is currently realized for the **ratatui (TUI)**, **Slint**, **Iced**, **Dioxus**, and **Bevy** backends; only the egui gallery renders the standard spec samples and does not yet have a HUD variant.
+The ratatui version uses custom `TuiComponent`s to draw ASCII gauges and a character-grid radar; the Slint version uses an inline `slint!` component with flex-bar gauges and an ASCII character-grid radar (echoing the ratatui original); the egui version uses native `ProgressBar` gauges and a `Painter`-drawn radar sweep (immediate mode: `ui()` rebuilds the whole widget tree from the data model every frame); the Iced version uses `progress_bar` gauges and a `Canvas`-drawn radar; the Dioxus version uses CSS-bar gauges and an **SVG** radar sweep, rendered into a system WebView; the Bevy version uses **native Bevy UI nodes** (retained ECS: the entity tree is spawned once, then mutated in place each frame — `Text`/`Node`/colors) with flex-bar gauges and an ASCII character-grid radar. The architecture is identical across all six — only **data** flows through the protocol; the rendering layer is each backend's own.
+
+> The sci-fi HUD is now realized for **all six backends** (ratatui terminal + Slint / egui / Iced / Dioxus / Bevy desktop).
 >
-> The Bevy screenshot is produced by `scripts/capture_bevy_screenshot.sh`: on a locked-down GNOME Wayland session desktop screenshot tools are unavailable (`org.gnome.Shell.Screenshot` D-Bus is denied, and X11 tools can't see Wayland-native windows), so the example ships an env-triggered self-screenshot mode that reads the window's render target directly (`Screenshot::primary_window()` + `save_to_disk`), compositor-independent. The Slint screenshot is produced by `scripts/capture_slint_screenshot.sh`: under the same Wayland constraint, the example installs a headless platform (`MinimalSoftwareWindow`) and the software renderer rasterizes straight into an in-memory pixel buffer (no window, no compositor) before encoding a PNG — the Slint analog of Bevy's in-app capture.
+> The Bevy screenshot is produced by `scripts/capture_bevy_screenshot.sh`: on a locked-down GNOME Wayland session desktop screenshot tools are unavailable (`org.gnome.Shell.Screenshot` D-Bus is denied, and X11 tools can't see Wayland-native windows), so the example ships an env-triggered self-screenshot mode that reads the window's render target directly (`Screenshot::primary_window()` + `save_to_disk`), compositor-independent. The Slint screenshot is produced by `scripts/capture_slint_screenshot.sh`: under the same Wayland constraint, the example installs a headless platform (`MinimalSoftwareWindow`) and the software renderer rasterizes straight into an in-memory pixel buffer (no window, no compositor) before encoding a PNG. The egui screenshot is produced by `scripts/capture_egui_screenshot.sh`: the example requests one screenshot via egui's built-in `ViewportCommand::Screenshot`, and eframe's glow backend reads the GPU framebuffer directly *after* painting (`read_screen_rgba`) — no compositor involved, the egui analog of the Bevy/Slint in-app capture.
 
 ## Quick Start
 
@@ -103,7 +104,7 @@ Dependencies flow upward: `a2ui-base` underpins six backends — `a2ui-tui` (rat
 
 ## Backend Support Matrix
 
-All five backends share the same `a2ui-base` core (interaction logic / `dispatch_event` / `apply_event_result`), but rendering fidelity and "real input" capability vary by GUI framework:
+All six backends share the same `a2ui-base` core (interaction logic / `dispatch_event` / `apply_event_result`), but rendering fidelity and "real input" capability vary by GUI framework:
 
 > ✅ Full (rendered; interactive controls accept input) · 🟡 Best-effort (read-only / limited interaction) · ⬜ Placeholder
 

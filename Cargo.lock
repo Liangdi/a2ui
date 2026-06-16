@@ -85,6 +85,7 @@ name = "a2ui-egui"
 version = "0.3.0"
 dependencies = [
  "a2ui-base",
+ "a2ui-tui",
  "eframe",
  "egui",
  "image",

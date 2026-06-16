@@ -48,17 +48,18 @@
 
 **Sci-fi HUD — 后端对比**（同一份数据、同一套 `updateDataModel` 协议，换不同渲染器；仪表 / 雷达扫描 / 事件日志所有实时值均从 a2ui data model 读出）
 
-|  |  |
-|:---:|:---:|
-| **ratatui 终端**（`a2ui` 的 `17_scifi_hud`）<br>![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | **Slint 桌面**（`a2ui-slint` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Slint](screenshot/sci-fi-hud-slint.png) |
-| **Iced 桌面**（`a2ui-iced` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) | **Dioxus 桌面**（`a2ui-dioxus` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Dioxus](screenshot/sci-fi-hud-dioxus.png) |
-| **Bevy 桌面**（`a2ui-bevy` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Bevy](screenshot/sci-fi-hud-bevy.png) | 五个后端，同一份协议数据 —— 仅**数据**经协议流动，渲染层各自为政 |
+|  |  |  |
+|:---:|:---:|:---:|
+| **ratatui 终端**（`a2ui` 的 `17_scifi_hud`）<br>![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | **Slint 桌面**（`a2ui-slint` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Slint](screenshot/sci-fi-hud-slint.png) | **egui 桌面**（`a2ui-egui` 的 `17_scifi_hud`）<br>![Sci-fi HUD — egui](screenshot/sci-fi-hud-egui.png) |
+| **Iced 桌面**（`a2ui-iced` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) | **Dioxus 桌面**（`a2ui-dioxus` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Dioxus](screenshot/sci-fi-hud-dioxus.png) | **Bevy 桌面**（`a2ui-bevy` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Bevy](screenshot/sci-fi-hud-bevy.png) |
 
-ratatui 版用自定义 `TuiComponent` 画 ASCII 仪表 + 字符网格雷达；Slint 版用内联 `slint!` 组件 + flex 条仪表 + ASCII 字符网格雷达（呼应 ratatui 原版）；Iced 版用 `progress_bar` 仪表 + `Canvas` 雷达；Dioxus 版用 CSS 进度条 + **SVG** 雷达扫描,渲染到系统 WebView；Bevy 版用**原生 Bevy UI 节点**(保留式 ECS:实体树 spawn 一次,每帧原位 mutate `Text`/`Node`/颜色)+ flex 条仪表 + ASCII 字符网格雷达。五者架构一致——仅**数据**经协议流动,渲染层各自为政。
+六个后端，同一份协议数据 —— 仅**数据**经协议流动，渲染层各自为政。
 
-> 目前 sci-fi HUD 在 **ratatui (TUI)**、**Slint**、**Iced**、**Dioxus**、**Bevy** 五个后端实现;仅 egui 的 gallery 渲染标准 spec 样例,暂无 HUD 变体。
+ratatui 版用自定义 `TuiComponent` 画 ASCII 仪表 + 字符网格雷达；Slint 版用内联 `slint!` 组件 + flex 条仪表 + ASCII 字符网格雷达（呼应 ratatui 原版）；egui 版用原生 `ProgressBar` 仪表 + `Painter` 绘制的雷达扫描（即时模式:`ui()` 每帧从 data model 读值重建整棵控件树）；Iced 版用 `progress_bar` 仪表 + `Canvas` 雷达；Dioxus 版用 CSS 进度条 + **SVG** 雷达扫描,渲染到系统 WebView；Bevy 版用**原生 Bevy UI 节点**(保留式 ECS:实体树 spawn 一次,每帧原位 mutate `Text`/`Node`/颜色)+ flex 条仪表 + ASCII 字符网格雷达。六者架构一致——仅**数据**经协议流动,渲染层各自为政。
+
+> sci-fi HUD 现已在**全部六个后端**(ratatui 终端 + Slint / egui / Iced / Dioxus / Bevy 桌面)实现。
 >
-> Bevy 版的截图由 `scripts/capture_bevy_screenshot.sh` 产生:锁定 GNOME Wayland 下桌面截图工具不可用(`org.gnome.Shell.Screenshot` D-Bus 被拒、X11 工具看不见 Wayland 原生窗口),故示例内置一个 env 触发的自截图模式,直接读窗口渲染目标(`Screenshot::primary_window()` + `save_to_disk`),与合成器无关。Slint 版的截图由 `scripts/capture_slint_screenshot.sh` 产生:同样的 Wayland 限制下,示例安装一个 headless 平台(`MinimalSoftwareWindow`),软件渲染器直接光栅化进内存像素缓冲区(无需窗口 / 合成器)再编码 PNG —— 与 Bevy 的 in-app 截图路径异曲同工。
+> Bevy 版的截图由 `scripts/capture_bevy_screenshot.sh` 产生:锁定 GNOME Wayland 下桌面截图工具不可用(`org.gnome.Shell.Screenshot` D-Bus 被拒、X11 工具看不见 Wayland 原生窗口),故示例内置一个 env 触发的自截图模式,直接读窗口渲染目标(`Screenshot::primary_window()` + `save_to_disk`),与合成器无关。Slint 版的截图由 `scripts/capture_slint_screenshot.sh` 产生:同样的 Wayland 限制下,示例安装一个 headless 平台(`MinimalSoftwareWindow`),软件渲染器直接光栅化进内存像素缓冲区(无需窗口 / 合成器)再编码 PNG。egui 版的截图由 `scripts/capture_egui_screenshot.sh` 产生:示例用 egui 内置的 `ViewportCommand::Screenshot` 触发一次截图 —— eframe 的 glow 后端在**绘制之后**直接读 GPU 帧缓冲区(`read_screen_rgba`),无需合成器介入,与 Bevy / Slint 的 in-app 截图路径同理。
 
 ## 快速开始
 
@@ -103,7 +104,7 @@ cargo run -p a2ui --example 12_handshake
 
 ## 后端支持矩阵
 
-五个后端共享同一套 `a2ui-base` 核心(交互逻辑 / `dispatch_event` / `apply_event_result`),但渲染保真度与「真输入」能力因 GUI 框架而异:
+六个后端共享同一套 `a2ui-base` 核心(交互逻辑 / `dispatch_event` / `apply_event_result`),但渲染保真度与「真输入」能力因 GUI 框架而异:
 
 > ✅ 完整渲染(可交互控件接受输入) · 🟡 尽力渲染(只读 / 有限交互) · ⬜ 占位符
 
