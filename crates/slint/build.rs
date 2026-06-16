@@ -237,8 +237,23 @@ fn node_body(k: usize, child_comp: Option<&str>) -> String {
     // there is no deeper component to instantiate → emit a truncation marker.
     // (Tabs contributes only its active panel to `me.children` — see
     // live_tree's `build_child_plan` — so this renders just that one panel.)
-    let render_children = match child_comp {
-        Some(c) => format!("for c in me.children : {c} {{ all: all; idx: c; }}"),
+    //
+    // Size-to-content: Slint layouts stretch children to fill the available
+    // space by default, so a Column's children would each grow to fill the
+    // column's height (and a Row's, its width) instead of taking their natural
+    // size — the rendered surface ends up "blown up" rather than packed. We
+    // counteract that *per layout direction*: in a vertical container the child
+    // keeps filling the width (cross-axis, so wrapping text / full-width
+    // controls still work) but takes its natural height (`vertical-stretch: 0`);
+    // in a horizontal container it keeps filling the height but takes its natural
+    // width (`horizontal-stretch: 0`). Which axis to clamp is a property of the
+    // *parent* layout, so we emit two snippets and pick by direction here.
+    let render_children_v = match child_comp {
+        Some(c) => format!("for c in me.children : {c} {{ all: all; idx: c; vertical-stretch: 0; }}"),
+        None => "Text { text: \"…\"; color: #888; }".to_string(),
+    };
+    let render_children_h = match child_comp {
+        Some(c) => format!("for c in me.children : {c} {{ all: all; idx: c; horizontal-stretch: 0; }}"),
         None => "Text { text: \"…\"; color: #888; }".to_string(),
     };
 
@@ -251,13 +266,13 @@ fn node_body(k: usize, child_comp: Option<&str>) -> String {
          \x20   // Column — vertical stack.\n\
          \x20   if me.kind == \"Column\" : VerticalLayout {{\n\
          \x20       spacing: 4px;\n\
-         \x20       {render_children}\n\
+         \x20       {render_children_v}\n\
          \x20   }}\n\
          \n\
          \x20   // Row — horizontal stack.\n\
          \x20   if me.kind == \"Row\" : HorizontalLayout {{\n\
          \x20       spacing: 4px;\n\
-         \x20       {render_children}\n\
+         \x20       {render_children_h}\n\
          \x20   }}\n\
          \n\
          \x20   // Card — bordered panel wrapping one child.\n\
@@ -266,7 +281,7 @@ fn node_body(k: usize, child_comp: Option<&str>) -> String {
          \x20       border-radius: 8px;\n\
          \x20       border-width: 1px;\n\
          \x20       border-color: #d0d0d0;\n\
-         \x20       VerticalLayout {{ padding: 10px; {render_children} }}\n\
+         \x20       VerticalLayout {{ padding: 10px; {render_children_v} }}\n\
          \x20   }}\n\
          \n\
          \x20   // Text — styled paragraph; variant selects heading/caption styles.\n\
@@ -282,7 +297,7 @@ fn node_body(k: usize, child_comp: Option<&str>) -> String {
          \x20       border-radius: 4px;\n\
          \x20       border-width: me.focused ? 2px : 0px;\n\
          \x20       border-color: #1d4ed8;\n\
-         \x20       HorizontalLayout {{ padding: 6px; {render_children} }}\n\
+         \x20       HorizontalLayout {{ padding: 6px; {render_children_h} }}\n\
          \x20       TouchArea {{ clicked => {{ Events.activate(me.id); }} }}\n\
          \x20   }}\n\
          \n\
@@ -307,7 +322,7 @@ fn node_body(k: usize, child_comp: Option<&str>) -> String {
          \x20   // List — vertical stack of children (same layout as Column).\n\
          \x20   if me.kind == \"List\" : VerticalLayout {{\n\
          \x20       spacing: 2px;\n\
-         \x20       {render_children}\n\
+         \x20       {render_children_v}\n\
          \x20   }}\n\
          \n\
          \x20   // CheckBox — native widget; toggled (no-arg) writes back the new state.\n\
@@ -356,7 +371,7 @@ fn node_body(k: usize, child_comp: Option<&str>) -> String {
          \x20               TouchArea {{ clicked => {{ Events.tab-selected(me.id, i); }} }}\n\
          \x20           }}\n\
          \x20       }}\n\
-         \x20       {render_children}\n\
+         \x20       {render_children_v}\n\
          \x20   }}\n\
          \n\
          \x20   // Modal — always renders its trigger child in-place. When open the\n\
@@ -364,7 +379,7 @@ fn node_body(k: usize, child_comp: Option<&str>) -> String {
          \x20   // properties), so the trigger keeps its place and focus.\n\
          \x20   if me.kind == \"Modal\" : Rectangle {{\n\
          \x20       background: transparent;\n\
-         \x20       {render_children}\n\
+         \x20       {render_children_v}\n\
          \x20   }}\n\
          \n\
          \x20   // ChoicePicker (single select) — native ComboBox.\n\
@@ -434,7 +449,7 @@ fn node_body(k: usize, child_comp: Option<&str>) -> String {
          \x20       Rectangle {{\n\
          \x20           background: #fafafa;\n\
          \x20           border-width: 1px; border-color: #ddd;\n\
-         \x20           VerticalLayout {{ padding: 6px; Text {{ text: \"[\" + me.kind + \"]\"; color: #888; {render_children} }} }}\n\
+         \x20           VerticalLayout {{ padding: 6px; Text {{ text: \"[\" + me.kind + \"]\"; color: #888; {render_children_v} }} }}\n\
          \x20       }}\n\
          }}\n",
     )

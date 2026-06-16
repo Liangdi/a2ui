@@ -45,3 +45,18 @@ ureq = { workspace = true, optional = true }
 # Compiles the `.slint` UI files (in `ui/`) into a Rust module consumed by
 # `slint::include_modules!()` in `src/ui.rs`.
 slint-build = { workspace = true, optional = true }
+
+[dev-dependencies]
+# Examples read live values out of the data model and render them with Slint
+# elements directly (NOT via the a2ui-slint reconciler / `live_tree` — the layout
+# *is* an inline `slint!` component; only the data flows through the protocol).
+# `a2ui-tui` provides `build_basic_catalog`; `slint` is the optional runtime dep
+# made available to examples via the `backend` feature (its windowing + software
+# renderer features ride on the crate's `backend` feature when it is enabled).
+a2ui-tui = { workspace = true }
+slint = { workspace = true }
+
+[[example]]
+name = "17_scifi_hud"
+# Needs the real Slint runtime (winit + software renderer) to open a window.
+required-features = ["backend"]

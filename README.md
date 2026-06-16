@@ -26,7 +26,7 @@
 - ✅ **模块化 Cargo workspace 架构**（`a2ui-base` 框架无关 / `a2ui-tui` ratatui backend / `a2ui-gallery` 展示 app / `a2ui` umbrella）
 - ✅ JSON Pointer 数据绑定与响应式状态管理
 - ✅ Gallery App 示例浏览器（支持消息逐步渲染）
-- ✅ **235 个单元/集成测试**（core 127 + tui 61 + gallery e2e 21 + slint 14 + iced 12），包含 A2UI 规范样例的端到端测试
+- ✅ **244 个单元/集成测试**（core 127 + tui 61 + gallery e2e 21 + slint 14 + iced 12 + bevy 9），包含 A2UI 规范样例的端到端测试
 
 ## 截图
 
@@ -50,14 +50,15 @@
 
 |  |  |
 |:---:|:---:|
-| **ratatui 终端**（`a2ui` 的 `17_scifi_hud`）<br>![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | **Iced 桌面**（`a2ui-iced` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) |
-| **Dioxus 桌面**（`a2ui-dioxus` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Dioxus](screenshot/sci-fi-hud-dioxus.png) | **Bevy 桌面**（`a2ui-bevy` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Bevy](screenshot/sci-fi-hud-bevy.png) |
+| **ratatui 终端**（`a2ui` 的 `17_scifi_hud`）<br>![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | **Slint 桌面**（`a2ui-slint` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Slint](screenshot/sci-fi-hud-slint.png) |
+| **Iced 桌面**（`a2ui-iced` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) | **Dioxus 桌面**（`a2ui-dioxus` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Dioxus](screenshot/sci-fi-hud-dioxus.png) |
+| **Bevy 桌面**（`a2ui-bevy` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Bevy](screenshot/sci-fi-hud-bevy.png) | 五个后端，同一份协议数据 —— 仅**数据**经协议流动，渲染层各自为政 |
 
-ratatui 版用自定义 `TuiComponent` 画 ASCII 仪表 + 字符网格雷达；Iced 版用 `progress_bar` 仪表 + `Canvas` 雷达；Dioxus 版用 CSS 进度条 + **SVG** 雷达扫描,渲染到系统 WebView；Bevy 版用**原生 Bevy UI 节点**(保留式 ECS:实体树 spawn 一次,每帧原位 mutate `Text`/`Node`/颜色)+ flex 条仪表 + ASCII 字符网格雷达(呼应 ratatui 原版)。四者架构一致——仅**数据**经协议流动,渲染层各自为政。
+ratatui 版用自定义 `TuiComponent` 画 ASCII 仪表 + 字符网格雷达；Slint 版用内联 `slint!` 组件 + flex 条仪表 + ASCII 字符网格雷达（呼应 ratatui 原版）；Iced 版用 `progress_bar` 仪表 + `Canvas` 雷达；Dioxus 版用 CSS 进度条 + **SVG** 雷达扫描,渲染到系统 WebView；Bevy 版用**原生 Bevy UI 节点**(保留式 ECS:实体树 spawn 一次,每帧原位 mutate `Text`/`Node`/颜色)+ flex 条仪表 + ASCII 字符网格雷达。五者架构一致——仅**数据**经协议流动,渲染层各自为政。
 
-> 目前 sci-fi HUD 在 **ratatui (TUI)**、**Iced**、**Dioxus**、**Bevy** 四个后端实现;Slint / egui 的 gallery 渲染标准 spec 样例,暂无 HUD 变体。
+> 目前 sci-fi HUD 在 **ratatui (TUI)**、**Slint**、**Iced**、**Dioxus**、**Bevy** 五个后端实现;仅 egui 的 gallery 渲染标准 spec 样例,暂无 HUD 变体。
 >
-> Bevy 版的截图由 `scripts/capture_bevy_screenshot.sh` 产生:锁定 GNOME Wayland 下桌面截图工具不可用(`org.gnome.Shell.Screenshot` D-Bus 被拒、X11 工具看不见 Wayland 原生窗口),故示例内置一个 env 触发的自截图模式,直接读窗口渲染目标(`Screenshot::primary_window()` + `save_to_disk`),与合成器无关。
+> Bevy 版的截图由 `scripts/capture_bevy_screenshot.sh` 产生:锁定 GNOME Wayland 下桌面截图工具不可用(`org.gnome.Shell.Screenshot` D-Bus 被拒、X11 工具看不见 Wayland 原生窗口),故示例内置一个 env 触发的自截图模式,直接读窗口渲染目标(`Screenshot::primary_window()` + `save_to_disk`),与合成器无关。Slint 版的截图由 `scripts/capture_slint_screenshot.sh` 产生:同样的 Wayland 限制下,示例安装一个 headless 平台(`MinimalSoftwareWindow`),软件渲染器直接光栅化进内存像素缓冲区(无需窗口 / 合成器)再编码 PNG —— 与 Bevy 的 in-app 截图路径异曲同工。
 
 ## 快速开始
 
@@ -114,24 +115,25 @@ cargo run -p a2ui --example 12_handshake
 | TextField | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | CheckBox | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Slider | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| ChoicePicker | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ |
-| Tabs | ✅ | ✅ | 🟡 | 🟡 | ✅ | ✅ |
-| DateTimeInput | ✅ | ✅ | 🟡 | 🟡 | ✅ | ✅ |
-| Icon | ✅ | ✅ | 🟡 | 🟡 | ✅ | ✅ |
-| Image | ✅² | ✅⁶ | ⬜ | ⬜ | ✅⁵ | ✅³ |
+| ChoicePicker | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Tabs | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ |
+| DateTimeInput | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ |
+| Icon | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ |
+| Image | ✅² | ✅⁶ | ⬜ | ✅⁷ | ✅⁵ | ✅³ |
 | Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
 | AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
 
 ¹ 需 `audio` 特性。
-² TUI 经 `ratatui-image` 真实解码并显示图像像素(kitty / iTerm2 / Sixel / Halfblocks 自动降级,仅本地路径);egui / Bevy 两个桌面后端目前仅渲染文本占位符。
+² TUI 经 `ratatui-image` 真实解码并显示图像像素(kitty / iTerm2 / Sixel / Halfblocks 自动降级,仅本地路径);egui 桌面后端目前仅渲染文本占位符。
 ³ Dioxus 经 WebView 原生 `<img>` 显示图像(支持 `file://` / `http(s)` / `data:` URL)。
 ⁴ Dioxus 经 WebView 原生 `<audio>` / `<video>` 元素真实播放(浏览器提供播放/暂停/进度/音量/全屏等完整传输控件)——这是终端及其它桌面后端做不到的。
 ⁵ Iced 没有内置的 URL 图片加载器(其 `image` 组件只接受本地路径或内存字节),因此 `Image` 的 `http(s)` URL 由后台用 `ureq` 拉取字节、`Handle::from_bytes` 解码后缓存(切换样例时清空);本地路径则直接走 `Handle::from_path`。`fit` 映射到 `ContentFit`。
 ⁶ Slint 经原生 `Image` 组件 + `image` crate 解码渲染图像像素:本地路径(含 `file://`)直接读文件,`http(s)` URL 由 `ureq` 拉取字节后解码(切换样例时清空缓存);`data:` URL 及解码失败的图片为带标签占位符。
+⁷ Bevy 经原生 `ImageNode`(wgpu 纹理)渲染图像像素:`image` crate 解码为 `bevy::image::Image` 后缓存 `Handle`(切换样例时清空)。本地路径(含 `file://`)直接读文件;`http(s)` URL 由 `ureq` 在 UI 线程同步拉取(样例图片少,与 Slint 同构);`data:` URL 及解码失败为带标签占位符。Icon 经内嵌的 ~12 KB NotoEmoji 子集字体显示 emoji(图标名映射表与 TUI / Iced 同名,Bevy 用 emoji 码点)。
 
 - **TUI 是参考实现**:18 组件全部完整渲染;图片默认开启(`ratatui-image`),音频需 `audio` 特性,视频始终为占位符。
 - **可交互输入控件(TextField / Slider / CheckBox / ChoicePicker / DateTimeInput)的「真输入」**:Slint、egui、Bevy、Iced、Dioxus 与 TUI 完整支持(Slint 用原生 `LineEdit` / `Slider` / `CheckBox` / `ComboBox` 控件,变化回调直接写回 data model,与 Iced / egui 同构)。
-- **Bevy 的 ChoicePicker** 当前为文本标签(`[ChoicePicker: …]`),尚未接入原生选择控件。
+- **Bevy 的可交互控件**(保留式 ECS reconciler + 原生 `bevy_ui_widgets`):ChoicePicker 由 reconciler 为每个选项 spawn 可点击行(单选 `●`/`○`、多选 `☑`/`☐`),点击经 marker 写回 data model;Tabs 有可点击 tab 栈 + 仅渲染激活面板(`activeTab` 绑定时写回 model,否则本地跟踪);DateTimeInput 复用 TextField 的 `TextInputNode` 绑定到 `value`;Icon 显示 emoji;Image 经 wgpu 纹理真实渲染。
 - **Iced 是映射最干净的后端**(无状态桥 / 无 diff),五个可交互控件全部原生 —— ChoicePicker 用原生 `pick_list`(单选)/ checkbox 组(多选),DateTimeInput 用绑定到 data model 的可编辑文本框,Tabs 有可点击 tab 栏(绑定的 `activeTab` 写回 data model;gallery 样例未绑定 `activeTab`,则选中的 tab 在本地跟踪,点击仍能切换面板);Icon 直接显示 emoji(映射表与 TUI 一致);**Image 也真实渲染**(本地路径即时解码,远程 URL 后台拉取 + 缓存,见脚注⁵);**Dioxus 架构最独特**(响应式 signals + WebView/CSS 渲染),且借 WebView 之力,Image / Video / AudioPlayer 均用原生 HTML 媒体元素真实渲染——**它是唯一覆盖全部 18 个 A2UI 组件的后端**(连 TUI 的 Video 都是占位符,终端无法播放视频)。
 
 ## Slint 桌面后端
