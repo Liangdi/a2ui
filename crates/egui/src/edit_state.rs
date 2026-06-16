@@ -51,8 +51,6 @@ pub struct EditBuffers {
     number: HashMap<String, f64>,
     /// CheckBox value, keyed by component id.
     boolean: HashMap<String, bool>,
-    /// ChoicePicker selected value, keyed by component id.
-    choice: HashMap<String, String>,
     /// Component ids whose buffer was seeded from the data model this frame —
     /// guards against re-seeding our own just-written value.
     synced_this_frame: HashSet<String>,
@@ -72,7 +70,6 @@ impl EditBuffers {
         self.text.clear();
         self.number.clear();
         self.boolean.clear();
-        self.choice.clear();
         self.synced_this_frame.clear();
         self.generation = self.generation.wrapping_add(1);
     }
@@ -119,17 +116,6 @@ impl EditBuffers {
             self.synced_this_frame.insert(id.to_string());
         }
         self.boolean.get_mut(id).expect("just inserted/ensured")
-    }
-
-    // -- ChoicePicker ----------------------------------------------------
-
-    /// Borrow-or-seed the choice buffer for `id`.
-    pub fn choice_buffer(&mut self, id: &str, resolved: &str) -> &mut String {
-        if !self.choice.contains_key(id) || !self.synced_this_frame.contains(id) {
-            self.choice.insert(id.to_string(), resolved.to_string());
-            self.synced_this_frame.insert(id.to_string());
-        }
-        self.choice.get_mut(id).expect("just inserted/ensured")
     }
 }
 

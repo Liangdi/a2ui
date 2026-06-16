@@ -26,6 +26,13 @@ pub enum PendingInteraction {
     /// A2UI convention; template children resolve their relative path to
     /// absolute before emitting this). Matches `DataModel::set`'s contract.
     DataUpdate { path: String, value: Value },
+    /// A Tabs title was clicked. When the Tabs' `activeTab` is a data binding
+    /// the click instead emits a [`PendingInteraction::DataUpdate`] (the model
+    /// is the source of truth); this is only used when `activeTab` is absent or
+    /// literal — the gallery's samples fall in this case — so the selected tab
+    /// is tracked locally on the app (see `EguiApp::local_tabs`). Mirrors the
+    /// Iced backend's `Message::TabActivate`.
+    TabActivate { component_id: String, index: usize },
     /// Toggle a boolean at `path` (CheckBox without a direct target value).
     /// `path` is absolute.
     Toggle { path: String },

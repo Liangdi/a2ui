@@ -26,7 +26,7 @@
 - ✅ **模块化 Cargo workspace 架构**（`a2ui-base` 框架无关 / `a2ui-tui` ratatui backend / `a2ui-gallery` 展示 app / `a2ui` umbrella）
 - ✅ JSON Pointer 数据绑定与响应式状态管理
 - ✅ Gallery App 示例浏览器（支持消息逐步渲染）
-- ✅ **244 个单元/集成测试**（core 127 + tui 61 + gallery e2e 21 + slint 14 + iced 12 + bevy 9），包含 A2UI 规范样例的端到端测试
+- ✅ **257 个单元/集成测试**（core 127 + tui 61 + gallery e2e 21 + slint 14 + iced 12 + bevy 9 + egui 13），包含 A2UI 规范样例的端到端测试
 
 ## 截图
 
@@ -116,20 +116,21 @@ cargo run -p a2ui --example 12_handshake
 | CheckBox | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Slider | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | ChoicePicker | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Tabs | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ |
-| DateTimeInput | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ |
-| Icon | ✅ | ✅ | 🟡 | ✅ | ✅ | ✅ |
-| Image | ✅² | ✅⁶ | ⬜ | ✅⁷ | ✅⁵ | ✅³ |
+| Tabs | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| DateTimeInput | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Icon | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Image | ✅² | ✅⁶ | ✅⁸ | ✅⁷ | ✅⁵ | ✅³ |
 | Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
 | AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
 
 ¹ 需 `audio` 特性。
-² TUI 经 `ratatui-image` 真实解码并显示图像像素(kitty / iTerm2 / Sixel / Halfblocks 自动降级,仅本地路径);egui 桌面后端目前仅渲染文本占位符。
+² TUI 经 `ratatui-image` 真实解码并显示图像像素(kitty / iTerm2 / Sixel / Halfblocks 自动降级,仅本地路径)。
 ³ Dioxus 经 WebView 原生 `<img>` 显示图像(支持 `file://` / `http(s)` / `data:` URL)。
 ⁴ Dioxus 经 WebView 原生 `<audio>` / `<video>` 元素真实播放(浏览器提供播放/暂停/进度/音量/全屏等完整传输控件)——这是终端及其它桌面后端做不到的。
 ⁵ Iced 没有内置的 URL 图片加载器(其 `image` 组件只接受本地路径或内存字节),因此 `Image` 的 `http(s)` URL 由后台用 `ureq` 拉取字节、`Handle::from_bytes` 解码后缓存(切换样例时清空);本地路径则直接走 `Handle::from_path`。`fit` 映射到 `ContentFit`。
 ⁶ Slint 经原生 `Image` 组件 + `image` crate 解码渲染图像像素:本地路径(含 `file://`)直接读文件,`http(s)` URL 由 `ureq` 拉取字节后解码(切换样例时清空缓存);`data:` URL 及解码失败的图片为带标签占位符。
 ⁷ Bevy 经原生 `ImageNode`(wgpu 纹理)渲染图像像素:`image` crate 解码为 `bevy::image::Image` 后缓存 `Handle`(切换样例时清空)。本地路径(含 `file://`)直接读文件;`http(s)` URL 由 `ureq` 在 UI 线程同步拉取(样例图片少,与 Slint 同构);`data:` URL 及解码失败为带标签占位符。Icon 经内嵌的 ~12 KB NotoEmoji 子集字体显示 emoji(图标名映射表与 TUI / Iced 同名,Bevy 用 emoji 码点)。
+⁸ egui 经原生 `Image` 组件(wgpu/glow 纹理)渲染图像像素:`image` crate 解码为 `egui::ColorImage` → `TextureHandle` 后缓存(切换样例时清空)。本地路径(含 `file://`)直接读文件;`http(s)` URL 由 `ureq` 在每帧渲染前同步拉取一次(样例图片少,与 Bevy / Slint 同构;失败者缓存为占位符不重试);`data:` URL 及解码失败为带标签占位符。Icon 同样经内嵌的 ~12 KB NotoEmoji 子集字体显示 emoji(与 Bevy 同名 `a2ui-icons.ttf`,映射表用 emoji 码点)。
 
 - **TUI 是参考实现**:18 组件全部完整渲染;图片默认开启(`ratatui-image`),音频需 `audio` 特性,视频始终为占位符。
 - **可交互输入控件(TextField / Slider / CheckBox / ChoicePicker / DateTimeInput)的「真输入」**:Slint、egui、Bevy、Iced、Dioxus 与 TUI 完整支持(Slint 用原生 `LineEdit` / `Slider` / `CheckBox` / `ComboBox` 控件,变化回调直接写回 data model,与 Iced / egui 同构)。
@@ -186,7 +187,7 @@ Slint 标准控件库(`std-widgets.slint`)提供原生 `LineEdit` / `Slider` / `
 
 ## egui 桌面后端
 
-除 ratatui 与 Slint 外,项目还提供 **`a2ui-egui`**:它把 A2UI 组件树渲染到原生桌面窗口,基于 [egui](https://github.com/emilk/egui)(即时模式 GUI,固定 0.33 版本)。与 Slint 后端不同,egui **原生支持递归**,因此不需要展平组件树或 `build.rs` 有界深度代码生成;`walker::render_node` 直接在 `&mut egui::Ui` 上递归渲染。egui 还提供**真正的可交互原生控件**(TextField / Slider / CheckBox / ComboBox)。Button 的点击复用共享的 `core::components::dispatch_event` + `apply_event_result`,与其它两个后端一致;Modal 用原生的 `egui::Window` 浮层呈现。
+除 ratatui 与 Slint 外,项目还提供 **`a2ui-egui`**:它把 A2UI 组件树渲染到原生桌面窗口,基于 [egui](https://github.com/emilk/egui)(即时模式 GUI,固定 0.34 版本)。与 Slint 后端不同,egui **原生支持递归**,因此不需要展平组件树或 `build.rs` 有界深度代码生成;`walker::render_node` 直接在 `&mut egui::Ui` 上递归渲染。egui 还提供**真正的可交互原生控件**(TextField / Slider / CheckBox / ComboBox)。Button 的点击复用共享的 `core::components::dispatch_event` + `apply_event_result`,与其它两个后端一致;Modal 用原生的 `egui::Window` 浮层呈现。
 
 **它是可选依赖**:`a2ui-egui` 是 workspace 的**非默认成员**(会拉取 winit + glow)。普通的 `cargo build` 只编译 ratatui 栈。需要显式构建:
 
@@ -195,6 +196,16 @@ cargo build -p a2ui-egui --features backend
 ```
 
 umbrella crate 也在 `egui` cargo feature 之后将后端 re-export 为 `a2ui::egui`。
+
+### 组件覆盖
+
+16 个 A2UI 组件类型可原生渲染(仅 Video / AudioPlayer 仍为占位符 —— egui 无媒体播放控件):
+
+- **容器 / 内容**:Text(h1/h2/h3 标题大小)/ Row / Column / Card / List / Divider / Modal(原生 `egui::Window` 浮层)/ Button(primary / secondary / borderless 三种样式,`checks` 校验失败时禁用)
+- **可交互控件(全部原生,真输入写回 data model)**:TextField(`text_edit_single_line`)/ CheckBox / Slider / ChoicePicker(单选用原生 `ComboBox`,多选用 checkbox 组,写回 `json!([value])` 数组)/ DateTimeInput(绑定到 data model 的可编辑 ISO 文本框;egui 无日历控件,故采用文本输入 + `enableDate`/`enableTime` 格式提示)/ Tabs(可点击 tab 栏 + 内容面板;绑定的 `activeTab` 写回 data model,未绑定则在本地跟踪)
+- **Icon**:映射到 emoji 字形,经内嵌的 ~12 KB NotoEmoji 子集字体显示(egui 默认字体无任何图标字形,故安装一个名为 `Icons` 的独立字体族;映射表用 emoji 码点,与 Bevy 同名 `a2ui-icons.ttf`,未知名称回退为 `[前两字符]`)
+- **Image**:真实渲染 —— 本地路径(含 `file://`)直接读文件,`http(s)` URL 在每帧渲染前由 `ureq` 同步拉取一次,均经 `image` crate 解码为 `egui::ColorImage` → `TextureHandle` 后用原生 `Image` 组件显示(切换样例时清空缓存;失败者缓存为占位符不重试;`data:` URL 及解码失败为带标签占位符)
+- **占位符**:Video / AudioPlayer 渲染为带标签的占位符
 
 ### 即时模式状态桥(实现要点)
 

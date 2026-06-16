@@ -27,6 +27,8 @@ pub mod components;
 #[cfg(feature = "backend")]
 pub mod edit_state;
 #[cfg(feature = "backend")]
+pub mod images;
+#[cfg(feature = "backend")]
 pub mod interaction;
 #[cfg(feature = "backend")]
 pub mod walker;

@@ -87,7 +87,9 @@ dependencies = [
  "a2ui-base",
  "eframe",
  "egui",
+ "image",
  "serde_json",
+ "ureq",
 ]
 
 [[package]]

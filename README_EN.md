@@ -115,20 +115,22 @@ All five backends share the same `a2ui-base` core (interaction logic / `dispatch
 | TextField | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | CheckBox | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Slider | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| ChoicePicker | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ |
-| Tabs | ✅ | ✅ | 🟡 | 🟡 | ✅ | ✅ |
-| DateTimeInput | ✅ | ✅ | 🟡 | 🟡 | ✅ | ✅ |
-| Icon | ✅ | ✅ | 🟡 | 🟡 | ✅ | ✅ |
-| Image | ✅² | ✅⁶ | ⬜ | ⬜ | ✅⁵ | ✅³ |
+| ChoicePicker | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Tabs | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| DateTimeInput | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Icon | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Image | ✅² | ✅⁶ | ✅⁸ | ✅⁷ | ✅⁵ | ✅³ |
 | Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
 | AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
 
 ¹ Needs the `audio` feature.
-² The TUI backend decodes and renders actual image pixels via `ratatui-image` (kitty / iTerm2 / Sixel / Halfblocks auto-degrade, local paths only); the egui / Bevy desktop backends currently render only a text placeholder.
+² The TUI backend decodes and renders actual image pixels via `ratatui-image` (kitty / iTerm2 / Sixel / Halfblocks auto-degrade, local paths only).
 ³ The Dioxus backend renders images via the native WebView `<img>` (supports `file://` / `http(s)` / `data:` URLs).
 ⁴ The Dioxus backend plays real media via the native WebView `<audio>` / `<video>` elements (the browser supplies full transport controls — play/pause/seek/volume/fullscreen) — something the terminal and other desktop backends cannot do.
 ⁵ Iced has no built-in URL image loader (its `image` widget only takes a local path or in-memory bytes), so an `Image`'s `http(s)` URL is fetched out-of-band with `ureq`, decoded via `Handle::from_bytes`, and cached (cleared on sample switch); local paths go straight through `Handle::from_path`. `fit` maps onto `ContentFit`.
 ⁶ The Slint backend renders actual image pixels via its native `Image` widget + the `image` crate: local paths (incl. `file://`) are read directly, `http(s)` URLs are fetched with `ureq` then decoded (cached and cleared on sample switch); `data:` URLs and images that fail to decode render as a labeled placeholder.
+⁷ The Bevy backend renders actual image pixels via the native `ImageNode` (a wgpu texture): the `image` crate decodes to a `bevy::image::Image` and the `Handle` is cached (cleared on sample switch). Local paths (incl. `file://`) are read directly; `http(s)` URLs are fetched synchronously on the UI thread with `ureq` (few sample images, isomorphic with Slint); `data:` URLs and decode failures render as a labeled placeholder. Icons render as emoji via the embedded ~12 KB NotoEmoji subset font (same icon-name table as TUI / Iced; Bevy uses emoji codepoints).
+⁸ The egui backend renders actual image pixels via the native `Image` widget (a wgpu/glow texture): the `image` crate decodes to an `egui::ColorImage` → `TextureHandle` which is cached (cleared on sample switch). Local paths (incl. `file://`) are read directly; `http(s)` URLs are fetched synchronously with `ureq` once, just before the per-frame walk (few sample images, isomorphic with Bevy / Slint; a failed fetch is cached as a placeholder and not retried); `data:` URLs and decode failures render as a labeled placeholder. Icons likewise render as emoji via the embedded ~12 KB NotoEmoji subset font (same `a2ui-icons.ttf` as Bevy; emoji-codepoint mapping).
 
 - **The TUI backend is the reference implementation** — all 18 components render fully; real images are on by default (`ratatui-image`), audio needs the `audio` feature, video is always a placeholder.
 - **Genuine input on the interactive widgets (TextField / Slider / CheckBox / ChoicePicker / DateTimeInput)**: full on Slint, egui, Bevy, Iced, Dioxus, and TUI (Slint uses native `LineEdit` / `Slider` / `CheckBox` / `ComboBox` widgets, with change callbacks writing straight back to the data model, isomorphic with Iced / egui).

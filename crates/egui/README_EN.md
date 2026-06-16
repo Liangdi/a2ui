@@ -10,7 +10,7 @@ English | [中文](README.md)
 >
 > This crate is the third rendering backend of the [`a2ui`](https://crates.io/crates/a2ui) workspace. See the [root README](https://github.com/Liangdi/a2ui#readme) for the full introduction.
 
-Renders an [A2UI](https://github.com/a2ui-project/a2ui) component tree onto a **native desktop window**, built on [egui](https://github.com/emilk/egui) (immediate-mode GUI, pinned 0.33). Unlike the [Slint](https://crates.io/crates/a2ui-slint) backend, egui **supports recursion natively**, so there is no tree flattening or `build.rs` bounded-depth codegen — `walker::render_node` recurses straight into a `&mut egui::Ui`. egui also offers **real interactive native widgets** (TextField / Slider / CheckBox / ComboBox), where the Slint backend renders them as read-only placeholders. Button clicks reuse the shared `core::components::dispatch_event` + `apply_event_result`, identical to the other two backends.
+Renders an [A2UI](https://github.com/a2ui-project/a2ui) component tree onto a **native desktop window**, built on [egui](https://github.com/emilk/egui) (immediate-mode GUI, pinned 0.34). Unlike the [Slint](https://crates.io/crates/a2ui-slint) backend, egui **supports recursion natively**, so there is no tree flattening or `build.rs` bounded-depth codegen — `walker::render_node` recurses straight into a `&mut egui::Ui`. egui also offers **real interactive native widgets** (TextField / Slider / CheckBox / ComboBox). 16 of the A2UI components render natively (only Video / AudioPlayer are placeholders): every interactive widget writes genuine input back to the data model; DateTimeInput is an editable ISO text field bound to `value`; Tabs has a clickable tab bar; Icons render as emoji via an embedded ~12 KB NotoEmoji subset font; Images render for real via the `image` crate decoding to an `egui::ColorImage` → `TextureHandle` (local paths decode immediately, remote URLs are fetched synchronously before the walk + cached). Button clicks reuse the shared `core::components::dispatch_event` + `apply_event_result`, identical to the other backends; Modals use a native `egui::Window` overlay.
 
 > **Optional dependency**: this crate is a **non-default workspace member** (it pulls in winit + glow); a plain `cargo build` does not compile it.
 
@@ -50,6 +50,7 @@ This is isomorphic to the TUI gallery's "drop the borrow, then mutate" and the S
 | `walker` | Recursively renders the A2UI component tree → `&mut egui::Ui` |
 | `app` | `EguiApp` — owns the surface state, drives the immediate-mode render loop |
 | `components` | egui implementations of each A2UI component (real native widgets) |
+| `images` | Byte fetching + decoding for the `Image` component → `egui::ColorImage` |
 | `edit_state` | `EditBuffers` — the immediate-mode ↔ data model state bridge |
 | `interaction` | Maps egui interactions back onto the shared core interaction layer |
 

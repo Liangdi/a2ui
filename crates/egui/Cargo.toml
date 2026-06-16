@@ -17,10 +17,15 @@ default = []
 # (glow) renderer. eframe's own `default` feature set (carried via the workspace
 # dep) supplies the winit X11/Wayland backends; we just opt into the glow
 # renderer + default fonts explicitly here. Swap in `eframe/wgpu` later if GPU
-# acceleration is wanted.
+# acceleration is wanted. The `image` crate decodes raster `Image` components to
+# egui textures; `ureq` fetches remote `http(s)` image URLs (blocking, on the UI
+# thread — matching the Slint/Bevy backends; the gallery samples carry only a
+# handful of small images).
 backend = [
     "dep:egui",
     "dep:eframe",
+    "dep:image",
+    "dep:ureq",
     "eframe/glow",
     "eframe/default_fonts",
 ]
@@ -32,3 +37,9 @@ serde_json = { workspace = true }
 # minimal. A windowing backend/renderer is selected by the `backend` feature.
 egui = { workspace = true, optional = true }
 eframe = { workspace = true, optional = true }
+# Optional: raster image decoding for the `Image` component (PNG / JPEG / … →
+# egui `ColorImage`/`TextureHandle`), mirroring the Bevy/Iced/Slint backends.
+image = { workspace = true, optional = true }
+# Optional: sync HTTP client for remote `http(s)` `Image` URLs (same version the
+# Iced / Slint backends use).
+ureq = { workspace = true, optional = true }

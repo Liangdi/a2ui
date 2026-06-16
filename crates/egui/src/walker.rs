@@ -17,9 +17,9 @@ use a2ui_base::model::components_model::SurfaceComponentsModel;
 use a2ui_base::model::data_model::DataModel;
 
 use crate::components::{Walk, render_button, render_card, render_checkbox, render_choice_picker,
-    render_column, render_date_time_input, render_divider, render_icon, render_media_placeholder,
-    render_modal, render_row, render_slider, render_tabs, render_text, render_text_field,
-    render_unknown};
+    render_column, render_date_time_input, render_divider, render_icon, render_image,
+    render_media_placeholder, render_modal, render_row, render_slider, render_tabs, render_text,
+    render_text_field, render_unknown};
 use crate::edit_state::EditBuffers;
 use crate::interaction::PendingInteraction;
 
@@ -35,6 +35,8 @@ pub fn render_node(
     functions: &HashMap<String, Box<dyn FunctionImplementation>>,
     focused_id: Option<&str>,
     open_modals: &HashSet<String>,
+    image_cache: &HashMap<String, Option<egui::TextureHandle>>,
+    local_tabs: &HashMap<String, usize>,
     edit_buffers: &mut EditBuffers,
     pending: &mut Vec<PendingInteraction>,
 ) {
@@ -53,6 +55,8 @@ pub fn render_node(
         functions,
         focused_id,
         open_modals,
+        image_cache,
+        local_tabs,
     };
 
     let ctx = ComponentContext::new(
@@ -77,8 +81,10 @@ pub fn render_node(
         "Text" => render_text(ui, &ctx, comp_model),
         "Divider" => render_divider(ui),
         "Icon" => render_icon(ui, &ctx, comp_model),
-        "DateTimeInput" => render_date_time_input(ui, &ctx, comp_model),
-        "Image" => render_media_placeholder(ui, "Image", &ctx, comp_model),
+        "DateTimeInput" => {
+            render_date_time_input(&walk, ui, edit_buffers, pending, &ctx, comp_model)
+        }
+        "Image" => render_image(&walk, ui, &ctx, comp_model),
         "Video" => render_media_placeholder(ui, "Video", &ctx, comp_model),
         "AudioPlayer" => render_media_placeholder(ui, "Audio", &ctx, comp_model),
 

@@ -10,7 +10,7 @@
 >
 > 本 crate 是 [`a2ui`](https://crates.io/crates/a2ui) workspace 的第三渲染后端,完整介绍见[根目录 README](https://github.com/Liangdi/a2ui#readme)。
 
-把 [A2UI](https://github.com/a2ui-project/a2ui) 组件树渲染到**原生桌面窗口**,基于 [egui](https://github.com/emilk/egui)(即时模式 GUI,固定 0.33)。与 [Slint](https://crates.io/crates/a2ui-slint) 后端不同,egui **原生支持递归**,因此无需展平组件树或 `build.rs` 有界深度代码生成 —— `walker::render_node` 直接在 `&mut egui::Ui` 上递归渲染。egui 还提供**真正的可交互原生控件**(TextField / Slider / CheckBox / ComboBox),而 Slint 后端把它们渲染为只读占位符。Button 的点击复用共享的 `core::components::dispatch_event` + `apply_event_result`,与其它两个后端一致。
+把 [A2UI](https://github.com/a2ui-project/a2ui) 组件树渲染到**原生桌面窗口**,基于 [egui](https://github.com/emilk/egui)(即时模式 GUI,固定 0.34)。与 [Slint](https://crates.io/crates/a2ui-slint) 后端不同,egui **原生支持递归**,因此无需展平组件树或 `build.rs` 有界深度代码生成 —— `walker::render_node` 直接在 `&mut egui::Ui` 上递归渲染。egui 还提供**真正的可交互原生控件**(TextField / Slider / CheckBox / ComboBox)。16 个 A2UI 组件均可原生渲染(仅 Video / AudioPlayer 为占位符):交互控件全部真输入写回 data model;DateTimeInput 是绑定到 `value` 的可编辑 ISO 文本框;Tabs 有可点击 tab 栏;Icon 经内嵌的 ~12 KB NotoEmoji 子集字体显示 emoji;Image 经 `image` crate 解码为 `egui::ColorImage` → `TextureHandle` 真实渲染(本地路径即时解码,远程 URL 渲染前同步拉取 + 缓存)。Button 的点击复用共享的 `core::components::dispatch_event` + `apply_event_result`,与其它后端一致;Modal 用原生的 `egui::Window` 浮层呈现。
 
 > **可选依赖**:本 crate 是 workspace 的**非默认成员**(会拉取 winit + glow),普通 `cargo build` 不编译它。
 
@@ -50,6 +50,7 @@ egui 控件每帧都需要一个稳定的 `&mut` 缓冲区(保留光标 / 滚动
 | `walker` | 递归渲染 A2UI 组件树 → `&mut egui::Ui` |
 | `app` | `EguiApp` —— 持有 surface 状态、驱动即时模式渲染循环 |
 | `components` | 各 A2UI 组件的 egui 实现(真实原生控件) |
+| `images` | `Image` 组件的字节抓取 + 解码 → `egui::ColorImage` |
 | `edit_state` | `EditBuffers` —— 即时模式 ↔ data model 状态桥 |
 | `interaction` | 把 egui 交互映射回共享的 core 交互层 |
 
