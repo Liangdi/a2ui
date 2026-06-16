@@ -1,3 +1,35 @@
+## [0.3.0] - 2026-06-16
+
+### 🚀 Features
+
+- *(modal)* Real open/close interaction + floating overlay on both backends
+- *(egui)* Add a2ui-egui immediate-mode backend (third renderer)
+- *(bevy)* Add a2ui-bevy ECS UI backend (fourth renderer)
+- *(iced)* Add a2ui-iced Elm-architecture backend (fifth renderer)
+- *(iced)* Add 17_scifi_hud example + ratatui/Iced HUD comparison
+- *(iced)* Modernize gallery UI — dark Catppuccin Mocha theme + restyled chrome
+- *(iced)* Switch gallery theme to green + refresh screenshot
+- *(gallery)* Restyle chrome with ratatui-sci-fi (Panel/ScanList/Divider/Value)
+- *(dioxus)* Add Dioxus 0.7 WebView backend (sixth renderer)
+- *(dioxus)* Complete all 18 components (Tabs/ChoicePicker/DateTime/Icon/Image/Video/Audio)
+- *(iced)* Complete native Tabs/ChoicePicker/DateTimeInput/Icon + real Image rendering
+- *(bevy)* Add sci-fi HUD example + screenshot capture
+- *(slint)* Complete native interactive controls + real image rendering
+- *(slint)* Add sci-fi HUD example + headless screenshot capture
+- *(bevy)* Native ChoicePicker/Tabs/DateTimeInput/Icon/Image + Modal chrome
+- *(egui)* Complete native ChoicePicker/Tabs/DateTimeInput/Icon/Image
+- *(core)* Implement @index system function for template lists
+
+### 🐛 Bug Fixes
+
+- *(tui)* Size AudioPlayer to fit full player UI
+
+### 📚 Documentation
+
+- *(crates)* Add bilingual READMEs marking each crate as part of the a2ui ecosystem
+- *(bevy)* Add bilingual READMEs for a2ui-bevy and a2ui-bevy-gallery
+- Refresh READMEs — 5-backend matrix, validate module, accurate counts
+- Rewrite intro for the 5-backend reality + clarify Image cell
 ## [0.2.1] - 2026-06-15
 
 ### 🚀 Features
@@ -16,6 +48,10 @@
 ### 📚 Documentation
 
 - Refresh READMEs for the dual-backend reality
+
+### ⚙️ Miscellaneous Tasks
+
+- Release
 ## [0.2.0] - 2026-06-14
 
 ### 🚀 Features

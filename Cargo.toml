@@ -8,7 +8,7 @@ members = ["crates/core", "crates/tui", "crates/gallery", "crates/a2ui", "crates
 default-members = ["crates/core", "crates/tui", "crates/gallery", "crates/a2ui"]
 
 [workspace.package]
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 authors = ["Liangdi <wu@liangdi.me>"]
 license = "MIT"
@@ -143,14 +143,14 @@ dioxus = { version = "0.7", default-features = false, features = [
 # a `version` (the workspace package version) so `cargo publish` can resolve them
 # against crates.io (the `path` is stripped on publish). Consumers use
 # `{ workspace = true }` and inherit both.
-a2ui-base = { path = "crates/core", version = "0.2.1" }
-a2ui-tui = { path = "crates/tui", version = "0.2.1" }
-a2ui-gallery = { path = "crates/gallery", version = "0.2.1" }
-a2ui-slint = { path = "crates/slint", version = "0.2.1" }
-a2ui-egui = { path = "crates/egui", version = "0.2.1" }
-a2ui-bevy = { path = "crates/bevy", version = "0.2.1" }
-a2ui-iced = { path = "crates/iced", version = "0.2.1" }
-a2ui-dioxus = { path = "crates/dioxus", version = "0.2.1" }
+a2ui-base = { path = "crates/core", version = "0.3.0" }
+a2ui-tui = { path = "crates/tui", version = "0.3.0" }
+a2ui-gallery = { path = "crates/gallery", version = "0.3.0" }
+a2ui-slint = { path = "crates/slint", version = "0.3.0" }
+a2ui-egui = { path = "crates/egui", version = "0.3.0" }
+a2ui-bevy = { path = "crates/bevy", version = "0.3.0" }
+a2ui-iced = { path = "crates/iced", version = "0.3.0" }
+a2ui-dioxus = { path = "crates/dioxus", version = "0.3.0" }
 
 # --- Release profile: optimize for binary size --------------------------------
 # The gallery embeds the full spec tree, so we trim the distributed binary.
