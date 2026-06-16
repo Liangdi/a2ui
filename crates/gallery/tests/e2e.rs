@@ -891,3 +891,188 @@ fn test_e2e_all_basic_samples_load_and_parse() {
         }
     }
 }
+
+// ===================================================================
+// Capitalized Text — gallery render/dispatch catalog reactivity
+// ===================================================================
+//
+// Regression for the gallery "Capitalized Text has no interaction" bug: the
+// gallery used a basic-only catalog for rendering/dispatch, so `capitalize`
+// (minimal-only) was never resolved and the function-bound `Text` stayed empty.
+// The fix is `a2ui_gallery::app::build_gallery_catalog`, which folds the
+// minimal functions into the basic catalog. These tests pin that fix.
+
+/// Render the gallery's active surface into a `cols x rows` TestBackend buffer
+/// and return the flattened cell text — the same render path the live gallery
+/// uses, minus the real terminal.
+fn render_gallery_surface(
+    processor: &MessageProcessor,
+    registry: &a2ui_tui::component_impl::ComponentRegistry,
+    catalog: &a2ui_base::catalog::Catalog,
+    focus: &a2ui_tui::focus_manager::FocusManager,
+    cols: u16,
+    rows: u16,
+) -> String {
+    use a2ui_tui::surface::SurfaceRenderer;
+    use ratatui::backend::TestBackend;
+
+    let surface = processor.model.surfaces().next().expect("surface exists");
+    let backend = TestBackend::new(cols, rows);
+    let mut terminal = ratatui::Terminal::new(backend).unwrap();
+    terminal
+        .draw(|frame| {
+            let renderer = SurfaceRenderer::new(surface, registry, catalog);
+            renderer.render(frame, frame.area(), focus.focused_id());
+        })
+        .unwrap();
+    let buf = terminal.backend().buffer();
+    let area = buf.area();
+    let mut out = String::new();
+    for y in 0..area.height {
+        for x in 0..area.width {
+            out.push_str(buf[(x, y)].symbol());
+        }
+        out.push('\n');
+    }
+    out
+}
+
+#[test]
+fn test_gallery_catalog_includes_minimal_capitalize() {
+    // The gallery render/dispatch catalog must carry `capitalize`; the bare
+    // basic catalog does not (that was the root cause of the bug).
+    let gallery = a2ui_gallery::app::build_gallery_catalog();
+    assert!(
+        gallery.get_function("capitalize").is_some(),
+        "gallery catalog must expose the minimal `capitalize` function"
+    );
+    let basic = a2ui_tui::catalogs::basic::build_basic_catalog();
+    assert!(
+        basic.get_function("capitalize").is_none(),
+        "basic catalog alone must NOT have `capitalize` (sanity check)"
+    );
+}
+
+#[test]
+fn test_e2e_capitalized_text_reacts_live_in_gallery() {
+    use a2ui_base::event::InputEvent;
+    use a2ui_tui::catalogs::basic::{build_basic_catalog, build_basic_registry};
+    use a2ui_tui::catalogs::minimal::build_minimal_catalog;
+    use a2ui_tui::focus_manager::FocusManager;
+    use a2ui_tui::interaction;
+    use crossterm::event::KeyCode;
+
+    // Load the minimal "Capitalized Text" sample.
+    let samples = a2ui_gallery::sample_loader::load_samples("v1_0/catalogs/minimal/examples");
+    let sample = samples
+        .iter()
+        .find(|s| s.file_path == "6_capitalized_text.json")
+        .expect("6_capitalized_text.json sample should exist");
+
+    // Processor owns both catalogs (as the gallery does) so the sample parses.
+    let mut processor =
+        MessageProcessor::new(vec![build_basic_catalog(), build_minimal_catalog()]);
+    for msg in sample.messages.clone() {
+        processor.process_message(msg).unwrap();
+    }
+
+    // The gallery's merged render/dispatch catalog — the thing under fix.
+    let registry = build_basic_registry();
+    let catalog = a2ui_gallery::app::build_gallery_catalog();
+
+    // Focus the TextField (the only focusable component).
+    let mut focus = FocusManager::new();
+    {
+        let surface = processor.model.surfaces().next().unwrap();
+        let components = surface.components.borrow();
+        focus.rebuild_from_components(&components);
+    }
+    assert_eq!(focus.focused_id(), Some("input_field"));
+
+    // Initially capitalize("") == "" — no capitalized output rendered yet.
+    let text = render_gallery_surface(&processor, &registry, &catalog, &focus, 80, 20);
+    assert!(!text.contains("Hello"), "should be empty before typing:\n{text}");
+
+    // Type "hello" through the same interaction pipeline the gallery uses.
+    for ch in "hello".chars() {
+        let key = interaction::map_key_code(KeyCode::Char(ch)).unwrap();
+        let event = InputEvent::KeyPress { key };
+        let result =
+            interaction::dispatch_to_focused(&processor, &registry, &catalog, &focus, &event);
+        if let Some(result) = result {
+            interaction::apply_event_result(&mut processor, result);
+        }
+    }
+
+    // The function-bound Text must now show the capitalized value.
+    let text = render_gallery_surface(&processor, &registry, &catalog, &focus, 80, 20);
+    assert!(
+        text.contains("Hello"),
+        "capitalized output missing after typing (capitalize not resolved):\n{text}"
+    );
+
+    // And the two-way binding wrote the raw value back to the data model.
+    let surface = processor.model.surfaces().next().unwrap();
+    assert_eq!(
+        surface.data_model.borrow().get("/inputValue"),
+        Some(&serde_json::json!("hello"))
+    );
+}
+
+#[test]
+fn test_e2e_incremental_dashboard_progressive_rendering() {
+    // "Incremental Dashboard" exists to show progressive rendering: loading
+    // placeholders are replaced step by step with real content. The gallery's
+    // stepper reveals this by processing one message at a time (Enter lands on
+    // step 1, `n` advances). This test drives that same step-by-step processing
+    // and asserts the rendered surface evolves correctly at each step.
+    use a2ui_tui::catalogs::basic::build_basic_registry;
+    use a2ui_tui::focus_manager::FocusManager;
+
+    let samples = a2ui_gallery::sample_loader::load_samples("v1_0/catalogs/basic/examples");
+    let sample = samples
+        .iter()
+        .find(|s| s.file_path == "31_incremental-dashboard.json")
+        .expect("31_incremental-dashboard.json sample should exist");
+    let msgs = sample.messages.clone();
+    assert_eq!(msgs.len(), 5, "Incremental Dashboard has 5 messages");
+
+    let registry = build_basic_registry();
+    let catalog = a2ui_gallery::app::build_gallery_catalog();
+    let focus = FocusManager::new();
+    let mut processor = make_basic_processor();
+
+    let render = |proc: &MessageProcessor| {
+        render_gallery_surface(proc, &registry, &catalog, &focus, 80, 16)
+    };
+
+    // Step 1 — createSurface only: no root component yet.
+    processor.process_message(msgs[0].clone()).unwrap();
+    let s = render(&processor);
+    assert!(!s.contains("Analytics are ready."), "step 1:\n{s}");
+
+    // Step 2 — loading placeholders, no real content yet.
+    processor.process_message(msgs[1].clone()).unwrap();
+    let s = render(&processor);
+    assert!(s.contains("Loading analytics..."), "step 2:\n{s}");
+    assert!(!s.contains("Analytics are ready."), "step 2:\n{s}");
+
+    // Step 3 — analytics card swapped in; logs still loading.
+    processor.process_message(msgs[2].clone()).unwrap();
+    let s = render(&processor);
+    assert!(s.contains("Analytics are ready."), "step 3:\n{s}");
+    assert!(!s.contains("System boot complete."), "step 3 — no logs yet:\n{s}");
+
+    // Step 4 — logs List template added, but data model still empty.
+    processor.process_message(msgs[3].clone()).unwrap();
+    let s = render(&processor);
+    assert!(s.contains("Analytics are ready."), "step 4:\n{s}");
+    assert!(!s.contains("System boot complete."), "step 4 — no log data yet:\n{s}");
+
+    // Step 5 — logs data populated: all three log lines render via the template.
+    processor.process_message(msgs[4].clone()).unwrap();
+    let s = render(&processor);
+    assert!(s.contains("System boot complete."), "step 5:\n{s}");
+    assert!(s.contains("All services healthy."), "step 5:\n{s}");
+    assert!(s.contains("Waiting for user input."), "step 5:\n{s}");
+}

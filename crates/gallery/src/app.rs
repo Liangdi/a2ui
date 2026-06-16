@@ -92,6 +92,24 @@ struct FrameData {
     frame_tick: u64,
 }
 
+/// Build the catalog the gallery uses to construct `ComponentContext`s at render
+/// and dispatch time.
+///
+/// The gallery renders samples from both the minimal and basic catalogs, so
+/// this catalog must expose the functions from BOTH. The basic catalog is a
+/// component superset of minimal (Text/Row/Column/Button/TextField), so only
+/// the minimal-only functions (e.g. `capitalize`) are folded in. Without this
+/// merge, a minimal sample like "Capitalized Text" silently renders an empty
+/// result for its function-bound `Text`, because `capitalize` is absent from
+/// the basic catalog — the gallery "had no interaction" for that sample.
+pub fn build_gallery_catalog() -> Catalog {
+    let mut catalog = build_basic_catalog();
+    for (name, func) in build_minimal_catalog().functions {
+        catalog.functions.entry(name).or_insert(func);
+    }
+    catalog
+}
+
 /// The gallery application.
 pub struct GalleryApp {
     /// Terminal handle.
@@ -134,9 +152,11 @@ impl GalleryApp {
 
         let basic_catalog = build_basic_catalog();
         let minimal_catalog = build_minimal_catalog();
-        let catalog = build_basic_catalog(); // real catalog for ComponentContext building
         let registry = build_basic_registry();
         let processor = MessageProcessor::new(vec![basic_catalog, minimal_catalog]);
+
+        // Catalog used to build ComponentContexts at render + dispatch time.
+        let catalog = build_gallery_catalog();
 
         // Load samples from both minimal and basic directories.
         let samples = {
@@ -305,14 +325,14 @@ impl GalleryApp {
             KeyCode::Char('t') => self.cycle_theme(),
             KeyCode::Up | KeyCode::Char('k') => {
                 if self.selected_sample > 0 {
-                    self.load_sample(self.selected_sample - 1);
+                    self.load_sample_full(self.selected_sample - 1);
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
                 if !self.samples.is_empty()
                     && self.selected_sample < self.samples.len() - 1
                 {
-                    self.load_sample(self.selected_sample + 1);
+                    self.load_sample_full(self.selected_sample + 1);
                 }
             }
             // Enter / Tab / → : move focus to the rendered surface.
@@ -333,12 +353,8 @@ impl GalleryApp {
             KeyCode::Esc => self.panel_focus = PanelFocus::List,
             KeyCode::Char('n') => {
                 // Process next message (stepper).
-                if self.messages_processed < self.current_messages.len() {
-                    let msg = self.current_messages[self.messages_processed].clone();
-                    let _ = self.processor.process_message(msg);
-                    self.messages_processed += 1;
-                    self.rebuild_focus();
-                }
+                self.process_next_message();
+                self.rebuild_focus();
             }
             KeyCode::Char('a') => {
                 // Process all remaining messages.
@@ -543,7 +559,11 @@ impl GalleryApp {
     // Sample management
     // -----------------------------------------------------------------------
 
-    /// Select a sample, switch to rendered mode, and process all messages.
+    /// Select a sample, switch to rendered mode, and load it at its **first step**.
+    ///
+    /// Only the initial message is processed, so the sample's progressive
+    /// evolution can be revealed with the `n` stepper; press `a` to jump to the
+    /// final state.
     fn select_sample(&mut self, index: usize) {
         if index >= self.samples.len() {
             return;
@@ -553,12 +573,27 @@ impl GalleryApp {
         self.mode = AppMode::Rendered;
     }
 
-    /// Load `index`'s messages into the processor and reset interaction state.
+    /// Load `index`'s messages at the **first step** (only the initial message
+    /// processed) and reset interaction state.
     ///
-    /// This is the shared core of entering a sample ([`Self::select_sample`]) and
-    /// walking the sample list while keeping the split view open (↑/↓ in list
-    /// focus). It does NOT touch `mode` or `panel_focus` — callers decide those.
+    /// Entering a sample at the start — rather than processing every message at
+    /// once — is what lets progressive samples like "Incremental Dashboard"
+    /// reveal their step-by-step evolution via the `n` stepper. Use
+    /// [`Self::load_sample_full`] when a complete preview is wanted (e.g. while
+    /// browsing the list), and `a` to jump to the final state once open.
     fn load_sample(&mut self, index: usize) {
+        self.load_sample_inner(index, false);
+    }
+
+    /// Like [`Self::load_sample`], but processes **all** messages — used for the
+    /// split-view browsing preview so the right panel shows the finished sample.
+    fn load_sample_full(&mut self, index: usize) {
+        self.load_sample_inner(index, true);
+    }
+
+    /// Shared core of [`Self::load_sample`] / [`Self::load_sample_full`]. Does
+    /// NOT touch `mode` or `panel_focus` — callers decide those.
+    fn load_sample_inner(&mut self, index: usize, process_all: bool) {
         if index >= self.samples.len() {
             return;
         }
@@ -573,21 +608,35 @@ impl GalleryApp {
         self.focus_manager.reset();
         self.selected_sample = index;
 
-        // Process all messages at once.
-        self.process_remaining_messages();
+        if process_all {
+            self.process_remaining_messages();
+        } else {
+            // Process only the first message (the `createSurface`) so the
+            // stepper begins at step 1 of N.
+            self.process_next_message();
+        }
         self.rebuild_focus();
+    }
+
+    /// Process exactly one unprocessed message — the stepper's single step.
+    /// Returns `true` if a message was processed.
+    fn process_next_message(&mut self) -> bool {
+        if self.messages_processed < self.current_messages.len() {
+            let msg = self.current_messages[self.messages_processed].clone();
+            let _ = self.processor.process_message(msg);
+            self.messages_processed += 1;
+            true
+        } else {
+            false
+        }
     }
 
     /// Process all remaining unprocessed messages.
     fn process_remaining_messages(&mut self) {
-        while self.messages_processed < self.current_messages.len() {
-            let msg = self.current_messages[self.messages_processed].clone();
-            let _ = self.processor.process_message(msg);
-            self.messages_processed += 1;
-        }
+        while self.process_next_message() {}
     }
 
-    /// Reset and replay all messages for the current sample.
+    /// Reset and replay the current sample from its **first step**.
     fn replay_current_sample(&mut self) {
         let messages = self.current_messages.clone();
         self.processor.reset();
@@ -595,7 +644,7 @@ impl GalleryApp {
         self.messages_processed = 0;
         self.focus_manager.reset();
 
-        self.process_remaining_messages();
+        self.process_next_message();
         self.rebuild_focus();
     }
 
@@ -820,7 +869,7 @@ fn help_line(fd: &FrameData, accent: Style, muted: Style) -> Line<'static> {
             ]),
             PanelFocus::Render => Line::from(vec![
                 Span::styled(" [Surface ►] ", accent),
-                Span::styled(" n step · a all · r replay · Tab focus · Esc list · q quit", muted),
+                Span::styled(" n step · a all · r restart · Tab focus · Esc list · q quit", muted),
             ]),
         },
     }
