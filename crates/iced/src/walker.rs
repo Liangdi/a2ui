@@ -19,17 +19,24 @@ use a2ui_base::model::components_model::SurfaceComponentsModel;
 use a2ui_base::model::data_model::DataModel;
 
 use iced::Element;
+use iced::widget::image;
 
 use crate::components::{Walk, render_button, render_card, render_checkbox, render_choice_picker,
-    render_column, render_date_time_input, render_divider, render_icon, render_media_placeholder,
-    render_modal, render_row, render_slider, render_tabs, render_text, render_text_field,
-    render_unknown};
+    render_column, render_date_time_input, render_divider, render_icon, render_image,
+    render_media_placeholder, render_modal, render_row, render_slider, render_tabs, render_text,
+    render_text_field, render_unknown};
 use crate::message::Message;
 
 /// Recursively render a single A2UI component into an Iced [`Element`] tree.
 ///
+/// `image_cache` is the app-wide remote-image cache (see [`crate::IcedApp`]):
+/// resolved `http(s)` URLs → their decoded [`image::Handle`] once the
+/// background fetch completes. Local-file images are decoded directly and do
+/// not consult the cache.
+///
 /// The returned element owns all of its content (see the lifetime note in
 /// [`crate::components`]); `'a` is not tied to any input borrow.
+#[allow(clippy::too_many_arguments)]
 pub fn render_node<'a>(
     component_id: &str,
     surface_id: &str,
@@ -38,6 +45,8 @@ pub fn render_node<'a>(
     components: &SurfaceComponentsModel,
     functions: &HashMap<String, Box<dyn FunctionImplementation>>,
     focused_id: Option<&str>,
+    image_cache: &HashMap<String, Option<image::Handle>>,
+    local_tabs: &HashMap<String, usize>,
 ) -> Element<'a, Message> {
     let comp_model = match components.get(component_id) {
         Some(m) => m,
@@ -50,6 +59,8 @@ pub fn render_node<'a>(
         components,
         functions,
         focused_id,
+        image_cache,
+        local_tabs,
     };
 
     let ctx = ComponentContext::new(
@@ -75,7 +86,7 @@ pub fn render_node<'a>(
         "Divider" => render_divider(),
         "Icon" => render_icon(&ctx, comp_model),
         "DateTimeInput" => render_date_time_input(&ctx, comp_model),
-        "Image" => render_media_placeholder("Image", &ctx, comp_model),
+        "Image" => render_image(&walk, &ctx, comp_model),
         "Video" => render_media_placeholder("Video", &ctx, comp_model),
         "AudioPlayer" => render_media_placeholder("Audio", &ctx, comp_model),
 

@@ -26,8 +26,23 @@ pub enum Message {
     /// A data-model write from an interactive widget (TextField / Slider /
     /// CheckBox / ChoicePicker). `path` is absolute.
     DataUpdate { path: String, value: Value },
+    /// A remote `Image` finished downloading — cache its decoded handle and
+    /// re-render. Emitted by the fetch task spawned on sample load/switch.
+    ImageLoaded {
+        url: String,
+        handle: iced::widget::image::Handle,
+    },
+    /// A remote `Image` failed to download — record the attempt so the fetch
+    /// isn't retried on every view (the placeholder stays).
+    ImageLoadFailed { url: String },
     /// A Modal's `trigger` was activated — open that Modal locally.
     ModalTrigger { modal_id: String },
+    /// A Tabs title was clicked. When the Tabs' `activeTab` is a data binding
+    /// the click instead emits a [`Message::DataUpdate`] (the model is the
+    /// source of truth); this message is only used when `activeTab` is absent
+    /// or literal — the gallery's samples fall in this case — so the selected
+    /// tab is tracked locally (see `IcedApp::local_tabs`).
+    TabActivate { component_id: String, index: usize },
     /// A Modal's open panel was dismissed (overlay backdrop / close button) —
     /// close it.
     ModalClose { modal_id: String },

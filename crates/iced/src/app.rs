@@ -22,6 +22,8 @@
 //! [`update`]: IcedApp::update
 
 use std::collections::{HashMap, HashSet};
+use std::io::Read;
+use std::time::Duration;
 
 use a2ui_base::catalog::function_api::FunctionImplementation;
 use a2ui_base::components::dispatch_event;
@@ -30,8 +32,10 @@ use a2ui_base::focus::FocusManager;
 use a2ui_base::interaction::apply_event_result;
 use a2ui_base::message_processor::MessageProcessor;
 use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::common_types::DynamicString;
 use a2ui_base::protocol::server_to_client::A2uiMessage;
 
+use iced::widget::image;
 use iced::widget::{Column, Stack, button, container, rule, scrollable, text};
 use iced::{Element, Fill, Font, Length, Task};
 
@@ -48,6 +52,15 @@ pub struct IcedApp {
     samples: Vec<(String, Vec<A2uiMessage>)>,
     selected_sample: usize,
     open_modals: HashSet<String>,
+    /// Remote-image cache: resolved `http(s)` URL → decoded [`image::Handle`]
+    /// once its background fetch completes (`None` = attempted but failed, so
+    /// it is not refetched). Populated by [`fetch_sample_images`] and read in
+    /// `view` via [`crate::walker::render_node`]. Local-file images bypass it.
+    image_cache: HashMap<String, Option<image::Handle>>,
+    /// Locally-tracked active tab for Tabs components whose `activeTab` is not
+    /// a data binding (the gallery samples). Keyed by component id. A bound
+    /// Tabs writes to the model instead and never touches this.
+    local_tabs: HashMap<String, usize>,
 }
 
 impl IcedApp {
@@ -68,6 +81,8 @@ impl IcedApp {
             samples: Vec::new(),
             selected_sample: 0,
             open_modals: HashSet::new(),
+            image_cache: HashMap::new(),
+            local_tabs: HashMap::new(),
         }
     }
 
@@ -94,7 +109,56 @@ impl IcedApp {
             self.focus.rebuild_from_components(&components);
         }
         self.open_modals.clear();
+        // Drop the previous sample's decoded images so the cache doesn't grow
+        // unbounded across many sample switches (re-fetched on demand).
+        self.image_cache.clear();
+        self.local_tabs.clear();
         self.selected_sample = idx;
+    }
+
+    // -----------------------------------------------------------------------
+    // Remote image loading
+    // -----------------------------------------------------------------------
+
+    /// Spawn background fetches for every remote (`http(s)`) `Image` URL in the
+    /// current sample that isn't already cached. Called from boot and from
+    /// [`Message::SelectSample`]. Local-file images are decoded inline in
+    /// `view` (via `Handle::from_path`) and are skipped here.
+    ///
+    /// Each URL is resolved through a [`ComponentContext`] so a bound `url`
+    /// (e.g. `{"path": "/image"}`) is dereferenced against the data model,
+    /// exactly as `render_image` does it.
+    pub fn fetch_sample_images(&self) -> Task<Message> {
+        let Some(surface) = self.processor.model.surfaces().next() else {
+            return Task::none();
+        };
+        let data_model = surface.data_model.borrow();
+        let components = surface.components.borrow();
+
+        let urls: Vec<String> = components
+            .all()
+            .iter()
+            .filter_map(|(id, m)| {
+                if m.component_type != "Image" {
+                    return None;
+                }
+                let ctx = ComponentContext::new(
+                    id.clone(),
+                    surface.id.clone(),
+                    &data_model,
+                    &components,
+                    &self.functions,
+                    "",
+                    None,
+                );
+                let ds = m.get_property::<DynamicString>("url")?;
+                let url = ctx.data_context.resolve_dynamic_string(&ds);
+                (url.starts_with("http://") || url.starts_with("https://")).then_some(url)
+            })
+            .filter(|url| !self.image_cache.contains_key(url))
+            .collect();
+
+        Task::batch(urls.into_iter().map(fetch_image_task))
     }
 
     // -----------------------------------------------------------------------
@@ -107,6 +171,7 @@ impl IcedApp {
         match message {
             Message::ButtonActivate { component_id } => {
                 self.handle_activate(&component_id);
+                Task::none()
             }
             Message::DataUpdate { path, value } => {
                 // Empty path = an unbound Slider's no-op write-back (see
@@ -116,18 +181,37 @@ impl IcedApp {
                 {
                     surface.data_model.borrow_mut().set(&path, value);
                 }
+                Task::none()
+            }
+            Message::ImageLoaded { url, handle } => {
+                self.image_cache.insert(url, Some(handle));
+                Task::none()
+            }
+            Message::ImageLoadFailed { url } => {
+                // Record the attempt so the fetch isn't retried; the
+                // placeholder stays in place.
+                self.image_cache.insert(url, None);
+                Task::none()
             }
             Message::ModalTrigger { modal_id } => {
                 self.open_modals.insert(modal_id);
+                Task::none()
+            }
+            Message::TabActivate { component_id, index } => {
+                // Unbound Tabs (the gallery samples): track the selection
+                // locally so the next `view` shows the newly active panel.
+                self.local_tabs.insert(component_id, index);
+                Task::none()
             }
             Message::ModalClose { modal_id } => {
                 self.open_modals.remove(&modal_id);
+                Task::none()
             }
             Message::SelectSample(idx) => {
                 self.load_sample(idx);
+                self.fetch_sample_images()
             }
         }
-        Task::none()
     }
 
     /// Build the current UI: a branded sidebar + the breadcrumb-topped preview
@@ -324,6 +408,8 @@ impl IcedApp {
             &components,
             &self.functions,
             focused_id.as_deref(),
+            &self.image_cache,
+            &self.local_tabs,
         )
     }
 
@@ -363,6 +449,8 @@ impl IcedApp {
                 &components,
                 &self.functions,
                 focused_id.as_deref(),
+                &self.image_cache,
+                &self.local_tabs,
             )
         };
 
@@ -490,5 +578,80 @@ impl IcedApp {
             }
             None => {}
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Free functions
+// ---------------------------------------------------------------------------
+
+/// Download a remote image over HTTP and decode it into an Iced
+/// [`image::Handle`]. Blocking — run off the UI thread (here, inside the
+/// `Task::perform` future in [`fetch_image_task`]).
+///
+/// A 10 s timeout keeps a slow/dead host from pinning the calling thread; any
+/// failure (network or read) returns `None` so the caller can record it as a
+/// failed attempt and keep the placeholder.
+fn fetch_handle(url: &str) -> Option<image::Handle> {
+    let resp = ureq::get(url).timeout(Duration::from_secs(10)).call().ok()?;
+    let mut bytes = Vec::new();
+    resp.into_reader().read_to_end(&mut bytes).ok()?;
+    // `Handle::from_bytes` does no decoding up front — the renderer decodes
+    // lazily — so an undecodable payload surfaces later as a blank render,
+    // not a panic.
+    Some(image::Handle::from_bytes(bytes))
+}
+
+/// One remote-image fetch task: download the bytes over HTTP (blocking, on the
+/// `thread-pool` executor) and decode them into an Iced [`image::Handle`].
+///
+/// Iced has no built-in URL image loader — its `image` widget only takes a
+/// `Handle` built from a local path or in-memory bytes — so remote `Image`
+/// URLs must be fetched and decoded here, then cached by [`IcedApp`]. Any
+/// failure becomes [`Message::ImageLoadFailed`] so the placeholder stays and
+/// the URL isn't refetched.
+fn fetch_image_task(url: String) -> Task<Message> {
+    let url_for_msg = url.clone();
+    Task::perform(
+        async move {
+            // Blocking HTTP inside an async future runs on one of the
+            // thread-pool executor's threads — acceptable for a gallery
+            // fetching a handful of images once per sample.
+            fetch_handle(&url)
+        },
+        move |maybe_handle| match maybe_handle {
+            Some(handle) => Message::ImageLoaded {
+                url: url_for_msg,
+                handle,
+            },
+            None => Message::ImageLoadFailed { url: url_for_msg },
+        },
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Fetches a *real* remote image end-to-end (ureq GET → bytes →
+    /// `Handle::from_bytes`), proving the Iced backend's remote-image path
+    /// works against the exact unsplash URLs the gallery samples use. Ignored
+    /// by default so offline / CI runs don't need network; run with
+    /// `cargo test -p a2ui-iced --features backend -- --ignored --nocapture`.
+    #[test]
+    #[ignore]
+    fn fetch_handle_downloads_real_image() {
+        let url = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=40&h=40&fit=crop";
+        let handle = fetch_handle(url).expect("image should download + decode");
+        // A Handle::Bytes carries the raw encoded payload; the renderer decodes
+        // it lazily, so we only assert we got *some* bytes back.
+        let bytes = match handle {
+            image::Handle::Bytes(_, b) => b,
+            _ => panic!("expected a Bytes handle"),
+        };
+        assert!(!bytes.is_empty(), "decoded image bytes should be non-empty");
+        // JPEG magic bytes — the unsplash asset is a JPEG.
+        assert_eq!(&bytes[..2], &[0xFF, 0xD8], "expected JPEG SOI marker");
+        println!("fetched {} bytes for {url}", bytes.len());
     }
 }

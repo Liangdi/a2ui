@@ -106,7 +106,14 @@ iced = { version = "0.14", default-features = false, features = [
     "thread-pool",
     "x11",
     "wayland",
+    "image",
 ] }
+# Lightweight sync HTTP client (rustls TLS) used by the iced backend to fetch
+# remote `Image` component URLs (the gallery samples all reference `https://`
+# images). Sync (no async runtime) so a fetch runs as a single blocking call
+# inside an Iced `Task::perform` future on the `thread-pool` executor — no
+# tokio/smol mixed in. Pinned to the 2.x line.
+ureq = { version = "2.12", features = ["tls"] }
 # Dioxus reactive RSX GUI runtime for the `a2ui-dioxus` backend. The sixth
 # renderer — and architecturally the most distinct of the bunch. Dioxus is a
 # *reactive-signals* framework whose desktop target renders to a system WebView

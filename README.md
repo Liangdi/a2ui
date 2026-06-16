@@ -26,7 +26,7 @@
 - ✅ **模块化 Cargo workspace 架构**（`a2ui-base` 框架无关 / `a2ui-tui` ratatui backend / `a2ui-gallery` 展示 app / `a2ui` umbrella）
 - ✅ JSON Pointer 数据绑定与响应式状态管理
 - ✅ Gallery App 示例浏览器（支持消息逐步渲染）
-- ✅ **219 个单元/集成测试**（core 127 + tui 61 + gallery e2e 21 + slint 10），包含 A2UI 规范样例的端到端测试
+- ✅ **231 个单元/集成测试**（core 127 + tui 61 + gallery e2e 21 + slint 10 + iced 12），包含 A2UI 规范样例的端到端测试
 
 ## 截图
 
@@ -112,22 +112,23 @@ cargo run -p a2ui --example 12_handshake
 | CheckBox | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Slider | ✅ | 🟡 | ✅ | ✅ | ✅ | ✅ |
 | ChoicePicker | ✅ | 🟡 | ✅ | ⬜ | ✅ | ✅ |
-| Tabs | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | ✅ |
-| DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | ✅ |
-| Icon | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | ✅ |
-| Image | ✅² | ⬜ | ⬜ | ⬜ | ⬜ | ✅³ |
+| Tabs | ✅ | 🟡 | 🟡 | 🟡 | ✅ | ✅ |
+| DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | ✅ | ✅ |
+| Icon | ✅ | 🟡 | 🟡 | 🟡 | ✅ | ✅ |
+| Image | ✅² | ⬜ | ⬜ | ⬜ | ✅⁵ | ✅³ |
 | Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
 | AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
 
 ¹ 需 `audio` 特性。
-² TUI 经 `ratatui-image` 真实解码并显示图像像素(kitty / iTerm2 / Sixel / Halfblocks 自动降级,仅本地路径);Slint / egui / Bevy / Iced 四个桌面后端目前仅渲染文本占位符。
+² TUI 经 `ratatui-image` 真实解码并显示图像像素(kitty / iTerm2 / Sixel / Halfblocks 自动降级,仅本地路径);Slint / egui / Bevy 三个桌面后端目前仅渲染文本占位符。
 ³ Dioxus 经 WebView 原生 `<img>` 显示图像(支持 `file://` / `http(s)` / `data:` URL)。
 ⁴ Dioxus 经 WebView 原生 `<audio>` / `<video>` 元素真实播放(浏览器提供播放/暂停/进度/音量/全屏等完整传输控件)——这是终端及其它桌面后端做不到的。
+⁵ Iced 没有内置的 URL 图片加载器(其 `image` 组件只接受本地路径或内存字节),因此 `Image` 的 `http(s)` URL 由后台用 `ureq` 拉取字节、`Handle::from_bytes` 解码后缓存(切换样例时清空);本地路径则直接走 `Handle::from_path`。`fit` 映射到 `ContentFit`。
 
 - **TUI 是参考实现**:18 组件全部完整渲染;图片默认开启(`ratatui-image`),音频需 `audio` 特性,视频始终为占位符。
-- **可交互输入控件(TextField / Slider / CheckBox / ChoicePicker)的「真输入」**:egui、Bevy、Iced、Dioxus 与 TUI 完整支持;**Slint 仅 Button / CheckBox 点击可交互**,TextField / Slider 渲染为只读值。
+- **可交互输入控件(TextField / Slider / CheckBox / ChoicePicker / DateTimeInput)的「真输入」**:egui、Bevy、Iced、Dioxus 与 TUI 完整支持;**Slint 仅 Button / CheckBox 点击可交互**,TextField / Slider 渲染为只读值。
 - **Bevy 的 ChoicePicker** 当前为文本标签(`[ChoicePicker: …]`),尚未接入原生选择控件。
-- **Iced 是映射最干净的后端**(无状态桥 / 无 diff),五个可交互控件全部原生;**Dioxus 架构最独特**(响应式 signals + WebView/CSS 渲染),且借 WebView 之力,Image / Video / AudioPlayer 均用原生 HTML 媒体元素真实渲染——**它是唯一覆盖全部 18 个 A2UI 组件的后端**(连 TUI 的 Video 都是占位符,终端无法播放视频)。
+- **Iced 是映射最干净的后端**(无状态桥 / 无 diff),五个可交互控件全部原生 —— ChoicePicker 用原生 `pick_list`(单选)/ checkbox 组(多选),DateTimeInput 用绑定到 data model 的可编辑文本框,Tabs 有可点击 tab 栏(绑定的 `activeTab` 写回 data model;gallery 样例未绑定 `activeTab`,则选中的 tab 在本地跟踪,点击仍能切换面板);Icon 直接显示 emoji(映射表与 TUI 一致);**Image 也真实渲染**(本地路径即时解码,远程 URL 后台拉取 + 缓存,见脚注⁵);**Dioxus 架构最独特**(响应式 signals + WebView/CSS 渲染),且借 WebView 之力,Image / Video / AudioPlayer 均用原生 HTML 媒体元素真实渲染——**它是唯一覆盖全部 18 个 A2UI 组件的后端**(连 TUI 的 Video 都是占位符,终端无法播放视频)。
 
 ## Slint 桌面后端
 
@@ -210,6 +211,16 @@ cargo build -p a2ui-iced --features backend
 ```
 
 umbrella crate 也在 `iced` cargo feature 之后将后端 re-export 为 `a2ui::iced`。渲染器默认使用 wgpu(GPU),并提供 tiny-skia 软件渲染兜底。
+
+### 组件覆盖
+
+16 个 A2UI 组件类型可原生渲染(仅 Video / AudioPlayer 仍为占位符 —— Iced 0.14 不带媒体播放控件):
+
+- **容器 / 内容**:Text(h1/h2/h3 标题大小)/ Row / Column / Card / List / Divider / Modal(`Stack` 居中浮层 + 半透明遮罩)/ Button(primary/secondary/borderless 三种样式,`checks` 校验失败时禁用)
+- **可交互控件(全部原生,真输入写回 data model)**:TextField(`text_input`)/ CheckBox / Slider / ChoicePicker(单选用原生 `pick_list`,多选用 checkbox 组,写回 `json!([value])` 数组)/ DateTimeInput(绑定到 data model 的可编辑 ISO 文本框;Iced 0.14 无日历控件,故采用文本输入 + `enableDate`/`enableTime` 格式提示)/ Tabs(可点击 tab 栏 + 内容面板;绑定的 `activeTab` 写回 data model,未绑定则在本地跟踪)
+- **Icon**:映射到 emoji / unicode 字形(映射表与 TUI / Dioxus 一致,未知名称回退为 `[前两字符]`)
+- **Image**:真实渲染 —— 本地路径(含 `file://`)直接走 `Handle::from_path`;`http(s)` URL 在样例加载时由后台 `ureq` 拉取、`Handle::from_bytes` 解码并缓存(加载中或失败时显示占位 chip),`fit` 映射到 `ContentFit`。Iced 没有内置 URL 图片加载器,这是在 Elm 架构下用 boot/`SelectSample` 返回的 `Task` 异步拉取 + `image_cache` 缓存实现的。
+- **占位符**:Video / AudioPlayer 渲染为带标签的 chip 徽章
 
 ### 运行 Gallery(iced 版)
 

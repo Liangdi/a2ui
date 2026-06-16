@@ -26,7 +26,7 @@ The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic c
 - ✅ **Modular Cargo workspace architecture** (`a2ui-base` framework-agnostic / `a2ui-tui` ratatui backend / `a2ui-gallery` demo app / `a2ui` umbrella)
 - ✅ JSON Pointer data binding with reactive state management
 - ✅ Gallery App sample browser with progressive message rendering
-- ✅ **219 unit/integration tests** (core 127 + tui 61 + gallery e2e 21 + slint 10), including end-to-end tests with A2UI specification examples
+- ✅ **231 unit/integration tests** (core 127 + tui 61 + gallery e2e 21 + slint 10 + iced 12), including end-to-end tests with A2UI specification examples
 
 ## Screenshots
 
@@ -112,22 +112,23 @@ All five backends share the same `a2ui-base` core (interaction logic / `dispatch
 | CheckBox | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Slider | ✅ | 🟡 | ✅ | ✅ | ✅ | ✅ |
 | ChoicePicker | ✅ | 🟡 | ✅ | ⬜ | ✅ | ✅ |
-| Tabs | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | ✅ |
-| DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | ✅ |
-| Icon | ✅ | 🟡 | 🟡 | 🟡 | 🟡 | ✅ |
-| Image | ✅² | ⬜ | ⬜ | ⬜ | ⬜ | ✅³ |
+| Tabs | ✅ | 🟡 | 🟡 | 🟡 | ✅ | ✅ |
+| DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | ✅ | ✅ |
+| Icon | ✅ | 🟡 | 🟡 | 🟡 | ✅ | ✅ |
+| Image | ✅² | ⬜ | ⬜ | ⬜ | ✅⁵ | ✅³ |
 | Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
 | AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
 
 ¹ Needs the `audio` feature.
-² The TUI backend decodes and renders actual image pixels via `ratatui-image` (kitty / iTerm2 / Sixel / Halfblocks auto-degrade, local paths only); the Slint / egui / Bevy / Iced desktop backends currently render only a text placeholder.
+² The TUI backend decodes and renders actual image pixels via `ratatui-image` (kitty / iTerm2 / Sixel / Halfblocks auto-degrade, local paths only); the Slint / egui / Bevy desktop backends currently render only a text placeholder.
 ³ The Dioxus backend renders images via the native WebView `<img>` (supports `file://` / `http(s)` / `data:` URLs).
 ⁴ The Dioxus backend plays real media via the native WebView `<audio>` / `<video>` elements (the browser supplies full transport controls — play/pause/seek/volume/fullscreen) — something the terminal and other desktop backends cannot do.
+⁵ Iced has no built-in URL image loader (its `image` widget only takes a local path or in-memory bytes), so an `Image`'s `http(s)` URL is fetched out-of-band with `ureq`, decoded via `Handle::from_bytes`, and cached (cleared on sample switch); local paths go straight through `Handle::from_path`. `fit` maps onto `ContentFit`.
 
 - **The TUI backend is the reference implementation** — all 18 components render fully; real images are on by default (`ratatui-image`), audio needs the `audio` feature, video is always a placeholder.
-- **Genuine input on the interactive widgets (TextField / Slider / CheckBox / ChoicePicker)**: full on egui, Bevy, Iced, Dioxus, and TUI. **On Slint only Button / CheckBox clicks are wired** — TextField and Slider render read-only.
+- **Genuine input on the interactive widgets (TextField / Slider / CheckBox / ChoicePicker / DateTimeInput)**: full on egui, Bevy, Iced, Dioxus, and TUI. **On Slint only Button / CheckBox clicks are wired** — TextField and Slider render read-only.
 - **Bevy's ChoicePicker** is currently a text label (`[ChoicePicker: …]`); not yet wired to a native picker.
-- **Iced is the cleanest-mapping backend** (no state bridge, no diffing); all five interactive widgets are native. **Dioxus is the most architecturally distinct** (reactive signals + WebView/CSS rendering), and thanks to the WebView, Image / Video / AudioPlayer render via native HTML media elements too — **it is the only backend to cover all 18 A2UI components** (even the TUI's Video is a placeholder, since a terminal cannot play video).
+- **Iced is the cleanest-mapping backend** (no state bridge, no diffing); all five interactive widgets are native — ChoicePicker uses a native `pick_list` (single-select) / checkbox group (multi-select), DateTimeInput is an editable text box bound to the data model, and Tabs has a clickable tab bar (a bound `activeTab` writes back to the data model; the gallery samples leave it unbound, so the selected tab is tracked locally and clicks still switch panels); Icon renders an emoji (the mapping matches the TUI); **and Image renders for real** (local paths decoded inline, remote URLs fetched + cached in the background, see footnote ⁵). **Dioxus is the most architecturally distinct** (reactive signals + WebView/CSS rendering), and thanks to the WebView, Image / Video / AudioPlayer render via native HTML media elements too — **it is the only backend to cover all 18 A2UI components** (even the TUI's Video is a placeholder, since a terminal cannot play video).
 
 ## Slint Desktop Backend
 
@@ -182,6 +183,16 @@ cargo build -p a2ui-iced --features backend
 ```
 
 The umbrella crate re-exports the backend as `a2ui::iced` under the `iced` cargo feature. The renderer defaults to wgpu (GPU), with a tiny-skia software fallback.
+
+### Component coverage
+
+16 of the A2UI component types render natively (only Video / AudioPlayer remain placeholders — Iced 0.14 ships no media-playback widgets):
+
+- **Containers / content**: Text (h1/h2/h3 heading sizes) / Row / Column / Card / List / Divider / Modal (a `Stack`-centered overlay with a dimmed scrim) / Button (primary/secondary/borderless styles; disabled when a `checks` rule fails)
+- **Interactive widgets (all native, genuine input written back to the data model)**: TextField (`text_input`) / CheckBox / Slider / ChoicePicker (a native `pick_list` for single-select, a checkbox group for multi-select; writes back a `json!([value])` array) / DateTimeInput (an editable ISO text box bound to the data model — Iced 0.14 has no calendar widget, so it uses a text input + an `enableDate`/`enableTime` format hint) / Tabs (a clickable tab bar + content panel; a bound `activeTab` writes back to the data model, an unbound one is tracked locally)
+- **Icon**: mapped to an emoji / unicode glyph (the mapping matches the TUI / Dioxus; unknown names fall back to `[first-two-chars]`)
+- **Image**: renders for real — a local path (incl. `file://`) goes straight to `Handle::from_path`; an `http(s)` URL is fetched in the background with `ureq` when the sample loads, decoded via `Handle::from_bytes`, and cached (a placeholder chip shows while loading or on failure). `fit` maps onto `ContentFit`. Iced has no built-in URL image loader, so this is done with the `Task` returned from boot / `SelectSample` plus an `image_cache`, all within the Elm architecture.
+- **Placeholders**: Video / AudioPlayer render as a labeled chip badge
 
 ### Run the Gallery (Iced)
 

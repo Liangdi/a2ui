@@ -16,7 +16,7 @@
 //! button::Style`, … — so they can be passed directly as function items
 //! (`button::Style` fns are status-aware to render hover / pressed states).
 
-use iced::widget::{button, container, rule, text_input};
+use iced::widget::{button, container, pick_list as pick_list_w, rule, text_input};
 use iced::{Background, Border, Color, Shadow, Theme, Vector};
 
 // ===========================================================================
@@ -328,6 +328,34 @@ pub(crate) fn scrim(_: &Theme, _: button::Status) -> button::Style {
     }
 }
 
+/// A Tabs title button. `active` swaps the resting fill to the accent wash +
+/// bright text so the selected tab reads clearly above the rule beneath the bar;
+/// inactive tabs are transparent with muted text, lifting to a surface wash on
+/// hover so they still feel clickable.
+pub(crate) fn tab(active: bool) -> impl Fn(&Theme, button::Status) -> button::Style {
+    move |_: &Theme, status: button::Status| {
+        let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
+        let (bg, text) = if active {
+            (Some(Background::Color(ACCENT_WASH)), TEXT)
+        } else if hovered {
+            (Some(Background::Color(SURFACE0)), SUBTEXT0)
+        } else {
+            (None, SUBTEXT1)
+        };
+        button::Style {
+            background: bg,
+            text_color: text,
+            border: Border {
+                color: Color::TRANSPARENT,
+                width: 0.0,
+                radius: 7.0.into(),
+            },
+            shadow: Shadow::default(),
+            snap: true,
+        }
+    }
+}
+
 // ===========================================================================
 // Input styles — a rounded, recessed text field that brightens on focus.
 // ===========================================================================
@@ -364,3 +392,33 @@ pub(crate) fn text_field(_: &Theme, status: text_input::Status) -> text_input::S
 /// A slightly stronger edge for hovered inputs (kept separate from [`EDGE`] so
 /// the hover state reads as a deliberate lift).
 const OVERLAY_EDGE: Color = rgba(0xC6, 0xD0, 0xF5, 0.14);
+
+/// A ChoicePicker dropdown — recessed like the text field, with an accent
+/// handle. Mirrors [`text_field`]'s focus/hover lift so the two input kinds
+/// agree.
+pub(crate) fn pick_list(_: &Theme, status: pick_list_w::Status) -> pick_list_w::Style {
+    let (bg, border) = match status {
+        pick_list_w::Status::Opened { .. } => (SURFACE0, Border {
+            color: ACCENT,
+            width: 1.5,
+            radius: 9.0.into(),
+        }),
+        pick_list_w::Status::Hovered => (SURFACE0, Border {
+            color: OVERLAY_EDGE,
+            width: 1.0,
+            radius: 9.0.into(),
+        }),
+        pick_list_w::Status::Active => (MANTLE, Border {
+            color: EDGE,
+            width: 1.0,
+            radius: 9.0.into(),
+        }),
+    };
+    pick_list_w::Style {
+        text_color: TEXT,
+        placeholder_color: SUBTEXT1,
+        handle_color: ACCENT,
+        background: Background::Color(bg),
+        border,
+    }
+}

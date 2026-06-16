@@ -127,7 +127,11 @@ fn main() -> ExitCode {
                 boot_data.lock().unwrap().take().expect("boot called once");
             let mut app = IcedApp::new(catalogs, functions);
             app.set_samples(entries, selected);
-            app
+            // Kick off background fetches for the initial sample's remote
+            // `Image` URLs (the gallery samples reference `https://` images,
+            // which Iced cannot load directly — see `fetch_sample_images`).
+            let task = app.fetch_sample_images();
+            (app, task)
         },
         IcedApp::update,
         IcedApp::view,
