@@ -46,14 +46,15 @@ impl Plugin for A2uiPlugin {
             .add_observer(collect_slider_change)
             .add_observer(crate::sample_browser::on_sample_row_click);
 
-        // The render-loop systems, ordered: collect (text-input poll) → apply →
-        // reconcile → update the sample browser. Observers run reactively
-        // (outside this chain) but their queue writes land before
+        // The render-loop systems, ordered: decode images → collect (text-input
+        // poll) → apply → reconcile → update the sample browser. Observers run
+        // reactively (outside this chain) but their queue writes land before
         // `apply_interactions_full` because observers for events triggered
         // during Update run within the same Update tick.
         app.add_systems(
             Update,
             (
+                crate::images::load_images,
                 collect_text_field_changes,
                 apply_interactions_full,
                 reconcile,
@@ -74,8 +75,22 @@ impl Plugin for A2uiPlugin {
 
 /// Base UI: camera + root layout + the two panes + overlay. Stores the
 /// surface/overlay root entities into `A2uiState` so the reconciler can parent
-/// nodes under them.
-fn setup_base_ui(mut commands: Commands, mut state: NonSendMut<A2uiState>) {
+/// nodes under them. Also loads the embedded emoji icon font into
+/// `A2uiState::icon_font` (Icons draw their glyphs in it — Bevy's default font
+/// covers almost none).
+fn setup_base_ui(
+    mut commands: Commands,
+    mut state: NonSendMut<A2uiState>,
+    mut fonts: ResMut<Assets<Font>>,
+) {
+    // Load the embedded emoji icon font once (a ~12 KB NotoEmoji subset covering
+    // the A2UI icon glyph set). Stored on the state so every Icon's `TextFont`
+    // can reference it.
+    let icon_bytes = include_bytes!("../assets/fonts/a2ui-icons.ttf");
+    if let Ok(font) = Font::try_from_bytes(icon_bytes.to_vec()) {
+        state.icon_font = Some(fonts.add(font));
+    }
+
     // UI camera.
     commands.spawn(Camera2d);
 
@@ -136,7 +151,19 @@ fn setup_base_ui(mut commands: Commands, mut state: NonSendMut<A2uiState>) {
         .add_child(browser)
         .add_child(surface_root);
 
-    // Overlay root (parents open-Modal content; absolutely positioned, on top).
+    // Overlay root (parents open-Modal content). Full-window, absolutely
+    // positioned on top (ZIndex 100) so a Modal's dim scrim can cover the whole
+    // window and its panel centers over everything — matching the Iced/egui
+    // backends' centered overlay. The reconciler parents each open Modal's
+    // synthetic scrim + panel under here.
+    //
+    // `Pickable { should_block_lower: false, is_hoverable: false }` makes the
+    // overlay root itself **transparent to pointer events** — when no Modal is
+    // open (no scrim child), clicks pass straight through to the sample-browser
+    // list and the surface beneath. (Without this the full-window node would
+    // intercept every click, since a UI node with no `Pickable` blocks by
+    // default.) A Modal's scrim child has no `Pickable` so it still blocks and
+    // catches its own click-to-dismiss.
     let overlay_root = commands
         .spawn((
             Name::new("A2UI Overlay"),
@@ -144,11 +171,17 @@ fn setup_base_ui(mut commands: Commands, mut state: NonSendMut<A2uiState>) {
                 display: Display::Flex,
                 flex_direction: FlexDirection::Column,
                 position_type: PositionType::Absolute,
-                left: Val::Percent(30.0),
-                top: Val::Px(40.0),
+                left: Val::Px(0.0),
+                top: Val::Px(0.0),
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
                 ..default()
             },
             ZIndex(100),
+            Pickable {
+                should_block_lower: false,
+                is_hoverable: false,
+            },
         ))
         .id();
 

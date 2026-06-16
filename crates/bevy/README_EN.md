@@ -37,6 +37,20 @@ cargo build -p a2ui-bevy --features backend
 
 The renderer uses wgpu; it needs a GPU/wgpu stack but no game-specific tooling.
 
+## Component coverage
+
+16 of the A2UI component kinds render natively (only Video / AudioPlayer stay placeholders — Bevy has no media-playback widgets, matching Iced / Slint / egui):
+
+- **Containers / content**: Text (h1/h2/h3 heading sizes) / Row / Column / Card / List / Divider / Modal (dimmed scrim + centered panel + ✕ close button; click the scrim or ✕ to dismiss) / Button (primary blue / default gray-filled bordered / borderless transparent; click dispatches via the shared `core::components::dispatch_event`)
+- **Interactive (native `bevy_ui_widgets` / `bevy_ui_text_input`, real input writes back to the data model)**: TextField (external `TextInputNode`) / CheckBox (native `Checkbox`) / Slider (native `Slider`) / ChoicePicker (the reconciler spawns a clickable row per option — single-select `●`/`○` writes `json!([value])`, multi-select `☑`/`☐` toggles array membership) / DateTimeInput (reuses the TextField `TextInputNode` bound to `value`) / Tabs (clickable tab bar + only the active panel renders; a bound `activeTab` writes back, otherwise tracked locally)
+- **Icon**: mapped to an emoji (an embedded ~12 KB NotoEmoji subset font; the icon-name table matches TUI / Iced, unknown names fall back to `[first two chars]`)
+- **Image**: real raster render — local paths (incl. `file://`) are read directly; `http(s)` URLs are fetched on the UI thread via `ureq` (few small sample images, same shape as Slint). Both are decoded by the `image` crate into a `bevy::image::Image` and shown via a native `ImageNode` (wgpu texture), cached by URL and cleared on sample switch; `data:` URLs and decode failures show a labeled placeholder
+- **Placeholders**: Video / AudioPlayer render as labeled placeholders (no media widgets in Bevy)
+
+### Implementation note: synthetic entities (why Tabs / ChoicePicker need reconciler special-casing)
+
+Tabs and ChoicePicker don't use `child` / `children` (their items come from the `tabs` / `options` **properties**), and each title / option must be its **own clickable entity**. So the reconciler's `walk` special-cases them (as it does Modal): it spawns a **synthetic entity** per title / option (id prefixed `__a2ui_tab:` / `__a2ui_choice:`) carrying a `TabTitle` / `ChoiceOption` marker (with the write-back pointer). These reuse the reconciler's existing spawn / parent / orphan-cleanup machinery — switching the active tab despawns the old panel child (orphan) and spawns the new one. `bevy_ui_widgets`' `Activate` is a global trigger, so the same observer routes a synthetic-button click by marker to `TabActivate` / `ChoiceSelect` / `ChoiceToggle` instead of `ButtonActivate`.
+
 ## The reconciler (implementation note)
 
 Bevy's interactive widgets only behave when their entities survive from frame to frame — a per-frame rebuild (the Slint / egui approach) would fling sliders and drop text cursors every frame. So the reconciler does a two-pass diff/patch against `A2uiState`'s stable `node_map: HashMap<component_id, Entity>`:
@@ -55,8 +69,9 @@ The render loop runs as Bevy systems each frame: `collect_interactions` (widget 
 | `reconcile` | React-style diff/patch — keeps a stable `component_id → Entity` map, spawn / update / despawn / reorder so the live tree mirrors the model |
 | `render` | Per-component-kind idempotent updaters — re-apply Bevy components to mirror resolved A2UI values |
 | `interaction` | Maps `bevy_ui_widgets` `EntityEvent`s + text-input diffs → `PendingInteraction`, then applies via the shared core pipeline |
-| `plugin` | `A2uiPlugin` — registers the render-loop systems + observers, spawns the base UI |
-| `state` | `A2uiState` (`NonSend` resource) — owns the processor, function map, focus, open-modals, and the `node_map` |
+| `images` | Decodes / fetches `Image` URLs into `bevy::image::Image` assets and caches the `Handle` (local read + blocking `ureq` fetch) |
+| `plugin` | `A2uiPlugin` — registers the render-loop systems + observers, spawns the base UI, loads the embedded emoji icon font |
+| `state` | `A2uiState` (`NonSend` resource) — owns the processor, function map, focus, open-modals, `node_map`, icon-font handle, image cache, local_tabs |
 | `sample_browser` | Left-hand sample list; clicking a row switches the loaded sample |
 
 ## License

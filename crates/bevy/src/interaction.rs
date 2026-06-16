@@ -37,9 +37,9 @@ use a2ui_base::components::dispatch_event;
 use a2ui_base::event::{InputEvent, InputKey};
 use a2ui_base::interaction::apply_event_result;
 use a2ui_base::model::component_context::ComponentContext;
-use a2ui_base::protocol::common_types::{DynamicBoolean, DynamicNumber, DynamicString};
+use a2ui_base::protocol::common_types::{DynamicBoolean, DynamicNumber, DynamicString, DynamicStringList};
 
-use crate::state::{A2uiNode, A2uiState, PendingInteractions};
+use crate::state::{A2uiNode, A2uiState, ChoiceOption, ModalDismiss, PendingInteractions, TabTitle};
 
 /// One deferred interaction, collected during a frame and applied after.
 ///
@@ -58,20 +58,81 @@ pub enum PendingInteraction {
     ModalTrigger { modal_id: String },
     /// A Modal's open panel was dismissed — close it.
     ModalClose { modal_id: String },
+    /// A Tabs title was clicked. `active_path` is the absolute `activeTab`
+    /// write-back pointer when it is bound (then the index is written to the
+    /// model); `None` for an unbound Tabs (the selection is tracked locally in
+    /// `A2uiState::local_tabs`). Carried from the [`TabTitle`] marker, which
+    /// captured it at plan time against the node's base path.
+    TabActivate { tabs_id: String, index: usize, active_path: Option<String> },
+    /// A single-select ChoicePicker option was chosen — write `json!([value])`
+    /// to its `value` binding.
+    ChoiceSelect { picker_id: String, value: String },
+    /// A multi-select ChoicePicker option was toggled — add/remove `value` in
+    /// the current selection array, then write the array to its `value` binding.
+    ChoiceToggle { picker_id: String, value: String },
 }
 
 // ===========================================================================
 // Collection — observers for the bevy_ui_widgets events
 // ===========================================================================
 
-/// Button activation → `ButtonActivate`. The source `Activate.entity` is the
-/// Bevy widget entity; look up its `A2uiNode` marker to recover the A2UI id.
+/// Button activation → routed to the right interaction. The source
+/// `Activate.entity` is the Bevy widget entity. **Synthetic** button entities
+/// (tab titles, choice options) carry a [`TabTitle`] / [`ChoiceOption`] marker
+/// and are routed to a `TabActivate` / `ChoiceSelect` / `ChoiceToggle` before
+/// the generic `ButtonActivate` fallthrough (which maps a real A2UI Button via
+/// its `A2uiNode` marker). `bevy_ui_widgets`' `Activate` is a global trigger,
+/// so the same observer fires for every button kind.
 pub fn collect_button_activate(trigger: On<Activate>, mut world: DeferredWorld) {
-    let Some(node) = world
-        .entity(trigger.event().entity)
-        .get::<A2uiNode>()
-        .map(|n| n.id.clone())
-    else {
+    let entity = trigger.event().entity;
+    let ent = world.entity(entity);
+
+    // Synthetic Modal dismiss (scrim backdrop click / panel close button).
+    if let Some(dismiss) = ent.get::<ModalDismiss>() {
+        let interaction = PendingInteraction::ModalClose {
+            modal_id: dismiss.modal_id.clone(),
+        };
+        if let Some(mut q) = world.get_non_send_resource_mut::<PendingInteractions>() {
+            q.0.push(interaction);
+        }
+        return;
+    }
+
+    // Synthetic tab-title button.
+    if let Some(tab) = ent.get::<TabTitle>() {
+        let interaction = PendingInteraction::TabActivate {
+            tabs_id: tab.tabs_id.clone(),
+            index: tab.index,
+            active_path: tab.active_path.clone(),
+        };
+        if let Some(mut q) = world.get_non_send_resource_mut::<PendingInteractions>() {
+            q.0.push(interaction);
+        }
+        return;
+    }
+
+    // Synthetic choice-option button (single-select; multi-select also uses a
+    // Button here, see `apply_choice_option`).
+    if let Some(choice) = ent.get::<ChoiceOption>() {
+        let interaction = if choice.multiple {
+            PendingInteraction::ChoiceToggle {
+                picker_id: choice.picker_id.clone(),
+                value: choice.value.clone(),
+            }
+        } else {
+            PendingInteraction::ChoiceSelect {
+                picker_id: choice.picker_id.clone(),
+                value: choice.value.clone(),
+            }
+        };
+        if let Some(mut q) = world.get_non_send_resource_mut::<PendingInteractions>() {
+            q.0.push(interaction);
+        }
+        return;
+    }
+
+    // Fallthrough: a real A2UI Button.
+    let Some(node) = ent.get::<A2uiNode>().map(|n| n.id.clone()) else {
         return;
     };
     if let Some(mut q) = world.get_non_send_resource_mut::<PendingInteractions>() {
@@ -148,7 +209,11 @@ pub fn collect_text_field_changes(
 
     for (entity, node, buffer) in nodes.iter() {
         let Some(model) = components.get(&node.id) else { continue };
-        if model.component_type != "TextField" { continue; }
+        // DateTimeInput reuses the TextField widget + write-back machinery, so
+        // it is polled here too (both keep their editable content under `value`).
+        if model.component_type != "TextField" && model.component_type != "DateTimeInput" {
+            continue;
+        }
         let Some(DynamicString::Binding(b)) =
             model.get_property::<DynamicString>("value")
         else {
@@ -249,6 +314,66 @@ pub fn apply_interactions_full(
                 state.open_modals.remove(&modal_id);
                 changed = true;
             }
+            PendingInteraction::TabActivate { tabs_id, index, active_path } => {
+                // Bound Tabs → write the index to the data model; unbound →
+                // track locally (the gallery samples fall here). Either way the
+                // reconciler re-walks and swaps the active panel next frame.
+                match active_path {
+                    Some(path) => {
+                        if let Some(surface) = state.processor.model.surfaces_mut().next() {
+                            surface
+                                .data_model
+                                .borrow_mut()
+                                .set(&path, serde_json::json!(index));
+                        }
+                    }
+                    None => {
+                        state.local_tabs.insert(tabs_id, index);
+                    }
+                }
+                changed = true;
+            }
+            PendingInteraction::ChoiceSelect { picker_id, value } => {
+                // Single-select: write `json!([value])` to the bound path.
+                if let Some(path) = resolve_choice_binding(&state, &picker_id) {
+                    if let Some(surface) = state.processor.model.surfaces_mut().next() {
+                        surface
+                            .data_model
+                            .borrow_mut()
+                            .set(&path, serde_json::json!([value]));
+                    }
+                    changed = true;
+                }
+            }
+            PendingInteraction::ChoiceToggle { picker_id, value } => {
+                // Multi-select: read the current array, toggle membership, write back.
+                if let Some(path) = resolve_choice_binding(&state, &picker_id) {
+                    if let Some(surface) = state.processor.model.surfaces_mut().next() {
+                        let current: Vec<String> = surface
+                            .data_model
+                            .borrow()
+                            .get(&path)
+                            .and_then(Value::as_array)
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_str().map(String::from))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
+                        let mut next = current;
+                        if let Some(pos) = next.iter().position(|v| v == &value) {
+                            next.remove(pos);
+                        } else {
+                            next.push(value);
+                        }
+                        surface
+                            .data_model
+                            .borrow_mut()
+                            .set(&path, serde_json::json!(next));
+                    }
+                    changed = true;
+                }
+            }
         }
     }
     if changed {
@@ -284,6 +409,25 @@ fn resolve_widget_binding(
         return (data_context_resolve_pointer(&data_model, &b.path), value);
     }
     (String::new(), value)
+}
+
+/// Resolve a ChoicePicker's absolute write-back path from its `value`
+/// `DynamicStringList` binding. Returns `None` for a literal/function value
+/// (a read-only picker, matching how the TUI `handle_event` bails). The
+/// [`ChoiceOption`] marker already carries the plan-time-resolved path; this is
+/// the fallback re-resolution used when the marker's path is consulted — kept
+/// for parity with [`resolve_widget_binding`].
+fn resolve_choice_binding(state: &A2uiState, component_id: &str) -> Option<String> {
+    let surface = state.processor.model.surfaces().next()?;
+    let components = surface.components.borrow();
+    let data_model = surface.data_model.borrow();
+    let model = components.get(component_id)?;
+    match model.get_property::<DynamicStringList>("value")? {
+        DynamicStringList::Binding(b) => {
+            Some(data_context_resolve_pointer(&data_model, &b.path))
+        }
+        _ => None,
+    }
 }
 
 /// A node was activated (button click): dispatch `Enter` via the shared core

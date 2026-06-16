@@ -42,6 +42,8 @@
 #![cfg_attr(not(feature = "backend"), allow(unused_imports))]
 
 #[cfg(feature = "backend")]
+pub mod images;
+#[cfg(feature = "backend")]
 pub mod interaction;
 #[cfg(feature = "backend")]
 pub mod plugin;

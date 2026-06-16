@@ -117,8 +117,8 @@ fn main() -> ExitCode {
     //    plugin, picking, input focus, and the wgpu render backend; `A2uiPlugin`
     //    adds the widget runtimes + the render-loop systems. `A2uiState` is a
     //    NonSend resource (the processor is !Sync).
-    App::new()
-        .add_plugins(DefaultPlugins.set(WindowPlugin {
+    let mut app = App::new();
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
             primary_window: Some(Window {
                 title: "A2UI Bevy Gallery".into(),
                 resolution: bevy::window::WindowResolution::new(1000, 700),
@@ -127,8 +127,92 @@ fn main() -> ExitCode {
             ..default()
         }))
         .insert_non_send_resource(state)
-        .add_plugins(A2uiPlugin)
-        .run();
+        .add_plugins(A2uiPlugin);
+
+    // Optional self-screenshot mode (compositor-independent, like the sci-fi HUD
+    // example): warm up a few dozen frames, capture one PNG to the path, exit.
+    // `A2UI_OPEN_MODALS=1` also force-opens every Modal's overlay first (so a
+    // screenshot can show the modal chrome), and is useful for non-screenshot
+    // debugging too.
+    let screenshot = std::env::var("A2UI_SCREENSHOT_PATH").ok();
+    let open_modals = std::env::var("A2UI_OPEN_MODALS").map(|v| !v.is_empty()).unwrap_or(false);
+    if open_modals || screenshot.is_some() {
+        app.insert_resource(ForceOpenModals(open_modals));
+        // Run before the reconciler so the overlay content mounts same-frame.
+        app.add_systems(bevy::prelude::PreUpdate, force_open_modals);
+    }
+    if let Some(path) = screenshot.clone() {
+        app.insert_resource(CaptureRequest {
+            path: std::path::PathBuf::from(path),
+            frame: 0,
+        })
+        .add_systems(Update, capture_and_exit);
+    }
+
+    app.run();
 
     ExitCode::SUCCESS
+}
+
+// ── Optional debug: force-open modals + self-screenshot ──────────────────────
+
+#[derive(Resource, Default)]
+struct ForceOpenModals(bool);
+
+/// Insert every `Modal` component id into `open_modals` so the reconciler mounts
+/// the overlay content (for screenshots / debugging modal chrome). Driven by
+/// `A2UI_OPEN_MODALS=1`.
+fn force_open_modals(
+    force: Res<ForceOpenModals>,
+    mut state: NonSendMut<A2uiState>,
+) {
+    if !force.0 {
+        return;
+    }
+    // Collect Modal ids while borrowing the model, then mutate open_modals after.
+    let modal_ids: Vec<String> = {
+        let Some(surface) = state.processor.model.surfaces().next() else {
+            return;
+        };
+        let components = surface.components.borrow();
+        components
+            .all()
+            .iter()
+            .filter_map(|(id, m)| (m.component_type == "Modal").then(|| id.clone()))
+            .collect()
+    };
+    let mut changed = false;
+    for id in modal_ids {
+        if state.open_modals.insert(id) {
+            changed = true;
+        }
+    }
+    if changed {
+        state.dirty = true;
+    }
+}
+
+#[derive(Resource)]
+struct CaptureRequest {
+    path: std::path::PathBuf,
+    frame: u32,
+}
+
+/// Warm the render up for ~0.75 s, capture one PNG to `path`, then quit once the
+/// async save has flushed. Mirrors the sci-fi HUD example's capture path.
+fn capture_and_exit(
+    mut req: ResMut<CaptureRequest>,
+    mut commands: Commands,
+    mut exit: bevy::prelude::MessageWriter<bevy::prelude::AppExit>,
+) {
+    req.frame += 1;
+    if req.frame == 45 {
+        eprintln!("Capturing Bevy gallery screenshot -> {}", req.path.display());
+        commands
+            .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
+            .observe(bevy::render::view::screenshot::save_to_disk(req.path.clone()));
+    }
+    if req.frame == 100 {
+        exit.write(bevy::app::AppExit::Success);
+    }
 }

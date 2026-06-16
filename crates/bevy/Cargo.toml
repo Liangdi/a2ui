@@ -15,8 +15,11 @@ default = []
 #
 # The workspace `bevy` dep is already configured with the minimal UI feature set
 # (layout, text, windowing via winit, picking, input focus, the experimental
-# `bevy_ui_widgets` headless widgets, and the wgpu UI render path).
-backend = ["dep:bevy", "dep:bevy_ui_text_input"]
+# `bevy_ui_widgets` headless widgets, and the wgpu UI render path). The `image`
+# crate decodes raster `Image` components to Bevy textures; `ureq` fetches
+# remote `http(s)` image URLs (blocking, on the UI thread — matching the Slint
+# backend; the gallery samples carry only a handful of small images).
+backend = ["dep:bevy", "dep:bevy_ui_text_input", "dep:image", "dep:ureq"]
 
 [dependencies]
 a2ui-base = { workspace = true }
@@ -25,6 +28,12 @@ serde_json = { workspace = true }
 bevy = { workspace = true, optional = true }
 # Optional: external text-input widget (Bevy 0.18 has no first-party one).
 bevy_ui_text_input = { workspace = true, optional = true }
+# Optional: raster image decoding for the `Image` component (PNG / JPEG / … →
+# Bevy `bevy::image::Image`). Same version line Bevy 0.18 uses internally.
+image = { workspace = true, optional = true }
+# Optional: sync HTTP client for remote `Image` URLs (rustls TLS). Same one the
+# Iced / Slint backends use.
+ureq = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Examples read live values out of the data model and render them with Bevy's

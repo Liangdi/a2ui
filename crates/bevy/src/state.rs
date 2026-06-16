@@ -12,6 +12,7 @@
 use std::collections::{HashMap, HashSet};
 
 use bevy::ecs::{component::Component, entity::Entity};
+use bevy::prelude::{Font, Handle, Image};
 
 use a2ui_base::catalog::function_api::FunctionImplementation;
 use a2ui_base::focus::FocusManager;
@@ -42,10 +43,56 @@ pub struct A2uiNode {
     pub overlay: bool,
 }
 
-/// One pending interaction collected during a frame's widget events, applied by
-/// [`crate::interaction::apply_interactions`] after the borrows are settled.
+/// Marker on a synthetic **tab-title** button entity (a Tabs' clickable title).
 ///
-/// (Defined in [`crate::interaction`]; re-aliased here only for doc links.)
+/// Tabs' titles are not A2UI components — the reconciler spawns one synthetic
+/// button per title so each is an independent click target. This marker carries
+/// the parent Tabs' component id + the title index, plus the absolute JSON
+/// pointer to write when `activeTab` is bound (resolved at plan time against the
+/// node's base path, so it is correct even inside template children). The button
+/// observer ([`crate::interaction::collect_button_activate`]) checks this marker
+/// before the generic `ButtonActivate` fallthrough.
+#[derive(Component, Debug, Clone)]
+pub struct TabTitle {
+    /// The parent Tabs component id.
+    pub tabs_id: String,
+    /// The 0-based index of this title in the Tabs' `tabs` array.
+    pub index: usize,
+    /// Absolute write-back pointer when `activeTab` is bound; `None` for an
+    /// unbound Tabs (tracked locally in `A2uiState::local_tabs`).
+    pub active_path: Option<String>,
+}
+
+/// Marker on a synthetic **choice-option** button entity (a ChoicePicker row).
+///
+/// ChoicePicker options are not A2UI components — the reconciler spawns one
+/// synthetic button per option (single-select renders `●`/`○`, multi-select
+/// `☑`/`☐`). Carries the parent's id + the option value + the absolute
+/// write-back pointer (resolved at plan time). The button observer routes the
+/// click to a single-select or multi-select interaction.
+#[derive(Component, Debug, Clone)]
+pub struct ChoiceOption {
+    /// The parent ChoicePicker component id.
+    pub picker_id: String,
+    /// The `value` of this option (written into the selection array).
+    pub value: String,
+    /// `true` for a multi-select (`variant == "multipleSelection"`) picker.
+    pub multiple: bool,
+    /// Absolute write-back pointer when `value` is bound; `None` for a
+    /// literal/function value (the picker renders read-only).
+    pub value_path: Option<String>,
+}
+
+/// Marker on a synthetic Modal **dismiss** entity (the scrim backdrop or the
+/// panel's close button). A click on either closes the named Modal locally
+/// (removes it from `A2uiState::open_modals`). The button observer
+/// ([`crate::interaction::collect_button_activate`]) checks this marker before
+/// the generic `ButtonActivate` fallthrough.
+#[derive(Component, Debug, Clone)]
+pub struct ModalDismiss {
+    /// The Modal component id this scrim/close dismisses.
+    pub modal_id: String,
+}
 
 /// The shared runtime state — owned as a Bevy **`NonSend` resource**, one per app.
 ///
@@ -98,6 +145,22 @@ pub struct A2uiState {
     /// spawn/despawn/reorder. Property re-resolution happens every frame
     /// regardless.
     pub dirty: bool,
+    /// Handle to the embedded emoji icon font (loaded once in `setup_base_ui`).
+    /// Applied to every `Icon`'s `TextFont` so its emoji glyph renders — Bevy's
+    /// bundled default font (`FiraMono-subset`) covers almost no icon glyphs.
+    pub icon_font: Option<Handle<Font>>,
+    /// Decoded-image cache: resolved `Image` URL → its Bevy `Handle<Image>` once
+    /// decoded (`None` = attempted but failed/not-loadable, so it isn't retried).
+    /// Local-file and `http(s)` URLs both flow through here (local files are read
+    /// synchronously; remote URLs are fetched on the UI thread — matching the
+    /// Slint backend, acceptable for the gallery's handful of small images).
+    /// `data:` URLs are not supported (placeholder). Cleared on `load_sample`.
+    pub image_cache: HashMap<String, Option<Handle<Image>>>,
+    /// Locally-tracked active tab index for Tabs whose `activeTab` is **not** a
+    /// data binding (the gallery samples fall here). Keyed by component id. A
+    /// bound Tabs writes to the model instead and never touches this. Cleared on
+    /// `load_sample`. Mirrors Iced's `local_tabs`.
+    pub local_tabs: HashMap<String, usize>,
 }
 
 impl A2uiState {
@@ -119,6 +182,9 @@ impl A2uiState {
             surface_root: None,
             overlay_root: None,
             dirty: true,
+            icon_font: None,
+            image_cache: HashMap::new(),
+            local_tabs: HashMap::new(),
         }
     }
 
@@ -160,6 +226,11 @@ impl A2uiState {
             self.focus.rebuild_from_components(&components);
         }
         self.open_modals.clear();
+        // Drop the previous sample's decoded images so the cache doesn't grow
+        // unbounded across sample switches (re-decoded on demand), and reset the
+        // locally-tracked tab selections — mirrors Iced's `load_sample`.
+        self.image_cache.clear();
+        self.local_tabs.clear();
         self.dirty = true;
         self.selected_sample = idx;
     }
