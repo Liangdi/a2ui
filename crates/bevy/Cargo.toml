@@ -25,3 +25,19 @@ serde_json = { workspace = true }
 bevy = { workspace = true, optional = true }
 # Optional: external text-input widget (Bevy 0.18 has no first-party one).
 bevy_ui_text_input = { workspace = true, optional = true }
+
+[dev-dependencies]
+# Examples read live values out of the data model and render them with Bevy's
+# native UI directly (not via the a2ui-bevy reconciler — the layout *is* the
+# Bevy entity tree; only the data flows through the protocol). `a2ui-tui`
+# provides `build_basic_catalog`; `bevy` is the optional runtime dep made
+# available to examples via the `backend` feature (its workspace feature set
+# already pulls the UI stack: bevy_ui, bevy_text, bevy_winit, ui_bevy_render,
+# default_font, ui_picking, ...).
+a2ui-tui = { workspace = true }
+bevy = { workspace = true }
+
+[[example]]
+name = "17_scifi_hud"
+# Needs the real Bevy runtime (wgpu + winit) to open a window.
+required-features = ["backend"]

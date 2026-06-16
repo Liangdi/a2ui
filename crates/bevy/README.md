@@ -37,6 +37,16 @@ cargo build -p a2ui-bevy --features backend
 
 渲染器使用 wgpu,需要 GPU/wgpu 栈但无需游戏专用工具链。
 
+## 示例
+
+`crates/bevy/examples/17_scifi_hud.rs` 是 ratatui 版 [`17_scifi_hud`](../a2ui/examples/17_scifi_hud.rs) 的 Bevy 对应版:同一份数据、同样的「data model 是唯一真源」架构,换用 Bevy 原生 UI 渲染。它不走本 crate 的 reconciler —— **布局就是 Bevy 实体树**:HUD 实体树在 `Startup` 里 spawn 一次,每帧由一个 `Update` system 从 data model 读出最新值、原位 mutate 已有实体(`Text` / `Node.width` / `BackgroundColor` / `TextColor`)。这正是保留式 ECS 的长处:实体身份跨帧保持,无需每帧重建、无需状态桥。仪表用 flex 条、雷达用 ASCII 字符网格(呼应 ratatui 原版;Bevy UI 无 canvas)。动画由一个 ~80 ms 的 `Timer` 资源推进 `tick` system(等价于 ratatui 版的 `event::poll`)。
+
+```bash
+cargo run -p a2ui-bevy --example 17_scifi_hud --features backend
+```
+
+> 截图由 [`scripts/capture_bevy_screenshot.sh`](../scripts/capture_bevy_screenshot.sh) 产生。锁定的 GNOME Wayland 下桌面截图工具不可用(`org.gnome.Shell.Screenshot` D-Bus 被拒、X11 工具看不见 Wayland 原生窗口),故示例内置一个 env(`A2UI_SCREENSHOT_PATH`)触发的自截图模式:直接读窗口渲染目标(`Screenshot::primary_window()` + `save_to_disk`),与合成器无关,然后退出。
+
 ## Reconciler(实现要点)
 
 Bevy 的可交互控件只有当其实体逐帧存活时才能正确工作 —— 每帧重建(Slint / egui 的做法)会让滑块每帧乱跳、文本光标每帧丢失。所以 reconciler 针对 `A2uiState` 中稳定的 `node_map: HashMap<component_id, Entity>` 做两遍 diff/patch:
