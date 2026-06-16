@@ -792,4 +792,90 @@ mod render_tests {
         assert!(screen.contains("Fine Dining & Spirits"), "first restaurant subtitle should render:\n{screen}");
         assert!(screen.contains("456 Shoreline Dr"), "second restaurant address should render:\n{screen}");
     }
+
+    #[test]
+    fn at_index_system_function_renders_in_template_items() {
+        // The `@index` system function (common_types.json → indexSystemFunction)
+        // must resolve to each template item's 0-based index. With offset:1 a
+        // 3-item list renders "1", "2", "3" — proving the index is derived from
+        // the item's base path with zero backend-specific plumbing. If @index
+        // were unimplemented, every item would show "" or a constant "1".
+        use crate::catalogs::minimal::{build_minimal_catalog, build_minimal_registry};
+
+        let registry = build_minimal_registry();
+        let mut processor = MessageProcessor::new(vec![build_minimal_catalog()]);
+
+        let create = serde_json::json!({
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "idx_surf",
+                "catalogId": "https://a2ui.org/specification/v1_0/catalogs/minimal/catalog.json"
+            }
+        });
+        processor
+            .process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
+
+        let set_data = serde_json::json!({
+            "version": "v1.0",
+            "updateDataModel": {
+                "surfaceId": "idx_surf",
+                "path": "/",
+                "value": { "items": [
+                    { "label": "Apple" },
+                    { "label": "Banana" },
+                    { "label": "Cherry" }
+                ] }
+            }
+        });
+        processor
+            .process_message(MessageProcessor::parse_message(&set_data.to_string()).unwrap())
+            .unwrap();
+
+        let update = serde_json::json!({
+            "version": "v1.0",
+            "updateComponents": {
+                "surfaceId": "idx_surf",
+                "components": [
+                    { "id": "root", "component": "Column", "children": { "path": "/items", "componentId": "item" } },
+                    { "id": "item", "component": "Row", "children": ["idx", "name"] },
+                    { "id": "idx", "component": "Text", "text": { "call": "@index", "args": { "offset": 1 } } },
+                    { "id": "name", "component": "Text", "text": { "path": "label" } }
+                ]
+            }
+        });
+        processor
+            .process_message(MessageProcessor::parse_message(&update.to_string()).unwrap())
+            .unwrap();
+
+        let surface = processor.model.get_surface("idx_surf").expect("surface exists");
+        let backend = TestBackend::new(60, 24);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        let render_catalog = Catalog::new("placeholder");
+        terminal
+            .draw(|frame| {
+                let renderer = SurfaceRenderer::new(surface, &registry, &render_catalog);
+                renderer.render(frame, frame.area(), None);
+            })
+            .unwrap();
+
+        let buf = terminal.backend().buffer().clone();
+        let mut screen = String::new();
+        for y in 0..24u16 {
+            for x in 0..60u16 {
+                screen.push(buf[(x, y)].symbol().chars().next().unwrap_or(' '));
+            }
+            screen.push('\n');
+        }
+
+        // Template expansion + @index: the three labels render, and the index
+        // text yields 1, 2, 3 (offset 1 over a 0-based 0,1,2).
+        assert!(screen.contains("Apple"), "item 0 label rendered:\n{screen}");
+        assert!(screen.contains("Banana"), "item 1 label rendered:\n{screen}");
+        assert!(screen.contains("Cherry"), "item 2 label rendered:\n{screen}");
+        assert!(
+            screen.contains('1') && screen.contains('2') && screen.contains('3'),
+            "@index must render 1,2,3 across the three template items:\n{screen}"
+        );
+    }
 }
