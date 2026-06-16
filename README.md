@@ -26,7 +26,7 @@
 - ✅ **模块化 Cargo workspace 架构**（`a2ui-base` 框架无关 / `a2ui-tui` ratatui backend / `a2ui-gallery` 展示 app / `a2ui` umbrella）
 - ✅ JSON Pointer 数据绑定与响应式状态管理
 - ✅ Gallery App 示例浏览器（支持消息逐步渲染）
-- ✅ **231 个单元/集成测试**（core 127 + tui 61 + gallery e2e 21 + slint 10 + iced 12），包含 A2UI 规范样例的端到端测试
+- ✅ **235 个单元/集成测试**（core 127 + tui 61 + gallery e2e 21 + slint 14 + iced 12），包含 A2UI 规范样例的端到端测试
 
 ## 截图
 
@@ -48,13 +48,16 @@
 
 **Sci-fi HUD — 后端对比**（同一份数据、同一套 `updateDataModel` 协议，换不同渲染器；仪表 / 雷达扫描 / 事件日志所有实时值均从 a2ui data model 读出）
 
-| ratatui 终端（`a2ui` 的 `17_scifi_hud`） | Iced 桌面（`a2ui-iced` 的 `17_scifi_hud`） | Dioxus 桌面（`a2ui-dioxus` 的 `17_scifi_hud`） |
-|:---:|:---:|:---:|
-| ![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | ![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) | ![Sci-fi HUD — Dioxus](screenshot/sci-fi-hud-dioxus.png) |
+|  |  |
+|:---:|:---:|
+| **ratatui 终端**（`a2ui` 的 `17_scifi_hud`）<br>![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | **Iced 桌面**（`a2ui-iced` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) |
+| **Dioxus 桌面**（`a2ui-dioxus` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Dioxus](screenshot/sci-fi-hud-dioxus.png) | **Bevy 桌面**（`a2ui-bevy` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Bevy](screenshot/sci-fi-hud-bevy.png) |
 
-ratatui 版用自定义 `TuiComponent` 画 ASCII 仪表 + 字符网格雷达；Iced 版用 `progress_bar` 仪表 + `Canvas` 雷达；Dioxus 版用 CSS 进度条 + **SVG** 雷达扫描,渲染到系统 WebView。三者架构一致——仅**数据**经协议流动,渲染层各自为政。
+ratatui 版用自定义 `TuiComponent` 画 ASCII 仪表 + 字符网格雷达；Iced 版用 `progress_bar` 仪表 + `Canvas` 雷达；Dioxus 版用 CSS 进度条 + **SVG** 雷达扫描,渲染到系统 WebView；Bevy 版用**原生 Bevy UI 节点**(保留式 ECS:实体树 spawn 一次,每帧原位 mutate `Text`/`Node`/颜色)+ flex 条仪表 + ASCII 字符网格雷达(呼应 ratatui 原版)。四者架构一致——仅**数据**经协议流动,渲染层各自为政。
 
-> 目前 sci-fi HUD 在 **ratatui (TUI)**、**Iced**、**Dioxus** 三个后端实现;Slint / egui / Bevy 的 gallery 渲染标准 spec 样例,暂无 HUD 变体。
+> 目前 sci-fi HUD 在 **ratatui (TUI)**、**Iced**、**Dioxus**、**Bevy** 四个后端实现;Slint / egui 的 gallery 渲染标准 spec 样例,暂无 HUD 变体。
+>
+> Bevy 版的截图由 `scripts/capture_bevy_screenshot.sh` 产生:锁定 GNOME Wayland 下桌面截图工具不可用(`org.gnome.Shell.Screenshot` D-Bus 被拒、X11 工具看不见 Wayland 原生窗口),故示例内置一个 env 触发的自截图模式,直接读窗口渲染目标(`Screenshot::primary_window()` + `save_to_disk`),与合成器无关。
 
 ## 快速开始
 
@@ -108,25 +111,26 @@ cargo run -p a2ui --example 12_handshake
 | Text / Row / Column / Card / List / Divider | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Button | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Modal | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| TextField | ✅ | 🟡 | ✅ | ✅ | ✅ | ✅ |
+| TextField | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | CheckBox | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Slider | ✅ | 🟡 | ✅ | ✅ | ✅ | ✅ |
-| ChoicePicker | ✅ | 🟡 | ✅ | ⬜ | ✅ | ✅ |
-| Tabs | ✅ | 🟡 | 🟡 | 🟡 | ✅ | ✅ |
-| DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | ✅ | ✅ |
-| Icon | ✅ | 🟡 | 🟡 | 🟡 | ✅ | ✅ |
-| Image | ✅² | ⬜ | ⬜ | ⬜ | ✅⁵ | ✅³ |
+| Slider | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| ChoicePicker | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ |
+| Tabs | ✅ | ✅ | 🟡 | 🟡 | ✅ | ✅ |
+| DateTimeInput | ✅ | ✅ | 🟡 | 🟡 | ✅ | ✅ |
+| Icon | ✅ | ✅ | 🟡 | 🟡 | ✅ | ✅ |
+| Image | ✅² | ✅⁶ | ⬜ | ⬜ | ✅⁵ | ✅³ |
 | Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
 | AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
 
 ¹ 需 `audio` 特性。
-² TUI 经 `ratatui-image` 真实解码并显示图像像素(kitty / iTerm2 / Sixel / Halfblocks 自动降级,仅本地路径);Slint / egui / Bevy 三个桌面后端目前仅渲染文本占位符。
+² TUI 经 `ratatui-image` 真实解码并显示图像像素(kitty / iTerm2 / Sixel / Halfblocks 自动降级,仅本地路径);egui / Bevy 两个桌面后端目前仅渲染文本占位符。
 ³ Dioxus 经 WebView 原生 `<img>` 显示图像(支持 `file://` / `http(s)` / `data:` URL)。
 ⁴ Dioxus 经 WebView 原生 `<audio>` / `<video>` 元素真实播放(浏览器提供播放/暂停/进度/音量/全屏等完整传输控件)——这是终端及其它桌面后端做不到的。
 ⁵ Iced 没有内置的 URL 图片加载器(其 `image` 组件只接受本地路径或内存字节),因此 `Image` 的 `http(s)` URL 由后台用 `ureq` 拉取字节、`Handle::from_bytes` 解码后缓存(切换样例时清空);本地路径则直接走 `Handle::from_path`。`fit` 映射到 `ContentFit`。
+⁶ Slint 经原生 `Image` 组件 + `image` crate 解码渲染图像像素:本地路径(含 `file://`)直接读文件,`http(s)` URL 由 `ureq` 拉取字节后解码(切换样例时清空缓存);`data:` URL 及解码失败的图片为带标签占位符。
 
 - **TUI 是参考实现**:18 组件全部完整渲染;图片默认开启(`ratatui-image`),音频需 `audio` 特性,视频始终为占位符。
-- **可交互输入控件(TextField / Slider / CheckBox / ChoicePicker / DateTimeInput)的「真输入」**:egui、Bevy、Iced、Dioxus 与 TUI 完整支持;**Slint 仅 Button / CheckBox 点击可交互**,TextField / Slider 渲染为只读值。
+- **可交互输入控件(TextField / Slider / CheckBox / ChoicePicker / DateTimeInput)的「真输入」**:Slint、egui、Bevy、Iced、Dioxus 与 TUI 完整支持(Slint 用原生 `LineEdit` / `Slider` / `CheckBox` / `ComboBox` 控件,变化回调直接写回 data model,与 Iced / egui 同构)。
 - **Bevy 的 ChoicePicker** 当前为文本标签(`[ChoicePicker: …]`),尚未接入原生选择控件。
 - **Iced 是映射最干净的后端**(无状态桥 / 无 diff),五个可交互控件全部原生 —— ChoicePicker 用原生 `pick_list`(单选)/ checkbox 组(多选),DateTimeInput 用绑定到 data model 的可编辑文本框,Tabs 有可点击 tab 栏(绑定的 `activeTab` 写回 data model;gallery 样例未绑定 `activeTab`,则选中的 tab 在本地跟踪,点击仍能切换面板);Icon 直接显示 emoji(映射表与 TUI 一致);**Image 也真实渲染**(本地路径即时解码,远程 URL 后台拉取 + 缓存,见脚注⁵);**Dioxus 架构最独特**(响应式 signals + WebView/CSS 渲染),且借 WebView 之力,Image / Video / AudioPlayer 均用原生 HTML 媒体元素真实渲染——**它是唯一覆盖全部 18 个 A2UI 组件的后端**(连 TUI 的 Video 都是占位符,终端无法播放视频)。
 
@@ -156,25 +160,31 @@ cargo run -p a2ui-slint-gallery -- login    # 按名称子串(大小写不敏感
 
 ### 组件覆盖
 
-全部 18 个 A2UI 组件类型均可渲染:
+16 个 A2UI 组件类型可原生渲染(仅 Video / AudioPlayer 仍为占位符 —— Slint 无媒体播放控件):
 
-- **富渲染**:Text / Button / Column / Row / Card / TextField / CheckBox / Slider(Button 与 CheckBox 的点击通过共享的 `core::components::dispatch_event` 分发)
-- **尽力渲染**:Divider / Icon / Tabs / Modal / List / ChoicePicker / DateTimeInput
-- **占位符**:Image / Video / AudioPlayer 渲染为带标签的占位符(二进制媒体不会带入 Slint 树)
+- **容器 / 内容**:Text / Row / Column / Card / List / Divider / Modal(浮层)/ Button(点击通过共享的 `core::components::dispatch_event` 分发)
+- **可交互控件(全部原生,真输入写回 data model)**:TextField(原生 `LineEdit`)/ CheckBox(原生 `CheckBox`)/ Slider(原生 `Slider`)/ ChoicePicker(单选用原生 `ComboBox`,多选用 `CheckBox` 组)/ DateTimeInput(绑定到 data model 的可编辑 ISO 文本框)/ Tabs(可点击 tab 栏 + 仅渲染激活面板)
+- **Icon**:映射到 emoji / unicode 字形(映射表与 TUI / Iced / Dioxus 一致,未知名称回退为 `[前两字符]`)
+- **Image**:真实渲染 —— 本地路径(含 `file://`)直接读文件,`http(s)` URL 由 `ureq` 拉取字节,均经 `image` crate 解码为 `slint::Image` 后用原生 `Image` 组件显示(切换样例时清空缓存;远程抓取在 UI 线程同步执行,样例图片少可接受)
+- **占位符**:Video / AudioPlayer 渲染为带标签的占位符
 
 ### 实现要点:为什么需要展平组件树
 
 Slint **无法表达递归**(既不支持递归 struct,也不支持自引用组件 —— 见 [slint-ui/slint#4218](https://github.com/slint-ui/slint/issues/4218))。因此 `live_tree` 不是嵌套树,而是把组件树展平为一个 `Vec<LiveNode>`,通过基于索引的 `children` 引用;`build.rs` 代码生成了一个**有界深度**的组件链 `Node0`(叶子)→ … → `Node7`(根)。A2UI 树通常很浅,深度 7 足以覆盖实际 UI;更深的子树会被截断为 `…`。这是未来贡献者最需要了解的关键约束。
 
+### 实现要点:原生交互控件与直接写回
+
+Slint 标准控件库(`std-widgets.slint`)提供原生 `LineEdit` / `Slider` / `CheckBox` / `ComboBox`,但它们的变化是**指针驱动**的(拖动 / 点击 / 输入),而共享的 `core::dispatch_event` 只建模键盘事件(Button / CheckBox / Slider / TextField 的箭头键 / 字符键),没有指针事件的通道。因此 Slint 后端(**与 Iced / egui 后端同构**)**绕过 core dispatch,直接写回 data model**:`build.rs` 给每个控件接上变化回调(`edited` / `changed` / `toggled` / `selected`),回调带上节点 id 经 `Events` global 上交到 host;host 用 id 找到 `ComponentModel`,解析控件 `value`/`activeTab` 的 `DynamicString::Binding` 路径(经 `ComponentContext::data_context.resolve_pointer` 处理 template 嵌套路径),然后 `data_model.set(path, value)` 并 redraw。仅 **Button** 仍走 core 的 `dispatch_event`(Enter),因为它的动作可能触发服务端事件 / 函数调用。
+
 ### 当前限制
 
-- 超过 7 层的树会被截断;
-- TextField 能显示其值,但尚未接入原生可编辑输入控件;
-- Tabs / ChoicePicker / DateTimeInput 可渲染,但它们的键盘处理未进入共享 core 的 dispatch(Slint 侧除 Button / CheckBox 外的交互尚未接通)。
+- 超过 7 层的树会被截断(展平方案的有界深度约束);
+- `Image` 的远程 `http(s)` 抓取在 UI 线程同步执行(`Rc`/`RefCell` 状态无法跨 `invoke_from_event_loop` 的 `Send` 闭包),样例图片少时可接受;`data:` URL 为占位符;
+- Video / AudioPlayer 为占位符(Slint 无媒体播放控件)。
 
 ## egui 桌面后端
 
-除 ratatui 与 Slint 外,项目还提供 **`a2ui-egui`**:它把 A2UI 组件树渲染到原生桌面窗口,基于 [egui](https://github.com/emilk/egui)(即时模式 GUI,固定 0.33 版本)。与 Slint 后端不同,egui **原生支持递归**,因此不需要展平组件树或 `build.rs` 有界深度代码生成;`walker::render_node` 直接在 `&mut egui::Ui` 上递归渲染。egui 还提供**真正的可交互原生控件**(TextField / Slider / CheckBox / ComboBox),而 Slint 后端把它们渲染为只读占位符。Button 的点击复用共享的 `core::components::dispatch_event` + `apply_event_result`,与其它两个后端一致;Modal 用原生的 `egui::Window` 浮层呈现。
+除 ratatui 与 Slint 外,项目还提供 **`a2ui-egui`**:它把 A2UI 组件树渲染到原生桌面窗口,基于 [egui](https://github.com/emilk/egui)(即时模式 GUI,固定 0.33 版本)。与 Slint 后端不同,egui **原生支持递归**,因此不需要展平组件树或 `build.rs` 有界深度代码生成;`walker::render_node` 直接在 `&mut egui::Ui` 上递归渲染。egui 还提供**真正的可交互原生控件**(TextField / Slider / CheckBox / ComboBox)。Button 的点击复用共享的 `core::components::dispatch_event` + `apply_event_result`,与其它两个后端一致;Modal 用原生的 `egui::Window` 浮层呈现。
 
 **它是可选依赖**:`a2ui-egui` 是 workspace 的**非默认成员**(会拉取 winit + glow)。普通的 `cargo build` 只编译 ratatui 栈。需要显式构建:
 

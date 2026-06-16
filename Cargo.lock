@@ -35,6 +35,7 @@ name = "a2ui-bevy"
 version = "0.2.1"
 dependencies = [
  "a2ui-base",
+ "a2ui-tui",
  "bevy",
  "bevy_ui_text_input",
  "serde_json",
@@ -142,9 +143,11 @@ name = "a2ui-slint"
 version = "0.2.1"
 dependencies = [
  "a2ui-base",
+ "image",
  "serde_json",
  "slint",
  "slint-build",
+ "ureq",
 ]
 
 [[package]]

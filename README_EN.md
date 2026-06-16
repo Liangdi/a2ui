@@ -26,7 +26,7 @@ The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic c
 - ✅ **Modular Cargo workspace architecture** (`a2ui-base` framework-agnostic / `a2ui-tui` ratatui backend / `a2ui-gallery` demo app / `a2ui` umbrella)
 - ✅ JSON Pointer data binding with reactive state management
 - ✅ Gallery App sample browser with progressive message rendering
-- ✅ **231 unit/integration tests** (core 127 + tui 61 + gallery e2e 21 + slint 10 + iced 12), including end-to-end tests with A2UI specification examples
+- ✅ **235 unit/integration tests** (core 127 + tui 61 + gallery e2e 21 + slint 14 + iced 12), including end-to-end tests with A2UI specification examples
 
 ## Screenshots
 
@@ -48,13 +48,16 @@ The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic c
 
 **Sci-fi HUD — backend comparison** (same data, same `updateDataModel` protocol, different renderer; every live value — gauges, radar sweep, event log — is read from the a2ui data model)
 
-| ratatui terminal (`17_scifi_hud` in `a2ui`) | Iced desktop (`17_scifi_hud` in `a2ui-iced`) | Dioxus desktop (`17_scifi_hud` in `a2ui-dioxus`) |
-|:---:|:---:|:---:|
-| ![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | ![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) | ![Sci-fi HUD — Dioxus](screenshot/sci-fi-hud-dioxus.png) |
+|  |  |
+|:---:|:---:|
+| **ratatui terminal** (`17_scifi_hud` in `a2ui`)<br>![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | **Iced desktop** (`17_scifi_hud` in `a2ui-iced`)<br>![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) |
+| **Dioxus desktop** (`17_scifi_hud` in `a2ui-dioxus`)<br>![Sci-fi HUD — Dioxus](screenshot/sci-fi-hud-dioxus.png) | **Bevy desktop** (`17_scifi_hud` in `a2ui-bevy`)<br>![Sci-fi HUD — Bevy](screenshot/sci-fi-hud-bevy.png) |
 
-The ratatui version uses custom `TuiComponent`s to draw ASCII gauges and a character-grid radar; the Iced version uses `progress_bar` gauges and a `Canvas`-drawn radar; the Dioxus version uses CSS-bar gauges and an **SVG** radar sweep, rendered into a system WebView. The architecture is identical — only **data** flows through the protocol; the rendering layer is each backend's own.
+The ratatui version uses custom `TuiComponent`s to draw ASCII gauges and a character-grid radar; the Iced version uses `progress_bar` gauges and a `Canvas`-drawn radar; the Dioxus version uses CSS-bar gauges and an **SVG** radar sweep, rendered into a system WebView; the Bevy version uses **native Bevy UI nodes** (retained ECS: the entity tree is spawned once, then mutated in place each frame — `Text`/`Node`/colors) with flex-bar gauges and an ASCII character-grid radar (echoing the ratatui original). The architecture is identical — only **data** flows through the protocol; the rendering layer is each backend's own.
 
-> The sci-fi HUD is currently realized for the **ratatui (TUI)**, **Iced**, and **Dioxus** backends; the Slint / egui / Bevy galleries render the standard spec samples and do not yet have a HUD variant.
+> The sci-fi HUD is currently realized for the **ratatui (TUI)**, **Iced**, **Dioxus**, and **Bevy** backends; the Slint / egui galleries render the standard spec samples and do not yet have a HUD variant.
+>
+> The Bevy screenshot is produced by `scripts/capture_bevy_screenshot.sh`: on a locked-down GNOME Wayland session desktop screenshot tools are unavailable (`org.gnome.Shell.Screenshot` D-Bus is denied, and X11 tools can't see Wayland-native windows), so the example ships an env-triggered self-screenshot mode that reads the window's render target directly (`Screenshot::primary_window()` + `save_to_disk`), compositor-independent.
 
 ## Quick Start
 
@@ -108,25 +111,26 @@ All five backends share the same `a2ui-base` core (interaction logic / `dispatch
 | Text / Row / Column / Card / List / Divider | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Button | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | Modal | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| TextField | ✅ | 🟡 | ✅ | ✅ | ✅ | ✅ |
+| TextField | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 | CheckBox | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Slider | ✅ | 🟡 | ✅ | ✅ | ✅ | ✅ |
-| ChoicePicker | ✅ | 🟡 | ✅ | ⬜ | ✅ | ✅ |
-| Tabs | ✅ | 🟡 | 🟡 | 🟡 | ✅ | ✅ |
-| DateTimeInput | ✅ | 🟡 | 🟡 | 🟡 | ✅ | ✅ |
-| Icon | ✅ | 🟡 | 🟡 | 🟡 | ✅ | ✅ |
-| Image | ✅² | ⬜ | ⬜ | ⬜ | ✅⁵ | ✅³ |
+| Slider | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| ChoicePicker | ✅ | ✅ | ✅ | ⬜ | ✅ | ✅ |
+| Tabs | ✅ | ✅ | 🟡 | 🟡 | ✅ | ✅ |
+| DateTimeInput | ✅ | ✅ | 🟡 | 🟡 | ✅ | ✅ |
+| Icon | ✅ | ✅ | 🟡 | 🟡 | ✅ | ✅ |
+| Image | ✅² | ✅⁶ | ⬜ | ⬜ | ✅⁵ | ✅³ |
 | Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
 | AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
 
 ¹ Needs the `audio` feature.
-² The TUI backend decodes and renders actual image pixels via `ratatui-image` (kitty / iTerm2 / Sixel / Halfblocks auto-degrade, local paths only); the Slint / egui / Bevy desktop backends currently render only a text placeholder.
+² The TUI backend decodes and renders actual image pixels via `ratatui-image` (kitty / iTerm2 / Sixel / Halfblocks auto-degrade, local paths only); the egui / Bevy desktop backends currently render only a text placeholder.
 ³ The Dioxus backend renders images via the native WebView `<img>` (supports `file://` / `http(s)` / `data:` URLs).
 ⁴ The Dioxus backend plays real media via the native WebView `<audio>` / `<video>` elements (the browser supplies full transport controls — play/pause/seek/volume/fullscreen) — something the terminal and other desktop backends cannot do.
 ⁵ Iced has no built-in URL image loader (its `image` widget only takes a local path or in-memory bytes), so an `Image`'s `http(s)` URL is fetched out-of-band with `ureq`, decoded via `Handle::from_bytes`, and cached (cleared on sample switch); local paths go straight through `Handle::from_path`. `fit` maps onto `ContentFit`.
+⁶ The Slint backend renders actual image pixels via its native `Image` widget + the `image` crate: local paths (incl. `file://`) are read directly, `http(s)` URLs are fetched with `ureq` then decoded (cached and cleared on sample switch); `data:` URLs and images that fail to decode render as a labeled placeholder.
 
 - **The TUI backend is the reference implementation** — all 18 components render fully; real images are on by default (`ratatui-image`), audio needs the `audio` feature, video is always a placeholder.
-- **Genuine input on the interactive widgets (TextField / Slider / CheckBox / ChoicePicker / DateTimeInput)**: full on egui, Bevy, Iced, Dioxus, and TUI. **On Slint only Button / CheckBox clicks are wired** — TextField and Slider render read-only.
+- **Genuine input on the interactive widgets (TextField / Slider / CheckBox / ChoicePicker / DateTimeInput)**: full on Slint, egui, Bevy, Iced, Dioxus, and TUI (Slint uses native `LineEdit` / `Slider` / `CheckBox` / `ComboBox` widgets, with change callbacks writing straight back to the data model, isomorphic with Iced / egui).
 - **Bevy's ChoicePicker** is currently a text label (`[ChoicePicker: …]`); not yet wired to a native picker.
 - **Iced is the cleanest-mapping backend** (no state bridge, no diffing); all five interactive widgets are native — ChoicePicker uses a native `pick_list` (single-select) / checkbox group (multi-select), DateTimeInput is an editable text box bound to the data model, and Tabs has a clickable tab bar (a bound `activeTab` writes back to the data model; the gallery samples leave it unbound, so the selected tab is tracked locally and clicks still switch panels); Icon renders an emoji (the mapping matches the TUI); **and Image renders for real** (local paths decoded inline, remote URLs fetched + cached in the background, see footnote ⁵). **Dioxus is the most architecturally distinct** (reactive signals + WebView/CSS rendering), and thanks to the WebView, Image / Video / AudioPlayer render via native HTML media elements too — **it is the only backend to cover all 18 A2UI components** (even the TUI's Video is a placeholder, since a terminal cannot play video).
 
@@ -156,21 +160,27 @@ Renderer: `renderer-software` + `backend-winit` — it works **without a GPU / O
 
 ### Component coverage
 
-All 18 A2UI component kinds render:
+16 of the A2UI component types render natively (only Video / AudioPlayer remain placeholders — Slint ships no media-playback widgets):
 
-- **Rich**: Text / Button / Column / Row / Card / TextField / CheckBox / Slider (Button & CheckBox clicks dispatch through the shared `core::components::dispatch_event`)
-- **Best-effort**: Divider / Icon / Tabs / Modal / List / ChoicePicker / DateTimeInput
-- **Placeholders**: Image / Video / AudioPlayer render as labeled placeholders (binary media isn't carried into the Slint tree)
+- **Containers / content**: Text / Row / Column / Card / List / Divider / Modal (overlay) / Button (clicks dispatch through the shared `core::components::dispatch_event`)
+- **Interactive widgets (all native, genuine input written back to the data model)**: TextField (native `LineEdit`) / CheckBox (native `CheckBox`) / Slider (native `Slider`) / ChoicePicker (a native `ComboBox` for single-select, a `CheckBox` group for multi-select) / DateTimeInput (an editable ISO text box bound to the data model) / Tabs (a clickable tab bar + only the active panel is rendered)
+- **Icon**: mapped to an emoji / unicode glyph (the mapping matches the TUI / Iced / Dioxus; unknown names fall back to `[first-two-chars]`)
+- **Image**: renders for real — local paths (incl. `file://`) are read directly, `http(s)` URLs are fetched with `ureq`, all decoded into a `slint::Image` via the `image` crate and shown in a native `Image` widget (cache cleared on sample switch; remote fetching runs synchronously on the UI thread, acceptable for the small sample-image set)
+- **Placeholders**: Video / AudioPlayer render as a labeled placeholder
 
 ### Implementation note: why the tree is flattened
 
 Slint **cannot express recursion** (neither recursive structs nor self-referencing components — see [slint-ui/slint#4218](https://github.com/slint-ui/slint/issues/4218)). So instead of a nested tree, `live_tree` flattens the component tree into a `Vec<LiveNode>` with index-based `children`, and `build.rs` code-generates a **bounded-depth** component chain `Node0` (leaf) → … → `Node7` (root). A2UI trees are shallow, so depth 7 covers realistic UIs; deeper subtrees truncate to a `…`. This is the key constraint a future contributor needs to know.
 
+### Implementation note: native interactive widgets & direct write-back
+
+Slint's standard widget library (`std-widgets.slint`) supplies native `LineEdit` / `Slider` / `CheckBox` / `ComboBox`, but their changes are **pointer-driven** (drag / click / type), whereas the shared `core::dispatch_event` only models keyboard events (arrow / character keys for Button / CheckBox / Slider / TextField) and has no channel for pointer events. So the Slint backend (**isomorphic with the Iced / egui backends**) **bypasses core dispatch and writes the data model directly**: `build.rs` wires each widget's change callback (`edited` / `changed` / `toggled` / `selected`), which carries the node id up to the host via the `Events` global; the host uses the id to find the `ComponentModel`, resolves the `value` / `activeTab` `DynamicString::Binding` path (handling template-nested paths through `ComponentContext::data_context.resolve_pointer`), then calls `data_model.set(path, value)` and redraws. Only **Button** still goes through core's `dispatch_event` (Enter), since its action may trigger a server event / function call.
+
 ### Current limitations
 
-- Trees deeper than 7 levels truncate;
-- TextField shows its value but isn't wired to a native editable input yet;
-- Tabs / ChoicePicker / DateTimeInput render, but their keyboard handlers aren't in the shared core dispatch (interaction beyond Button / CheckBox is not yet wired on the Slint side).
+- Trees deeper than 7 levels truncate (the bounded-depth constraint of the flattening scheme);
+- Remote `http(s)` image fetching runs synchronously on the UI thread (the `Rc`/`RefCell` state can't cross the `Send` closure required by `invoke_from_event_loop`), acceptable for the small sample-image set; `data:` URLs render as a placeholder;
+- Video / AudioPlayer are placeholders (Slint has no media-playback widgets).
 
 ## Iced Desktop Backend
 
