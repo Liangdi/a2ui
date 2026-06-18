@@ -4,7 +4,7 @@ version = 4
 
 [[package]]
 name = "a2ui"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "a2ui-base",
  "a2ui-bevy",
@@ -20,7 +20,7 @@ dependencies = [
 
 [[package]]
 name = "a2ui-base"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "chrono",
  "regex",
@@ -32,7 +32,7 @@ dependencies = [
 
 [[package]]
 name = "a2ui-bevy"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "a2ui-base",
  "a2ui-tui",
@@ -45,7 +45,7 @@ dependencies = [
 
 [[package]]
 name = "a2ui-bevy-gallery"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "a2ui-base",
  "a2ui-bevy",
@@ -58,7 +58,7 @@ dependencies = [
 
 [[package]]
 name = "a2ui-dioxus"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "a2ui-base",
  "a2ui-tui",
@@ -70,7 +70,7 @@ dependencies = [
 
 [[package]]
 name = "a2ui-dioxus-gallery"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "a2ui-base",
  "a2ui-dioxus",
@@ -82,7 +82,7 @@ dependencies = [
 
 [[package]]
 name = "a2ui-egui"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "a2ui-base",
  "a2ui-tui",
@@ -95,7 +95,7 @@ dependencies = [
 
 [[package]]
 name = "a2ui-egui-gallery"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "a2ui-base",
  "a2ui-egui",
@@ -108,7 +108,7 @@ dependencies = [
 
 [[package]]
 name = "a2ui-gallery"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "a2ui-base",
  "a2ui-tui",
@@ -125,7 +125,7 @@ dependencies = [
 
 [[package]]
 name = "a2ui-iced"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "a2ui-base",
  "a2ui-tui",
@@ -136,7 +136,7 @@ dependencies = [
 
 [[package]]
 name = "a2ui-iced-gallery"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "a2ui-base",
  "a2ui-gallery",
@@ -148,7 +148,7 @@ dependencies = [
 
 [[package]]
 name = "a2ui-slint"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "a2ui-base",
  "a2ui-tui",
@@ -161,7 +161,7 @@ dependencies = [
 
 [[package]]
 name = "a2ui-slint-gallery"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "a2ui-base",
  "a2ui-gallery",
@@ -172,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "a2ui-tui"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "a2ui-base",
  "base64",

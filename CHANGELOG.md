@@ -1,3 +1,16 @@
+## [0.3.1] - 2026-06-18
+
+### 🚀 Features
+
+- *(egui)* Add sci-fi HUD example + in-app screenshot capture
+- *(tui)* SVG + data-URI image rendering, runtime-switchable protocol
+- *(gallery)* Json scenario gallery + persisted image-protocol config
+- *(tui)* Add SurfaceRenderer::render_scrolled for scroll viewports
+
+### 🐛 Bug Fixes
+
+- *(gallery)* Resolve catalog functions + Enter-at-start stepper
+- *(example)* Stop chat surfaces squishing when scrolled in 08_agent_chat
 ## [0.3.0] - 2026-06-16
 
 ### 🚀 Features
@@ -30,6 +43,10 @@
 - *(bevy)* Add bilingual READMEs for a2ui-bevy and a2ui-bevy-gallery
 - Refresh READMEs — 5-backend matrix, validate module, accurate counts
 - Rewrite intro for the 5-backend reality + clarify Image cell
+
+### ⚙️ Miscellaneous Tasks
+
+- Release
 ## [0.2.1] - 2026-06-15
 
 ### 🚀 Features
