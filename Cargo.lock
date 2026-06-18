@@ -113,10 +113,13 @@ dependencies = [
  "a2ui-base",
  "a2ui-tui",
  "crossterm",
+ "dirs",
  "include_dir",
  "ratatui",
  "ratatui-sci-fi",
+ "serde",
  "serde_json",
+ "toml 0.8.2",
  "uuid",
 ]
 
@@ -172,11 +175,14 @@ name = "a2ui-tui"
 version = "0.3.0"
 dependencies = [
  "a2ui-base",
+ "base64",
  "chrono",
  "crossterm",
  "image",
+ "percent-encoding",
  "ratatui",
  "ratatui-image",
+ "resvg",
  "rodio",
  "serde",
  "serde_json",

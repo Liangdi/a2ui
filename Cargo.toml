@@ -27,6 +27,19 @@ regex = "1"
 unicode-width = "0.2"
 ratatui-image = "11"
 image = "0.25"
+# SVG rasterizer (resvg bundles usvg + tiny-skia, re-exported from `resvg`).
+# Used by the `a2ui-tui` Image component to render `data:image/svg+xml` URIs and
+# local `.svg` files — a single dep is enough (resvg re-exports the other two).
+resvg = "0.47"
+# data-URI payload decoding for the Image component: `;base64` bodies and the
+# URL-percent-encoded `data:image/svg+xml,...` form.
+base64 = "0.22"
+percent-encoding = "2.3"
+# User-level config file for the gallery (e.g. the persisted image-protocol
+# choice). `dirs` resolves the platform config dir; `toml` is the editable
+# format. Both already resolve transitively, so this just promotes them.
+dirs = "6"
+toml = "0.8"
 # Embed the A2UI specification tree into the binary at compile time so the
 # gallery is self-contained and distributable (no on-disk spec dir needed).
 include_dir = "0.7"
