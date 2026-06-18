@@ -1,0 +1,138 @@
+[
+  {
+    "version": "v1.0",
+    "createSurface": {
+      "surfaceId": "my-surface",
+      "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+    }
+  },
+  {
+    "version": "v1.0",
+    "updateComponents": {
+      "surfaceId": "my-surface",
+      "components": [
+        {
+          "id": "root",
+          "component": "Column",
+          "justify": "start",
+          "align": "stretch",
+          "children": [
+            "ex-head",
+            "ex-bio",
+            "ex-actions",
+            "row-1"
+          ]
+        },
+        {
+          "id": "ex-head",
+          "component": "Row",
+          "justify": "start",
+          "align": "center",
+          "children": [
+            "ex-avatar",
+            "ex-info"
+          ]
+        },
+        {
+          "id": "ex-avatar",
+          "component": "Image",
+          "url": "data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2272%22%20height%3D%2272%22%3E%3Crect%20width%3D%2272%22%20height%3D%2272%22%20fill%3D%22%23e2e8f0%22%2F%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20font-family%3D%22sans-serif%22%20font-size%3D%2214%22%20fill%3D%22%2364748b%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22middle%22%3E%E5%A4%B4%E5%83%8F%3C%2Ftext%3E%3C%2Fsvg%3E",
+          "description": "头像",
+          "variant": "circle"
+        },
+        {
+          "id": "ex-info",
+          "component": "Column",
+          "justify": "start",
+          "align": "start",
+          "children": [
+            "ex-name",
+            "ex-role"
+          ]
+        },
+        {
+          "id": "ex-name",
+          "component": "Text",
+          "text": "李雷",
+          "weight": "bold"
+        },
+        {
+          "id": "ex-role",
+          "component": "Text",
+          "text": "前端工程师 · AI Station",
+          "variant": "caption"
+        },
+        {
+          "id": "ex-bio",
+          "component": "Text",
+          "text": "热爱构建优雅的界面，专注 React 与设计系统工程。",
+          "weight": "bold"
+        },
+        {
+          "id": "ex-actions",
+          "component": "Row",
+          "justify": "start",
+          "align": "center",
+          "children": [
+            "ex-follow",
+            "ex-msg"
+          ]
+        },
+        {
+          "id": "ex-follow",
+          "component": "Button",
+          "variant": "primary",
+          "child": "ex-follow-label"
+        },
+        {
+          "id": "ex-follow-label",
+          "component": "Text",
+          "text": "关注"
+        },
+        {
+          "id": "ex-msg",
+          "component": "Button",
+          "variant": "borderless",
+          "child": "ex-msg-label"
+        },
+        {
+          "id": "ex-msg-label",
+          "component": "Text",
+          "text": "私信"
+        },
+        {
+          "id": "row-1",
+          "component": "Row",
+          "justify": "start",
+          "align": "center",
+          "children": [
+            "button-1",
+            "button-3"
+          ]
+        },
+        {
+          "id": "button-1",
+          "component": "Button",
+          "variant": "primary",
+          "child": "text-1"
+        },
+        {
+          "id": "text-1",
+          "component": "Text",
+          "text": "关注"
+        },
+        {
+          "id": "button-3",
+          "component": "Button",
+          "variant": "primary",
+          "child": "text-3"
+        },
+        {
+          "id": "text-3",
+          "component": "Text",
+          "text": "关注"
+        }
+      ]
+    }
+  }
+]

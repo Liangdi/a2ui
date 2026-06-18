@@ -23,10 +23,12 @@ use a2ui_base::message_processor::MessageProcessor;
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::protocol::common_types::DynamicBoolean;
 use a2ui_base::protocol::server_to_client::A2uiMessage;
+use crate::config::{self, GalleryConfig};
 use crate::sample_loader::{self, Sample};
 use a2ui_tui::catalogs::basic::{build_basic_catalog, build_basic_registry};
 use a2ui_tui::catalogs::minimal::build_minimal_catalog;
 use a2ui_tui::component_impl::ComponentRegistry;
+use a2ui_tui::components::image as tui_image;
 use a2ui_tui::focus_manager::FocusManager;
 use a2ui_tui::surface::SurfaceRenderer;
 
@@ -90,6 +92,8 @@ struct FrameData {
     list_scroll: usize,
     /// Animation clock; feeds [`ScanListState::tick`] so the cursor blinks.
     frame_tick: u64,
+    /// Active image-protocol name for the status readout (cycled live with `P`).
+    image_protocol: &'static str,
 }
 
 /// Build the catalog the gallery uses to construct `ComponentContext`s at render
@@ -142,11 +146,32 @@ pub struct GalleryApp {
     list_scroll: usize,
     /// Per-frame animation clock for blinking cursors.
     frame_tick: u64,
+    /// Persisted user config (image-protocol choice, …). Mutated by the `P`
+    /// key and saved to `<config_dir>/a2ui/config.toml`.
+    config: GalleryConfig,
 }
 
 impl GalleryApp {
-    /// Create and initialize the gallery application.
+    /// Create and initialize the gallery application with the default embedded
+    /// spec samples (both minimal and basic catalogs).
     pub fn new() -> io::Result<Self> {
+        // Load samples from both minimal and basic directories.
+        let samples = {
+            let mut s = load_catalog_samples("minimal");
+            s.extend(load_catalog_samples("basic"));
+            s
+        };
+        Self::with_samples(samples)
+    }
+
+    /// Create the gallery application driven by an explicit sample set.
+    ///
+    /// Both the minimal and basic catalogs are still registered with the
+    /// processor (so a scenario referencing either catalog resolves correctly);
+    /// only the browsable sample list is replaced. Used by the `json_gallery`
+    /// example to browse ad-hoc `a2ui-json/*.json` scenarios instead of the
+    /// embedded spec tree.
+    pub fn with_samples(samples: Vec<Sample>) -> io::Result<Self> {
         let backend = CrosstermBackend::new(io::stderr());
         let terminal = Terminal::new(backend)?;
 
@@ -158,12 +183,12 @@ impl GalleryApp {
         // Catalog used to build ComponentContexts at render + dispatch time.
         let catalog = build_gallery_catalog();
 
-        // Load samples from both minimal and basic directories.
-        let samples = {
-            let mut s = load_catalog_samples("minimal");
-            s.extend(load_catalog_samples("basic"));
-            s
-        };
+        // Load the persisted config and apply the image-protocol choice before
+        // the first render (the terminal probe itself stays lazy).
+        let config = config::load();
+        if let Some(name) = &config.image_protocol {
+            tui_image::set_image_protocol(tui_image::ImageProtocol::from_name(name));
+        }
 
         Ok(Self {
             terminal,
@@ -182,6 +207,7 @@ impl GalleryApp {
             theme: Theme::Fallout,
             list_scroll: 0,
             frame_tick: 0,
+            config,
         })
     }
 
@@ -264,6 +290,7 @@ impl GalleryApp {
             theme: self.theme,
             list_scroll: self.list_scroll,
             frame_tick: self.frame_tick,
+            image_protocol: tui_image::detected_protocol(),
         }
     }
 
@@ -289,6 +316,7 @@ impl GalleryApp {
         match code {
             KeyCode::Char('q') | KeyCode::Esc => self.running = false,
             KeyCode::Char('t') => self.cycle_theme(),
+            KeyCode::Char('p') | KeyCode::Char('P') => self.cycle_image_protocol(),
             KeyCode::Up | KeyCode::Char('k') => {
                 if self.selected_sample > 0 {
                     self.selected_sample -= 1;
@@ -323,6 +351,9 @@ impl GalleryApp {
             // `t` cycles the theme; only bound here (not in surface focus) so a
             // focused A2UI TextInput still receives a typed 't'.
             KeyCode::Char('t') => self.cycle_theme(),
+            // `P` cycles the image protocol (persisted); also browsing-only so a
+            // typed 'p' reaches a focused TextInput.
+            KeyCode::Char('p') | KeyCode::Char('P') => self.cycle_image_protocol(),
             KeyCode::Up | KeyCode::Char('k') => {
                 if self.selected_sample > 0 {
                     self.load_sample_full(self.selected_sample - 1);
@@ -674,6 +705,19 @@ impl GalleryApp {
         };
     }
 
+    /// Cycle the image protocol (bound to `P`) and persist the choice to the
+    /// config file. Order: Auto → Halfblocks → Kitty → Sixel → iTerm2 → None.
+    fn cycle_image_protocol(&mut self) {
+        let next = next_image_protocol(tui_image::current_image_protocol());
+        tui_image::set_image_protocol(next);
+        self.config.image_protocol = Some(next.as_str().to_string());
+        if let Err(e) = config::save(&self.config) {
+            // The TUI paints stderr, so this only lands after quit — still
+            // better than silently dropping the save failure.
+            eprintln!("Warning: could not save config: {e}");
+        }
+    }
+
     /// Keep `list_scroll` pinned so `selected_sample` stays inside the window.
     ///
     /// `capacity` is how many [`ScanList`] items fit the current panel; the
@@ -855,17 +899,17 @@ fn render_help_bar(frame: &mut ratatui::Frame, area: Rect, fd: &FrameData) {
 }
 
 /// The contextual one-line key hint for the help bar (active tag in accent,
-/// the rest muted). `t:theme` appears only in the browsing contexts.
+/// the rest muted). `t:theme` / `P:img` appear only in the browsing contexts.
 fn help_line(fd: &FrameData, accent: Style, muted: Style) -> Line<'static> {
     match fd.mode {
         AppMode::SampleList => Line::from(vec![
             Span::styled(" A2UI GALLERY ", accent),
-            Span::styled(" ↑/k up · ↓/j down · Enter select · t theme · q/Esc quit", muted),
+            Span::styled(" ↑/k up · ↓/j down · Enter select · t theme · P img · q/Esc quit", muted),
         ]),
         AppMode::Rendered => match fd.panel_focus {
             PanelFocus::List => Line::from(vec![
                 Span::styled(" [List ◄] ", accent),
-                Span::styled(" ↑/↓ sample · Tab/Enter surface · Esc browser · t theme · q quit", muted),
+                Span::styled(" ↑/↓ sample · Tab/Enter surface · Esc browser · t theme · P img · q quit", muted),
             ]),
             PanelFocus::Render => Line::from(vec![
                 Span::styled(" [Surface ►] ", accent),
@@ -877,28 +921,47 @@ fn help_line(fd: &FrameData, accent: Style, muted: Style) -> Line<'static> {
 
 /// The right-hand telemetry readout for the help bar: the live theme name in
 /// the browser, or the message stepper `processed/total` (Ok once complete).
+/// The active image protocol (cycled with `P`) is always appended.
 fn help_readout(fd: &FrameData) -> Value {
     match fd.mode {
-        AppMode::SampleList => Value::new(theme_name(fd.theme)).label("THEME").theme(fd.theme),
+        AppMode::SampleList => Value::new(format!("{} · {}", theme_name(fd.theme), fd.image_protocol))
+            .label("THEME/IMG")
+            .theme(fd.theme),
         AppMode::Rendered => {
             if fd.total_messages == 0 {
-                Value::new("—").label("MSG").theme(fd.theme)
+                Value::new(fd.image_protocol.to_string()).label("IMG").theme(fd.theme)
             } else {
                 let done = fd.messages_processed >= fd.total_messages;
-                Value::new(format!("{}/{}", fd.messages_processed, fd.total_messages))
-                    .label("MSG")
-                    .state(if done { Level::Ok } else { Level::Warn })
-                    .theme(fd.theme)
+                Value::new(format!(
+                    "{}/{} · {}",
+                    fd.messages_processed, fd.total_messages, fd.image_protocol
+                ))
+                .label("MSG/IMG")
+                .state(if done { Level::Ok } else { Level::Warn })
+                .theme(fd.theme)
             }
         }
+    }
+}
+
+/// Next image protocol in the `P`-key cycle:
+/// Auto → Halfblocks → Kitty → Sixel → iTerm2 → None → Auto.
+fn next_image_protocol(p: tui_image::ImageProtocol) -> tui_image::ImageProtocol {
+    use tui_image::ImageProtocol;
+    match p {
+        ImageProtocol::Auto => ImageProtocol::Halfblocks,
+        ImageProtocol::Halfblocks => ImageProtocol::Kitty,
+        ImageProtocol::Kitty => ImageProtocol::Sixel,
+        ImageProtocol::Sixel => ImageProtocol::Iterm2,
+        ImageProtocol::Iterm2 => ImageProtocol::None,
+        ImageProtocol::None => ImageProtocol::Auto,
     }
 }
 
 /// Pure scroll-offset rule: keep `selected` inside `[offset, offset+cap)`,
 /// moving `offset` only when the selection escapes. Shared by
 /// [`GalleryApp::ensure_list_visible`] (runtime) and the unit tests.
-fn compute_list_scroll(selected: usize, len: usize, cap: usize, prev_offset: usize) -> usize {
-    let cap = cap.max(1);
+fn compute_list_scroll(selected: usize, len: usize, cap: usize, prev_offset: usize) -> usize {    let cap = cap.max(1);
     if len == 0 {
         return 0;
     }
@@ -948,6 +1011,7 @@ mod tests {
             theme: Theme::Cyberpunk,
             list_scroll: scroll,
             frame_tick: tick,
+            image_protocol: "Halfblocks",
         }
     }
 

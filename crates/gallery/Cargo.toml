@@ -27,3 +27,8 @@ crossterm = { workspace = true }
 uuid = { workspace = true }
 include_dir = { workspace = true }
 serde_json = { workspace = true }
+# Persisted user config (image-protocol choice). `serde` for the config struct
+# derive, `toml` for the editable file format, `dirs` for the config path.
+serde = { workspace = true }
+dirs = { workspace = true }
+toml = { workspace = true }
