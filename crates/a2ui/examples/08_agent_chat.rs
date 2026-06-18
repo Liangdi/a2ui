@@ -18,10 +18,10 @@
 //!
 //! ## Controls
 //! - Type a message and press Enter to send
-//! - Available commands: hello, weather, tasks, story, help
+//! - Available commands: hello, weather, tasks, story, stats, quote, help
 //! - Mouse wheel or Arrow keys to scroll chat history
 //! - PageUp / PageDown to scroll by page
-//! - `q` or `Ctrl+C` to quit
+//! - `Esc` or `Ctrl+C` to quit
 
 use std::io;
 
@@ -35,7 +35,7 @@ use crossterm::{
 };
 use ratatui::{
     Frame, Terminal,
-    backend::CrosstermBackend,
+    backend::{CrosstermBackend, TestBackend},
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
@@ -75,6 +75,13 @@ fn generate_response(sid: &str, user_msg: &str) -> Vec<serde_json::Value> {
         scenario_tasks(sid)
     } else if lower.contains("story") || lower.contains("tell me") {
         scenario_streaming(sid)
+    } else if lower.contains("stat")
+        || lower.contains("dashboard")
+        || lower.contains("number")
+    {
+        scenario_stats(sid)
+    } else if lower.contains("quote") {
+        scenario_quote(sid)
     } else if lower.contains("help") || lower.contains("command") {
         scenario_help(sid)
     } else {
@@ -230,16 +237,63 @@ fn scenario_help(sid: &str) -> Vec<serde_json::Value> {
     vec![
         serde_json::json!({"version":"v1.0","createSurface":{"surfaceId":sid,"catalogId":CATALOG_ID,"dataModel":{}}}),
         serde_json::json!({"version":"v1.0","updateComponents":{"surfaceId":sid,"components":[
-            {"id":"root","component":"Column","children":["title","d0","c1","c2","c3","c4","c5","d1","hint"],"align":"stretch"},
+            {"id":"root","component":"Column","children":["title","d0","c1","c2","c3","c4","c5","c6","c7","d1","hint"],"align":"stretch"},
             {"id":"title","component":"Text","text":"📖 Available Commands","variant":"h2"},
             {"id":"d0","component":"Divider","axis":"horizontal"},
             {"id":"c1","component":"Text","text":"  hello   → Simple greeting response","variant":"body"},
             {"id":"c2","component":"Text","text":"  weather → Weather card with rich components","variant":"body"},
             {"id":"c3","component":"Text","text":"  tasks   → Interactive task list in a Card","variant":"body"},
             {"id":"c4","component":"Text","text":"  story   → Streaming text word-by-word","variant":"body"},
-            {"id":"c5","component":"Text","text":"  help    → Show this command list","variant":"body"},
+            {"id":"c5","component":"Text","text":"  stats   → Dashboard: a Row of stat Cards","variant":"body"},
+            {"id":"c6","component":"Text","text":"  quote   → A pull-quote Card","variant":"body"},
+            {"id":"c7","component":"Text","text":"  help    → Show this command list","variant":"body"},
             {"id":"d1","component":"Divider","axis":"horizontal"},
             {"id":"hint","component":"Text","text":"Each response is streamed as A2UI protocol messages (text/a2ui over SSE)","variant":"caption"}
+        ]}}),
+    ]
+}
+
+fn scenario_stats(sid: &str) -> Vec<serde_json::Value> {
+    // A horizontal dashboard: a Row of three Cards, each a stat tile. Showcases
+    // the Row (horizontal layout) + nested Card > Column trees side by side.
+    vec![
+        serde_json::json!({"version":"v1.0","createSurface":{"surfaceId":sid,"catalogId":CATALOG_ID,"dataModel":{}}}),
+        serde_json::json!({"version":"v1.0","updateComponents":{"surfaceId":sid,"components":[
+            {"id":"root","component":"Column","children":["title","stats_row","d1","note"],"align":"stretch"},
+            {"id":"title","component":"Text","text":"📊 a2ui by the Numbers","variant":"h2"},
+            {"id":"stats_row","component":"Row","children":["c_down","c_stars","c_back"],"align":"stretch"},
+            {"id":"c_down","component":"Card","child":"c_down_inner","weight":1},
+            {"id":"c_down_inner","component":"Column","children":["down_num","down_lbl"],"align":"stretch"},
+            {"id":"down_num","component":"Text","text":"1.2k","variant":"h1"},
+            {"id":"down_lbl","component":"Text","text":"downloads","variant":"caption"},
+            {"id":"c_stars","component":"Card","child":"c_stars_inner","weight":1},
+            {"id":"c_stars_inner","component":"Column","children":["stars_num","stars_lbl"],"align":"stretch"},
+            {"id":"stars_num","component":"Text","text":"4.9★","variant":"h1"},
+            {"id":"stars_lbl","component":"Text","text":"avg rating","variant":"caption"},
+            {"id":"c_back","component":"Card","child":"c_back_inner","weight":1},
+            {"id":"c_back_inner","component":"Column","children":["back_num","back_lbl"],"align":"stretch"},
+            {"id":"back_num","component":"Text","text":"6","variant":"h1"},
+            {"id":"back_lbl","component":"Text","text":"backends","variant":"caption"},
+            {"id":"d1","component":"Divider","axis":"horizontal"},
+            {"id":"note","component":"Text","text":"ratatui · slint · egui · bevy · iced · dioxus","variant":"caption"}
+        ]}}),
+    ]
+}
+
+fn scenario_quote(sid: &str) -> Vec<serde_json::Value> {
+    // A single tall Card holding a pull-quote + attribution — a content-sized
+    // surface that is intentionally a few rows taller than a greeting, so
+    // scrolling the chat reveals it cleanly in slices.
+    vec![
+        serde_json::json!({"version":"v1.0","createSurface":{"surfaceId":sid,"catalogId":CATALOG_ID,"dataModel":{}}}),
+        serde_json::json!({"version":"v1.0","updateComponents":{"surfaceId":sid,"components":[
+            {"id":"root","component":"Column","children":["qcard"],"align":"stretch"},
+            {"id":"qcard","component":"Card","child":"qcard_inner","weight":8},
+            {"id":"qcard_inner","component":"Column","children":["qmark","body","d1","who"],"align":"stretch"},
+            {"id":"qmark","component":"Text","text":"❝","variant":"h1"},
+            {"id":"body","component":"Text","text":"Any sufficiently advanced interface is indistinguishable from a well-structured JSON stream.","variant":"h3"},
+            {"id":"d1","component":"Divider","axis":"horizontal"},
+            {"id":"who","component":"Text","text":"— an a2ui proverb","variant":"caption"}
         ]}}),
     ]
 }
@@ -251,12 +305,14 @@ fn scenario_default(sid: &str) -> Vec<serde_json::Value> {
             {"id":"root","component":"Column","children":["msg","d1","card"],"align":"stretch"},
             {"id":"msg","component":"Text","text":"I received your message! Here are some things you can try:","variant":"body"},
             {"id":"d1","component":"Divider","axis":"horizontal"},
-            {"id":"card","component":"Card","child":"card_inner","weight":5},
-            {"id":"card_inner","component":"Column","children":["s1","s2","s3","s4"],"align":"stretch"},
+            {"id":"card","component":"Card","child":"card_inner","weight":6},
+            {"id":"card_inner","component":"Column","children":["s1","s2","s3","s4","s5","s6"],"align":"stretch"},
             {"id":"s1","component":"Text","text":"💬  Say \"hello\" for a greeting","variant":"body"},
             {"id":"s2","component":"Text","text":"🌤️  Say \"weather\" for a weather card","variant":"body"},
             {"id":"s3","component":"Text","text":"📋  Say \"tasks\" for a task list","variant":"body"},
-            {"id":"s4","component":"Text","text":"📖  Say \"story\" for streaming text","variant":"body"}
+            {"id":"s4","component":"Text","text":"📖  Say \"story\" for streaming text","variant":"body"},
+            {"id":"s5","component":"Text","text":"📊  Say \"stats\" for a dashboard","variant":"body"},
+            {"id":"s6","component":"Text","text":"❝  Say \"quote\" for a pull-quote card","variant":"body"}
         ]}}),
     ]
 }
@@ -285,7 +341,7 @@ fn render_input(frame: &mut Frame, area: Rect, input: &str, streaming: bool) {
     let help_text = if streaming {
         " ⏳ Streaming A2UI messages...".to_string()
     } else {
-        " Enter: send | ↑↓/Mouse: scroll | q: quit".to_string()
+        " Enter: send | ↑↓/Mouse: scroll | Esc: quit".to_string()
     };
     let help_style = if streaming {
         Style::default().fg(Color::Yellow)
@@ -295,7 +351,7 @@ fn render_input(frame: &mut Frame, area: Rect, input: &str, streaming: bool) {
     frame.render_widget(Paragraph::new(help_text).style(help_style), chunks[0]);
 
     let prompt = if input.is_empty() && !streaming {
-        " > Type a message (hello, weather, tasks, story, help)...".to_string()
+        " > Type a message (hello, weather, tasks, story, stats, quote, help)...".to_string()
     } else {
         format!(" > {}█", input)
     };
@@ -310,6 +366,71 @@ fn render_input(frame: &mut Frame, area: Rect, input: &str, streaming: bool) {
     let inner = input_block.inner(chunks[1]);
     frame.render_widget(input_block, chunks[1]);
     frame.render_widget(Paragraph::new(prompt).style(input_style), inner);
+}
+
+/// Render an AI surface into the scrolling chat viewport WITHOUT squishing it.
+///
+/// Every scenario uses a `Column` (a layout container) as its root, and a
+/// container root *fills* whatever rect it is handed (see `SurfaceRenderer`).
+/// The chat measures each surface's natural height and lays entries out in a
+/// virtual column taller than the screen; only a slice of each surface is
+/// visible at any time. If we rendered the surface straight into that slice,
+/// the layout engine would shrink/reflow the whole tree into `vis_h` rows — so
+/// every surface deforms the moment it is partially scrolled.
+///
+/// Instead we render the full surface at its natural height into an off-screen
+/// scratch buffer, then blit only the visible rows into the frame. Rows scrolled
+/// above the viewport (`src_skip`) are simply skipped on the source side, which
+/// is how we get correct top-clipping even though `Rect.y` is unsigned.
+fn render_clipped_surface(
+    frame: &mut Frame,
+    chat_area: Rect,
+    content_w: u16,
+    renderer: a2ui::tui::surface::SurfaceRenderer,
+    entry_top: usize,
+    scroll_offset: usize,
+    viewport_h: usize,
+    natural_h: usize,
+) {
+    if natural_h == 0 || content_w == 0 {
+        return;
+    }
+    let entry_bot = entry_top + natural_h;
+    let clip_top = entry_top.max(scroll_offset);
+    let clip_bot = entry_bot.min(scroll_offset + viewport_h);
+    if clip_top >= clip_bot {
+        return;
+    }
+
+    // Rows of *this* surface scrolled above the viewport (skipped on blit).
+    let src_skip = scroll_offset.saturating_sub(entry_top);
+    let vis_h = clip_bot - clip_top;
+    let dst_y0 = chat_area.y + (clip_top - scroll_offset) as u16;
+
+    // Off-screen render at full natural height — the Column fills this rect
+    // exactly, so children keep their natural sizes (no shrink/reflow).
+    // TestBackend never errors, so this construction is infallible.
+    let backend = TestBackend::new(content_w, natural_h as u16);
+    let mut scratch_term = Terminal::new(backend).unwrap();
+    let _ = scratch_term.draw(|f| renderer.render(f, f.area(), None));
+    let scratch = scratch_term.backend().buffer();
+
+    // Blit only the visible rows into the live frame, clamped to the chat area.
+    let dst = frame.buffer_mut();
+    let bottom = chat_area.bottom();
+    for row in 0..vis_h {
+        let sy = (src_skip + row) as u16;
+        let dy = dst_y0 + row as u16;
+        if dy >= bottom {
+            break;
+        }
+        for col in 0..content_w {
+            let dx = chat_area.x + col;
+            if let (Some(src), Some(cell)) = (scratch.cell((col, sy)), dst.cell_mut((dx, dy))) {
+                *cell = src.clone();
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -347,7 +468,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             {"id":"title","component":"Text","text":"🤖 Welcome to A2UI Agent Chat!","variant":"h1"},
             {"id":"sub","component":"Text","text":"This is a terminal AI chat interface powered by the A2UI protocol.","variant":"body"},
             {"id":"d1","component":"Divider","axis":"horizontal"},
-            {"id":"hint","component":"Text","text":"Type a message below to get started. Try: hello, weather, tasks, story","variant":"caption"}
+            {"id":"hint","component":"Text","text":"Type a message below to get started. Try: hello, weather, tasks, story, stats, quote","variant":"caption"}
         ]}
     });
     processor.process_message(MessageProcessor::parse_message(&welcome_create.to_string())?)?;
@@ -416,6 +537,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let chat_area = chunks[0];
             let vh = chat_area.height as usize;
+            // Usable width: reserve 1 column on the right for the scrollbar.
+            let content_w = chat_area.width.saturating_sub(1);
 
             // ── Calculate each entry's desired height ──────────────────
             let mut entry_heights: Vec<usize> = entries
@@ -513,7 +636,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         &registry,
                                         &render_catalog,
                                     );
-                                renderer.render(frame, rect, None);
+                                // Render off-screen at the surface's natural
+                                // height and blit the visible slice, so scrolling
+                                // reveals a true slice instead of reflowing the
+                                // content into the (smaller) visible rect.
+                                render_clipped_surface(
+                                    frame,
+                                    chat_area,
+                                    content_w,
+                                    renderer,
+                                    entry_top,
+                                    scroll_offset,
+                                    vh,
+                                    h,
+                                );
                             }
                         }
                     }
@@ -554,7 +690,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         {
                             break;
                         }
-                        KeyCode::Char('q') if input.is_empty() && !streaming => {
+                        // `Ctrl+Q` also quits (a bare `q` must be free to type,
+                        // e.g. the "quote" command — otherwise the first `q`
+                        // would exit the app whenever the input is empty).
+                        KeyCode::Char('q')
+                            if key
+                                .modifiers
+                                .contains(crossterm::event::KeyModifiers::CONTROL) =>
+                        {
+                            break;
+                        }
+                        KeyCode::Esc if !streaming => {
                             break;
                         }
                         KeyCode::Enter if !streaming => {
