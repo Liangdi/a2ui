@@ -3,7 +3,8 @@
 use std::collections::HashMap;
 
 use ratatui::{
-    Frame,
+    Frame, Terminal,
+    backend::TestBackend,
     layout::{Constraint, Direction, Layout, Margin, Rect},
     style::{Color, Style},
     widgets::{Block, Clear, Paragraph},
@@ -41,7 +42,104 @@ impl<'a> SurfaceRenderer<'a> {
     }
 
     /// Main entry point: render the component tree into the frame.
+    ///
+    /// Renders the tree (see [`Self::render_tree`]) and then paints any open
+    /// [`Modal`](a2ui_base::model::component_model::ComponentModel) as a centered
+    /// overlay on top.
     pub fn render(&self, frame: &mut Frame, area: Rect, focused_id: Option<&str>) {
+        self.render_tree(frame, area, focused_id);
+
+        // Any open Modal floats its content as a centered overlay on top of the
+        // rendered tree — a real modal dialog rather than an inline swap.
+        let data_model = self.surface.data_model.borrow();
+        let components = self.surface.components.borrow();
+        let surface_id = &self.surface.id;
+        self.render_modal_overlays(frame, area, surface_id, &data_model, &components, focused_id);
+    }
+
+    /// Render the tree with viewport scrolling, **without squishing the content**.
+    ///
+    /// A layout-container root (`Column`/`Row`/`List`) *fills* whatever rect it
+    /// is given (see [`Self::render`]). That is desirable for a full-screen app,
+    /// but wrong inside a scroll viewport: if you hand the surface only its
+    /// visible slice, the layout engine reflows/shrinks the whole tree into that
+    /// slice and the content deforms as soon as it is partially scrolled.
+    ///
+    /// `render_scrolled` instead lays the surface out **once, at its full natural
+    /// height**, into an off-screen buffer, then paints the slice
+    /// `[scroll_offset, scroll_offset + viewport.height)` into `viewport`. Content
+    /// above `scroll_offset` (scrolled out the top) is clipped. Because layout
+    /// never depends on the viewport size, scrolling always reveals a true,
+    /// un-squished slice.
+    ///
+    /// This intentionally does **not** paint [`Modal`] overlays — a modal is a
+    /// full-surface floating dialog, which is meaningless inside a clipped slice.
+    /// Use [`Self::render`] when you want modals.
+    ///
+    /// If the root's natural height cannot be measured, falls back to [`render`].
+    ///
+    /// [`Modal`]: a2ui_base::model::component_model::ComponentModel
+    pub fn render_scrolled(
+        &self,
+        frame: &mut Frame,
+        viewport: Rect,
+        scroll_offset: usize,
+        focused_id: Option<&str>,
+    ) {
+        if viewport.width == 0 || viewport.height == 0 {
+            return;
+        }
+        // Fall back to the plain fill-render when we cannot size the content.
+        let natural = match self.measure(viewport.width) {
+            Some(n) => n,
+            None => {
+                self.render(frame, viewport, focused_id);
+                return;
+            }
+        };
+        if natural == 0 {
+            return;
+        }
+        // Nothing left to show (scrolled past the end).
+        let scroll_offset = scroll_offset.min(natural as usize);
+        if scroll_offset as u16 >= natural {
+            return;
+        }
+
+        // Off-screen render at full natural height. A container root fills this
+        // rect exactly, so children keep their natural sizes — no shrink/reflow.
+        // TestBackend never errors, so this construction is infallible.
+        let scratch_backend = TestBackend::new(viewport.width, natural);
+        let mut scratch = Terminal::new(scratch_backend).unwrap();
+        let _ = scratch.draw(|f| self.render_tree(f, f.area(), focused_id));
+        let src = scratch.backend().buffer();
+
+        // Blit only the visible rows into the live frame, clamped to the viewport.
+        let dst = frame.buffer_mut();
+        let vis_h = ((natural as usize) - scroll_offset).min(viewport.height as usize);
+        let bottom = viewport.bottom();
+        for row in 0..vis_h {
+            let sy = (scroll_offset + row) as u16;
+            let dy = viewport.y + row as u16;
+            if dy >= bottom {
+                break;
+            }
+            for col in 0..viewport.width {
+                let dx = viewport.x + col;
+                if let (Some(src_cell), Some(dst_cell)) =
+                    (src.cell((col, sy)), dst.cell_mut((dx, dy)))
+                {
+                    *dst_cell = src_cell.clone();
+                }
+            }
+        }
+    }
+
+    /// Render the component tree (root sizing + recursive [`render_node`]), **without**
+    /// modal overlays. Shared by [`render`] (which paints modals on top) and
+    /// [`render_scrolled`] (which renders into an off-screen buffer where a modal
+    /// overlay would be meaningless).
+    fn render_tree(&self, frame: &mut Frame, area: Rect, focused_id: Option<&str>) {
         let data_model = self.surface.data_model.borrow();
         let components = self.surface.components.borrow();
         let surface_id = &self.surface.id;
@@ -107,10 +205,6 @@ impl<'a> SurfaceRenderer<'a> {
             &self.catalog.functions,
             focused_id,
         );
-
-        // Any open Modal floats its content as a centered overlay on top of the
-        // rendered tree — a real modal dialog rather than an inline swap.
-        self.render_modal_overlays(frame, area, surface_id, &data_model, &components, focused_id);
     }
 
     /// Measure the root component's natural content height (including its own
@@ -485,6 +579,79 @@ mod render_tests {
             })
             .unwrap();
         terminal.backend().buffer().clone()
+    }
+
+    /// Like [`render_to_buffer`], but renders via `SurfaceRenderer::render_scrolled`
+    /// into a `cols x rows` viewport with the given `scroll_offset`. Used to test
+    /// that scrolling reveals a true slice of the natural-height layout.
+    fn render_scrolled_to_buffer(
+        components_json: serde_json::Value,
+        cols: u16,
+        rows: u16,
+        scroll_offset: usize,
+    ) -> ratatui::buffer::Buffer {
+        let registry = build_basic_registry();
+        let mut processor = MessageProcessor::new(vec![build_basic_catalog()]);
+        let create = serde_json::json!({
+            "version": "v1.0",
+            "createSurface": {
+                "surfaceId": "test",
+                "catalogId": "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+                "dataModel": {}
+            }
+        });
+        processor
+            .process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
+        let update = serde_json::json!({
+            "version": "v1.0",
+            "updateComponents": { "surfaceId": "test", "components": components_json }
+        });
+        processor
+            .process_message(MessageProcessor::parse_message(&update.to_string()).unwrap())
+            .unwrap();
+        let surface = processor.model.get_surface("test").expect("surface exists");
+        let backend = TestBackend::new(cols, rows);
+        let mut terminal = ratatui::Terminal::new(backend).unwrap();
+        let render_catalog = Catalog::new("placeholder");
+        terminal
+            .draw(|frame| {
+                let renderer = SurfaceRenderer::new(surface, &registry, &render_catalog);
+                renderer.render_scrolled(frame, frame.area(), scroll_offset, None);
+            })
+            .unwrap();
+        terminal.backend().buffer().clone()
+    }
+
+    /// Render `buf` as a flat screen string (one char per cell, rows joined by `\n`).
+    fn screen_string(buf: &ratatui::buffer::Buffer, cols: u16, rows: u16) -> String {
+        let mut s = String::new();
+        for y in 0..rows {
+            for x in 0..cols {
+                s.push(buf[(x, y)].symbol().chars().next().unwrap_or(' '));
+            }
+            s.push('\n');
+        }
+        s
+    }
+
+    /// True if `buf`'s top `rows` rows exactly match `reference`'s rows
+    /// `[ref_y0, ref_y0 + rows)` — a cell-for-cell slice comparison.
+    fn viewport_matches_reference(
+        buf: &ratatui::buffer::Buffer,
+        reference: &ratatui::buffer::Buffer,
+        ref_y0: u16,
+        rows: u16,
+        cols: u16,
+    ) -> bool {
+        for r in 0..rows {
+            for c in 0..cols {
+                if buf[(c, r)] != reference[(c, ref_y0 + r)] {
+                    return false;
+                }
+            }
+        }
+        true
     }
 
     /// True if every cell in row `y` (across `width` columns) is a blank/space.
@@ -877,5 +1044,105 @@ mod render_tests {
             screen.contains('1') && screen.contains('2') && screen.contains('3'),
             "@index must render 1,2,3 across the three template items:\n{screen}"
         );
+    }
+
+    // -------------------------------------------------------------------------
+    // render_scrolled: scrollable-viewport rendering (no squish, true slices).
+    // -------------------------------------------------------------------------
+
+    /// 6 Text children → each natural height 3 → column natural height 18.
+    fn scrolled_column_components() -> serde_json::Value {
+        serde_json::json!([
+            { "id": "root", "component": "Column", "children": ["t0", "t1", "t2", "t3", "t4", "t5"] },
+            { "id": "t0", "component": "Text", "text": "ROW 0" },
+            { "id": "t1", "component": "Text", "text": "ROW 1" },
+            { "id": "t2", "component": "Text", "text": "ROW 2" },
+            { "id": "t3", "component": "Text", "text": "ROW 3" },
+            { "id": "t4", "component": "Text", "text": "ROW 4" },
+            { "id": "t5", "component": "Text", "text": "ROW 5" }
+        ])
+    }
+
+    #[test]
+    fn render_scrolled_top_slice_is_unsquished_reference_slice() {
+        // Reference: the full natural-height render (40 wide × 18 tall).
+        let comps = scrolled_column_components();
+        let reference = render_to_buffer(comps.clone(), 40, 18);
+
+        // A 6-row viewport scrolled to the top must be exactly the reference's
+        // top 6 rows — proving the layout is rendered at natural height and only
+        // sliced, NOT reflowed/compressed into the 6-row viewport.
+        let top = render_scrolled_to_buffer(comps, 40, 6, 0);
+        assert!(
+            viewport_matches_reference(&top, &reference, 0, 6, 40),
+            "top viewport must equal the reference's top 6 rows (no squish)"
+        );
+        let screen = screen_string(&top, 40, 6);
+        assert!(screen.contains("ROW 0"), "top slice shows the first row:\n{screen}");
+        assert!(!screen.contains("ROW 5"), "top slice must not show the last row:\n{screen}");
+    }
+
+    #[test]
+    fn render_scrolled_bottom_slice_matches_reference() {
+        let comps = scrolled_column_components();
+        let reference = render_to_buffer(comps.clone(), 40, 18);
+
+        // Offset 12 of an 18-tall surface → the bottom 6 rows.
+        let bottom = render_scrolled_to_buffer(comps, 40, 6, 12);
+        assert!(
+            viewport_matches_reference(&bottom, &reference, 12, 6, 40),
+            "bottom viewport must equal the reference's rows 12..18"
+        );
+        let screen = screen_string(&bottom, 40, 6);
+        assert!(screen.contains("ROW 5"), "bottom slice shows the last row:\n{screen}");
+        assert!(!screen.contains("ROW 0"), "bottom slice must not show the first row:\n{screen}");
+    }
+
+    #[test]
+    fn render_scrolled_middle_slice_matches_reference() {
+        // A slice that is clipped on BOTH sides (top scrolled off, bottom not yet
+        // reached) — the case that needed negative-y handling before.
+        let comps = scrolled_column_components();
+        let reference = render_to_buffer(comps.clone(), 40, 18);
+
+        let mid = render_scrolled_to_buffer(comps, 40, 4, 6);
+        assert!(
+            viewport_matches_reference(&mid, &reference, 6, 4, 40),
+            "middle viewport must equal the reference's rows 6..10"
+        );
+        let screen = screen_string(&mid, 40, 4);
+        assert!(screen.contains("ROW 2"), "middle slice shows ROW 2:\n{screen}");
+        assert!(!screen.contains("ROW 0") && !screen.contains("ROW 5"),
+            "middle slice shows neither end:\n{screen}");
+    }
+
+    #[test]
+    fn render_scrolled_does_not_compress_tall_content_into_tiny_viewport() {
+        // The regression: a tall surface (18 rows) in a 2-row viewport must still
+        // show the *top* two natural rows, not all six ROWs mashed into 2 lines.
+        let comps = scrolled_column_components();
+        let reference = render_to_buffer(comps.clone(), 40, 18);
+
+        let tiny = render_scrolled_to_buffer(comps, 40, 2, 0);
+        assert!(
+            viewport_matches_reference(&tiny, &reference, 0, 2, 40),
+            "2-row viewport must be the reference's top 2 rows — sliced, not compressed"
+        );
+        let screen = screen_string(&tiny, 40, 2);
+        assert!(screen.contains("ROW 0"), "tiny viewport still shows ROW 0:\n{screen}");
+        assert!(
+            !screen.contains("ROW 5"),
+            "last row must not be compressed into the 2-row viewport:\n{screen}"
+        );
+    }
+
+    #[test]
+    fn render_scrolled_offset_past_end_is_blank() {
+        // Scrolling past the surface's end renders nothing visible.
+        let comps = scrolled_column_components();
+        let past = render_scrolled_to_buffer(comps, 40, 6, 100);
+        for y in 0..6u16 {
+            assert!(row_is_blank(&past, y, 40), "row {y} should be blank past end");
+        }
     }
 }

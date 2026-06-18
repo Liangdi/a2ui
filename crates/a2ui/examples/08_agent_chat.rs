@@ -35,7 +35,7 @@ use crossterm::{
 };
 use ratatui::{
     Frame, Terminal,
-    backend::{CrosstermBackend, TestBackend},
+    backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
@@ -368,71 +368,6 @@ fn render_input(frame: &mut Frame, area: Rect, input: &str, streaming: bool) {
     frame.render_widget(Paragraph::new(prompt).style(input_style), inner);
 }
 
-/// Render an AI surface into the scrolling chat viewport WITHOUT squishing it.
-///
-/// Every scenario uses a `Column` (a layout container) as its root, and a
-/// container root *fills* whatever rect it is handed (see `SurfaceRenderer`).
-/// The chat measures each surface's natural height and lays entries out in a
-/// virtual column taller than the screen; only a slice of each surface is
-/// visible at any time. If we rendered the surface straight into that slice,
-/// the layout engine would shrink/reflow the whole tree into `vis_h` rows — so
-/// every surface deforms the moment it is partially scrolled.
-///
-/// Instead we render the full surface at its natural height into an off-screen
-/// scratch buffer, then blit only the visible rows into the frame. Rows scrolled
-/// above the viewport (`src_skip`) are simply skipped on the source side, which
-/// is how we get correct top-clipping even though `Rect.y` is unsigned.
-fn render_clipped_surface(
-    frame: &mut Frame,
-    chat_area: Rect,
-    content_w: u16,
-    renderer: a2ui::tui::surface::SurfaceRenderer,
-    entry_top: usize,
-    scroll_offset: usize,
-    viewport_h: usize,
-    natural_h: usize,
-) {
-    if natural_h == 0 || content_w == 0 {
-        return;
-    }
-    let entry_bot = entry_top + natural_h;
-    let clip_top = entry_top.max(scroll_offset);
-    let clip_bot = entry_bot.min(scroll_offset + viewport_h);
-    if clip_top >= clip_bot {
-        return;
-    }
-
-    // Rows of *this* surface scrolled above the viewport (skipped on blit).
-    let src_skip = scroll_offset.saturating_sub(entry_top);
-    let vis_h = clip_bot - clip_top;
-    let dst_y0 = chat_area.y + (clip_top - scroll_offset) as u16;
-
-    // Off-screen render at full natural height — the Column fills this rect
-    // exactly, so children keep their natural sizes (no shrink/reflow).
-    // TestBackend never errors, so this construction is infallible.
-    let backend = TestBackend::new(content_w, natural_h as u16);
-    let mut scratch_term = Terminal::new(backend).unwrap();
-    let _ = scratch_term.draw(|f| renderer.render(f, f.area(), None));
-    let scratch = scratch_term.backend().buffer();
-
-    // Blit only the visible rows into the live frame, clamped to the chat area.
-    let dst = frame.buffer_mut();
-    let bottom = chat_area.bottom();
-    for row in 0..vis_h {
-        let sy = (src_skip + row) as u16;
-        let dy = dst_y0 + row as u16;
-        if dy >= bottom {
-            break;
-        }
-        for col in 0..content_w {
-            let dx = chat_area.x + col;
-            if let (Some(src), Some(cell)) = (scratch.cell((col, sy)), dst.cell_mut((dx, dy))) {
-                *cell = src.clone();
-            }
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -537,8 +472,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let chat_area = chunks[0];
             let vh = chat_area.height as usize;
-            // Usable width: reserve 1 column on the right for the scrollbar.
-            let content_w = chat_area.width.saturating_sub(1);
 
             // ── Calculate each entry's desired height ──────────────────
             let mut entry_heights: Vec<usize> = entries
@@ -636,20 +569,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         &registry,
                                         &render_catalog,
                                     );
-                                // Render off-screen at the surface's natural
-                                // height and blit the visible slice, so scrolling
-                                // reveals a true slice instead of reflowing the
-                                // content into the (smaller) visible rect.
-                                render_clipped_surface(
-                                    frame,
-                                    chat_area,
-                                    content_w,
-                                    renderer,
-                                    entry_top,
-                                    scroll_offset,
-                                    vh,
-                                    h,
-                                );
+                                // Rows of *this* surface scrolled above the
+                                // viewport. The library renders the surface at its
+                                // natural height off-screen and blits the visible
+                                // slice, so scrolling reveals a true (un-squished)
+                                // slice instead of reflowing the content.
+                                let src_skip = scroll_offset.saturating_sub(entry_top);
+                                renderer.render_scrolled(frame, rect, src_skip, None);
                             }
                         }
                     }
