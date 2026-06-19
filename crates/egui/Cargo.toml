@@ -55,3 +55,8 @@ a2ui-tui = { workspace = true }
 name = "17_scifi_hud"
 # Needs the real egui runtime (eframe + glow) to open a window.
 required-features = ["backend"]
+
+[[example]]
+name = "08_agent_chat"
+# Needs the real egui runtime (eframe + glow) to open a window.
+required-features = ["backend"]

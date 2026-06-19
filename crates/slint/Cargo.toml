@@ -60,3 +60,8 @@ slint = { workspace = true }
 name = "17_scifi_hud"
 # Needs the real Slint runtime (winit + software renderer) to open a window.
 required-features = ["backend"]
+
+[[example]]
+name = "08_agent_chat"
+# Needs the real Slint runtime (winit + software renderer) to open a window.
+required-features = ["backend"]

@@ -50,3 +50,8 @@ bevy = { workspace = true }
 name = "17_scifi_hud"
 # Needs the real Bevy runtime (wgpu + winit) to open a window.
 required-features = ["backend"]
+
+[[example]]
+name = "08_agent_chat"
+# Needs the real Bevy runtime (wgpu + winit) to open a window.
+required-features = ["backend"]

@@ -120,6 +120,248 @@ pub fn A2uiNode(id: String, base_path: String) -> Element {
     }
 }
 
+/// A surface-id-aware variant of [`A2uiNode`].
+///
+/// [`A2uiNode`] assumes a *single* current surface (`processor.model
+/// .surfaces().next()`) — correct for the gallery (one sample at a time) but
+/// wrong for a chat, where each AI message is its own surface and many coexist.
+/// This component takes an explicit `surface_id` and looks up *that* surface
+/// (`processor.model.get_surface(&surface_id)`) instead of the first one, then
+/// renders it with the exact same per-kind arms as `A2uiNode`. Children re-enter
+/// via `<A2uiNodeInSurface>` (passing the same `surface_id` along) so the whole
+/// subtree stays pinned to the right surface.
+///
+/// Used by the multi-surface `08_agent_chat` example; the gallery keeps using
+/// [`A2uiNode`] unchanged.
+#[component]
+pub fn A2uiNodeInSurface(surface_id: String, id: String, base_path: String) -> Element {
+    let processor: Signal<MessageProcessor> = use_context();
+    let functions: Rc<Functions> = use_context();
+    let on_activate: OnActivate = use_context();
+    let focused: Signal<Option<String>> = use_context();
+
+    // Read scope: borrow the processor + the named surface to read this node.
+    // The signal read subscribes us, so any write re-renders this node.
+    let p = processor.read();
+    let Some(surface) = p.model.get_surface(&surface_id) else {
+        return rsx! { span { class: "unknown", "missing surface {surface_id}" } };
+    };
+    let components = surface.components.borrow();
+    let data_model = surface.data_model.borrow();
+    let Some(model) = components.get(&id) else {
+        return rsx! { span { class: "unknown", "Component not found: {id}" } };
+    };
+
+    let focused_id = focused.read().as_deref().map(str::to_string);
+    let ctx = ComponentContext::new(
+        id.clone(),
+        surface.id.clone(),
+        &data_model,
+        &components,
+        functions.as_ref(),
+        &base_path,
+        focused_id,
+    );
+
+    // Same dispatch as A2uiNode, but children re-enter as
+    // `<A2uiNodeInSurface>` so the surface binding propagates down the tree.
+    match model.component_type.as_str() {
+        "Column" | "List" => render_column_in_surface(model, &ctx, &surface_id),
+        "Row" => render_row_in_surface(model, &ctx, &surface_id),
+        "Card" => render_card_in_surface(model, &ctx, &surface_id),
+        "Tabs" => render_tabs_in_surface(model, &ctx, processor, &surface_id),
+        "Modal" => render_modal_in_surface(model, &ctx, &surface_id),
+
+        "Text" => render_text(model, &ctx),
+        "Divider" => render_divider(),
+        "Icon" => render_icon(model, &ctx),
+        "DateTimeInput" => render_date_time_input(model, &ctx, processor),
+        "Image" => render_image(model, &ctx),
+        "Video" => render_video(model, &ctx),
+        "AudioPlayer" => render_audio(model, &ctx),
+
+        "Button" => render_button(model, &ctx, &on_activate),
+        "TextField" => render_text_field(model, &ctx, processor),
+        "CheckBox" => render_checkbox(model, &ctx, processor),
+        "Slider" => render_slider(model, &ctx, processor),
+        "ChoicePicker" => render_choice_picker(model, &ctx, processor),
+
+        _ => render_unknown_in_surface(model, &ctx, &surface_id),
+    }
+}
+
+// ===========================================================================
+// Surface-pinned container arms — identical to the A2uiNode arms above, but
+// children re-enter via `<A2uiNodeInSurface surface_id=..>` so a multi-surface
+// host (e.g. the agent-chat example) keeps each subtree bound to its own
+// surface. Kept inline (not genericized) to match the readability of the
+// `A2uiNode` arms and avoid macro gymnastics.
+// ===========================================================================
+
+fn render_column_in_surface(
+    model: &ComponentModel,
+    ctx: &ComponentContext,
+    surface_id: &str,
+) -> Element {
+    let plan = build_child_plan(model, ctx);
+    let sid = surface_id.to_string();
+    rsx! {
+        div { class: "col",
+            for (cid, base) in plan {
+                A2uiNodeInSurface { surface_id: sid.clone(), id: cid, base_path: base }
+            }
+        }
+    }
+}
+
+fn render_row_in_surface(
+    model: &ComponentModel,
+    ctx: &ComponentContext,
+    surface_id: &str,
+) -> Element {
+    let plan = build_child_plan(model, ctx);
+    let sid = surface_id.to_string();
+    rsx! {
+        div { class: "row",
+            for (cid, base) in plan {
+                A2uiNodeInSurface { surface_id: sid.clone(), id: cid, base_path: base }
+            }
+        }
+    }
+}
+
+fn render_card_in_surface(
+    model: &ComponentModel,
+    ctx: &ComponentContext,
+    surface_id: &str,
+) -> Element {
+    let plan = build_child_plan(model, ctx);
+    let sid = surface_id.to_string();
+    rsx! {
+        div { class: "card col",
+            for (cid, base) in plan {
+                A2uiNodeInSurface { surface_id: sid.clone(), id: cid, base_path: base }
+            }
+        }
+    }
+}
+
+/// Surface-pinned Modal — renders its `trigger` child in place (the content
+/// floats as an overlay in single-surface hosts; the multi-surface chat does
+/// not open modals, so an in-place trigger is enough).
+fn render_modal_in_surface(
+    model: &ComponentModel,
+    ctx: &ComponentContext,
+    surface_id: &str,
+) -> Element {
+    let sid = surface_id.to_string();
+    if let Some(trigger_id) = model.get_property::<String>("trigger") {
+        rsx! {
+            A2uiNodeInSurface {
+                surface_id: sid,
+                id: trigger_id,
+                base_path: ctx.data_context.base_path().to_string()
+            }
+        }
+    } else {
+        rsx! { span {} }
+    }
+}
+
+/// Surface-pinned Tabs — same logic as `render_tabs`, but tab-bar writes target
+/// the named surface and the active panel re-enters via `A2uiNodeInSurface`.
+fn render_tabs_in_surface(
+    model: &ComponentModel,
+    ctx: &ComponentContext,
+    mut processor: Signal<MessageProcessor>,
+    surface_id: &str,
+) -> Element {
+    let tabs: Vec<TabEntry> = match model.get_property("tabs") {
+        Some(t) => t,
+        None => return rsx! { span {} },
+    };
+    if tabs.is_empty() {
+        return rsx! { span {} };
+    }
+
+    let active = model
+        .get_property::<DynamicNumber>("activeTab")
+        .as_ref()
+        .map(|dn| ctx.data_context.resolve_dynamic_number(dn) as usize)
+        .unwrap_or(0)
+        .min(tabs.len() - 1);
+
+    let active_path: Option<String> = model
+        .get_property::<DynamicNumber>("activeTab")
+        .as_ref()
+        .and_then(|dn| match dn {
+            DynamicNumber::Binding(b) => Some(ctx.data_context.resolve_pointer(&b.path)),
+            _ => None,
+        });
+
+    let sid = surface_id.to_string();
+    // Pre-build owned per-tab items so the rsx `for` body stays a single
+    // element and each onclick `move` closure owns its own `sid` clone (a
+    // shared `String` would be moved out by the first closure). Mirrors the
+    // pattern in `render_choice_picker`.
+    let tab_items: Vec<(usize, String, &'static str, Option<String>, String)> = tabs
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            let class = if i == active { "tab tab--active" } else { "tab" };
+            (i, ctx.data_context.resolve_dynamic_string(&t.title), class, active_path.clone(), sid.clone())
+        })
+        .collect();
+
+    let active_child = tabs[active].child.clone();
+    let child_base = ctx.data_context.base_path().to_string();
+    let panel_sid = sid.clone();
+
+    rsx! {
+        div { class: "tabs",
+            div { class: "tabs__bar",
+                for (idx, title, class, path_for_tab, tab_sid) in tab_items {
+                    button {
+                        class: "{class}",
+                        onclick: move |_| {
+                            if let Some(path) = path_for_tab.as_ref() {
+                                let mut p = processor.write();
+                                if let Some(surface) = p.model.get_surface_mut(&tab_sid) {
+                                    surface.data_model.borrow_mut().set(path, serde_json::json!(idx));
+                                }
+                            }
+                        },
+                        "{title}"
+                    }
+                }
+            }
+            div { class: "tabs__panel",
+                A2uiNodeInSurface { surface_id: panel_sid, id: active_child, base_path: child_base }
+            }
+        }
+    }
+}
+
+/// Surface-pinned unknown-kind arm — recurses children via `A2uiNodeInSurface`.
+fn render_unknown_in_surface(
+    model: &ComponentModel,
+    ctx: &ComponentContext,
+    surface_id: &str,
+) -> Element {
+    let kind = model.component_type.clone();
+    let plan = build_child_plan(model, ctx);
+    let sid = surface_id.to_string();
+    let header = chip("?", &format!("{kind} · unknown"))?;
+    rsx! {
+        div { class: "col",
+            {header}
+            for (cid, base) in plan {
+                A2uiNodeInSurface { surface_id: sid.clone(), id: cid, base_path: base }
+            }
+        }
+    }
+}
+
 // ===========================================================================
 // Child planning — honor all three A2UI child shapes.
 // ===========================================================================

@@ -44,3 +44,9 @@ tokio = { version = "1", features = ["time"] }
 name = "17_scifi_hud"
 # Needs the real Dioxus desktop runtime (wry WebView + tao) to open a window.
 required-features = ["backend"]
+
+[[example]]
+name = "08_agent_chat"
+# Multi-surface streaming chat; needs the real Dioxus desktop runtime to open
+# a window. Reuses the tokio `time` dev-dep that drives 17_scifi_hud's loop.
+required-features = ["backend"]

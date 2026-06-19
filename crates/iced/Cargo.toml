@@ -47,3 +47,8 @@ iced = { workspace = true, features = ["canvas"] }
 name = "17_scifi_hud"
 # Needs the real Iced runtime (wgpu + winit) to open a window.
 required-features = ["backend"]
+
+[[example]]
+name = "08_agent_chat"
+# Needs the real Iced runtime (wgpu + winit) to open a window.
+required-features = ["backend"]

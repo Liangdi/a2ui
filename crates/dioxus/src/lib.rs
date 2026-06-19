@@ -53,6 +53,12 @@ pub use app::Gallery;
 #[cfg(feature = "backend")]
 pub use node::A2uiNode;
 
+/// Surface-id-aware variant of [`A2uiNode`]: renders a node pinned to an
+/// explicit `surface_id` instead of the single "current" surface. For
+/// multi-surface hosts (e.g. a chat where each AI message is its own surface).
+#[cfg(feature = "backend")]
+pub use node::A2uiNodeInSurface;
+
 /// The whole-gallery CSS stylesheet (the dark Catppuccin-Mocha + green-accent
 /// palette). Inject it via the desktop `Config`'s custom `<head>`.
 #[cfg(feature = "backend")]
