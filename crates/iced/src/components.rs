@@ -610,14 +610,34 @@ pub(super) fn render_checkbox<'a>(
 }
 
 /// Slider — Iced native slider; value changes write back to the data model.
+///
+/// Reads `min`/`max`/`value`/`steps` from the model (matching the TUI
+/// reference): `min` defaults to `0.0`, `max` to `100.0`, and the resolved
+/// `value` is clamped into `[min, max]`. A degenerate range (`max <= min`) is
+/// widened to `min..=min + 1.0` so Iced never sees an empty span. When `steps`
+/// is present and positive the slider snaps via Iced's `.step(...)`.
 pub(super) fn render_slider<'a>(
     ctx: &ComponentContext, model: &ComponentModel,
 ) -> Element<'a, Message> {
     let value_binding = model.get_property::<DynamicNumber>("value");
-    let resolved = value_binding
+    let resolved_value = value_binding
         .as_ref()
         .map(|dn| ctx.data_context.resolve_dynamic_number(dn))
-        .unwrap_or(0.0) as f32;
+        .unwrap_or(0.0);
+    let min = model
+        .get_property::<DynamicNumber>("min")
+        .map(|dn| ctx.data_context.resolve_dynamic_number(&dn))
+        .unwrap_or(0.0);
+    let max = model
+        .get_property::<DynamicNumber>("max")
+        .map(|dn| ctx.data_context.resolve_dynamic_number(&dn))
+        .unwrap_or(100.0);
+    let steps = model
+        .get_property::<DynamicNumber>("steps")
+        .map(|dn| ctx.data_context.resolve_dynamic_number(&dn));
+
+    let (range_min, range_max, clamped) =
+        resolve_slider_range_and_value(min, max, resolved_value);
     let label = model
         .get_property::<DynamicString>("label")
         .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
@@ -630,10 +650,17 @@ pub(super) fn render_slider<'a>(
         Some(DynamicNumber::Binding(b)) => Some(ctx.data_context.resolve_pointer(&b.path)),
         _ => None,
     };
-    let track = slider(0.0..=100.0, resolved, move |v| Message::DataUpdate {
+    let mut track = slider(range_min..=range_max, clamped, move |v| Message::DataUpdate {
         path: path_opt.clone().unwrap_or_default(),
         value: serde_json::json!(v as f64),
     });
+    // Spec's `steps` is the discrete increment between adjacent values; only
+    // apply it when present and strictly positive.
+    if let Some(step) = steps {
+        if step > 0.0 {
+            track = track.step(step as f32);
+        }
+    }
 
     let mut col = Column::new().spacing(6.0);
     if !label.is_empty() {
@@ -641,6 +668,20 @@ pub(super) fn render_slider<'a>(
     }
     col = col.push(track);
     col.into()
+}
+
+/// Pure helper for [`render_slider`]: given the model-resolved `min`, `max`,
+/// and `value` (all `f64`), return the `(min, max, value)` triple — as `f32`
+/// for Iced — with the degenerate-range guard and value clamping applied.
+///
+/// - `max <= min` widens the span to `min..=min + 1.0` (mirrors the TUI
+///   `range.abs() < f64::EPSILON` collapse-to-zero handling by ensuring a
+///   valid, non-empty track rather than dividing by zero).
+/// - the resolved `value` is clamped into `[min, max]`.
+fn resolve_slider_range_and_value(min: f64, max: f64, value: f64) -> (f32, f32, f32) {
+    let safe_max = if max <= min { min + 1.0 } else { max };
+    let clamped = value.clamp(min, safe_max);
+    (min as f32, safe_max as f32, clamped as f32)
 }
 
 /// An option entry in a ChoicePicker: the display label plus the value written
@@ -939,5 +980,38 @@ mod tests {
         // Unknown names take the first two chars in brackets.
         assert_eq!(map_icon("XYZ"), "[XY]");
         assert_eq!(map_icon("k"), "[k]");
+    }
+
+    #[test]
+    fn slider_range_clamps_value_into_bounds() {
+        // A value inside the range is passed through unchanged.
+        let (lo, hi, v) = resolve_slider_range_and_value(0.0, 100.0, 42.0);
+        assert_eq!((lo, hi, v), (0.0, 100.0, 42.0));
+    }
+
+    #[test]
+    fn slider_range_clamps_over_max() {
+        let (_, hi, v) = resolve_slider_range_and_value(10.0, 20.0, 99.0);
+        assert_eq!((hi, v), (20.0, 20.0));
+    }
+
+    #[test]
+    fn slider_range_clamps_under_min() {
+        let (lo, _, v) = resolve_slider_range_and_value(10.0, 20.0, -5.0);
+        assert_eq!((lo, v), (10.0, 10.0));
+    }
+
+    #[test]
+    fn slider_range_widens_degenerate_span() {
+        // max <= min: the span widens to min..=min+1 so Iced sees a valid
+        // non-empty range; an out-of-bounds value then clamps to the new max.
+        let (lo, hi, v) = resolve_slider_range_and_value(7.0, 7.0, 50.0);
+        assert_eq!((lo, hi, v), (7.0, 8.0, 8.0));
+        // Inverted range (max < min) is treated the same way.
+        let (lo, hi, v) = resolve_slider_range_and_value(7.0, 3.0, 50.0);
+        assert_eq!((lo, hi, v), (7.0, 8.0, 8.0));
+        // A value below min still clamps to min under the widened range.
+        let (lo, _, v) = resolve_slider_range_and_value(7.0, 7.0, 0.0);
+        assert_eq!((lo, v), (7.0, 7.0));
     }
 }
