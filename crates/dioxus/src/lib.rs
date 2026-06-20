@@ -43,7 +43,7 @@ pub mod node;
 pub mod theme;
 
 /// The gallery root component — owns the state signals and renders the sidebar
-/// + preview pane + modal overlay. Construct from the gallery (or any host)
+/// and the preview pane + modal overlay. Construct from the gallery (or any host)
 /// and hand to `dioxus::launch`.
 #[cfg(feature = "backend")]
 pub use app::Gallery;

@@ -300,7 +300,7 @@ pub(crate) fn secondary(_: &Theme, status: button::Status) -> button::Style {
 pub(crate) fn borderless(_: &Theme, status: button::Status) -> button::Style {
     let hovered = matches!(status, button::Status::Hovered | button::Status::Pressed);
     button::Style {
-        background: hovered.then(|| Background::Color(SURFACE0)),
+        background: hovered.then_some(Background::Color(SURFACE0)),
         text_color: if hovered { ACCENT_HI } else { ACCENT },
         border: Border {
             color: Color::TRANSPARENT,

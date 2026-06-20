@@ -19,7 +19,7 @@
 //!
 //! The one piece of local logic the chrome owns is the activation flow
 //! (`handle_activate`) — a Button press → `dispatch_event` + `apply_event_result`
-//! + local Modal toggle — ported verbatim from `IcedApp::handle_activate` /
+//! and a local Modal toggle — ported verbatim from `IcedApp::handle_activate` /
 //! `apply_modal_interaction`; only the state access changes from `&mut self` to
 //! signal writes.
 
@@ -91,7 +91,10 @@ fn Sidebar(
     // Pre-clone an Rc per row so each row's onclick closure owns its handle
     // (the rsx `for` body can't start with a `let`, and a single shared `Rc`
     // can't be moved into more than one closure).
-    let rows: Vec<(usize, String, Rc<Vec<(String, Vec<A2uiMessage>)>>)> = samples
+    // Factored out so clippy's `type_complexity` stays quiet (and the row
+    // shape reads at the use site).
+    type SampleRow = (usize, String, Rc<Vec<(String, Vec<A2uiMessage>)>>);
+    let rows: Vec<SampleRow> = samples
         .iter()
         .enumerate()
         .map(|(i, (name, _))| (i, name.clone(), samples.clone()))

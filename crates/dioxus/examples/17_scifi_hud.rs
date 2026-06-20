@@ -88,7 +88,7 @@ fn hud() -> Element {
     // The processor holds the *entire* HUD state in its data model (seeded by a
     // `createSurface`). It lives in a `Signal` so writes (from the tick loop)
     // re-render every reader below.
-    let processor: Signal<MessageProcessor> = use_signal(|| build_processor());
+    let processor: Signal<MessageProcessor> = use_signal(build_processor);
 
     // Spawn the tick loop once (use_hook runs once per mount). Each iteration
     // sleeps ~80 ms, computes the next telemetry snapshot from a local tick

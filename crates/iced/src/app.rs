@@ -427,9 +427,7 @@ impl IcedApp {
         // Resolve the modal's content id + optional title in one borrow.
         let (content_id, title): (Option<String>, String) = {
             let components = surface.components.borrow();
-            let Some(m) = components.get(modal_id) else {
-                return None;
-            };
+            let m = components.get(modal_id)?;
             if m.component_type != "Modal" {
                 return None;
             }

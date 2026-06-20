@@ -800,6 +800,48 @@ pub(super) fn icon_family() -> egui::FontFamily {
     egui::FontFamily::Name(std::sync::Arc::from("Icons"))
 }
 
+/// Unknown / not-yet-implemented kind — show the kind name + recurse children.
+pub(super) fn render_unknown(
+    walk: &Walk<'_>,
+    ui: &mut Ui,
+    eb: &mut EditBuffers,
+    p: &mut Vec<PendingInteraction>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
+) {
+    ui.label(format!("[{}]", model.component_type));
+    for (child_id, child_base) in build_child_plan(model, ctx) {
+        render_child(walk, ui, eb, p, &child_id, &child_base);
+    }
+}
+
+// ===========================================================================
+// Field helpers
+// ===========================================================================
+
+/// Resolve a Button's child Text label (if its `child` is a Text component).
+fn resolve_child_text(ctx: &ComponentContext, model: &ComponentModel) -> Option<String> {
+    let child_id = model.child()?;
+    let child = ctx.components.get(&child_id)?;
+    if child.component_type != "Text" {
+        return None;
+    }
+    child
+        .get_property::<DynamicString>("text")
+        .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
+}
+
+/// Evaluate all `checks` on the component. Returns `true` if all pass (or none).
+fn evaluate_checks(ctx: &ComponentContext, model: &ComponentModel) -> bool {
+    match model.checks() {
+        Some(checks) => checks.iter().all(|rule| {
+            ctx.data_context
+                .resolve_dynamic_boolean_condition(&rule.condition)
+        }),
+        None => true,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -866,47 +908,5 @@ mod tests {
         // Unknown names take the first two chars in brackets.
         assert_eq!(map_icon_emoji("XYZ"), "[XY]");
         assert_eq!(map_icon_emoji("k"), "[k]");
-    }
-}
-
-/// Unknown / not-yet-implemented kind — show the kind name + recurse children.
-pub(super) fn render_unknown(
-    walk: &Walk<'_>,
-    ui: &mut Ui,
-    eb: &mut EditBuffers,
-    p: &mut Vec<PendingInteraction>,
-    ctx: &ComponentContext,
-    model: &ComponentModel,
-) {
-    ui.label(format!("[{}]", model.component_type));
-    for (child_id, child_base) in build_child_plan(model, ctx) {
-        render_child(walk, ui, eb, p, &child_id, &child_base);
-    }
-}
-
-// ===========================================================================
-// Field helpers
-// ===========================================================================
-
-/// Resolve a Button's child Text label (if its `child` is a Text component).
-fn resolve_child_text(ctx: &ComponentContext, model: &ComponentModel) -> Option<String> {
-    let child_id = model.child()?;
-    let child = ctx.components.get(&child_id)?;
-    if child.component_type != "Text" {
-        return None;
-    }
-    child
-        .get_property::<DynamicString>("text")
-        .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
-}
-
-/// Evaluate all `checks` on the component. Returns `true` if all pass (or none).
-fn evaluate_checks(ctx: &ComponentContext, model: &ComponentModel) -> bool {
-    match model.checks() {
-        Some(checks) => checks.iter().all(|rule| {
-            ctx.data_context
-                .resolve_dynamic_boolean_condition(&rule.condition)
-        }),
-        None => true,
     }
 }
