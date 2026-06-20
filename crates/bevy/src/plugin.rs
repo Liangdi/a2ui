@@ -9,10 +9,12 @@
 //! 2. `apply_interactions_full` consumes the queue, mutates `A2uiState`.
 //! 3. `reconcile` diff/patches the entity tree to match the model.
 //!
-//! The plugin pulls in `bevy_ui_widgets::UiWidgetsPlugins`, which registers
-//! the Button/Checkbox/Slider observers **and** Bevy 0.19's first-party
-//! `EditableText` text-input plugin. The host app supplies
-//! `DefaultPlugins` (which carries `UiPlugin`, windowing, picking, render).
+//! The widget runtimes come from `DefaultPlugins` — Bevy 0.19 folds the
+//! `UiWidgetsPlugins` group (Button/Checkbox/Slider observers **and** the
+//! first-party `EditableText` text-input plugin) into `DefaultPlugins` under
+//! the `bevy_ui_widgets` feature. So `A2uiPlugin` does **not** add it itself
+//! (doing so panics: "plugin was already added"). The host app must supply
+//! `DefaultPlugins` (which also carries `UiPlugin`, windowing, picking, render).
 
 use bevy::ecs::prelude::*;
 use bevy::prelude::*;
@@ -30,10 +32,6 @@ pub struct A2uiPlugin;
 
 impl Plugin for A2uiPlugin {
     fn build(&self, app: &mut App) {
-        // Widget runtimes: the headless widget observers (Button/Checkbox/Slider)
-        // + Bevy 0.19's first-party `EditableText` (registered by UiWidgetsPlugins).
-        app.add_plugins(bevy::ui_widgets::UiWidgetsPlugins);
-
         // Resources (NonSend — see `state.rs`: the processor is !Sync). The host
         // inserts `A2uiState` via `insert_non_send`; we init the queue
         // here so the observers can write to it before `apply_interactions_full`.
