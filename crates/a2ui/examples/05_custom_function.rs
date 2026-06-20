@@ -21,7 +21,7 @@ use std::io;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Terminal,
@@ -64,16 +64,10 @@ impl FunctionImplementation for GreetFunction {
         _context: &DataContext,
     ) -> Result<serde_json::Value, A2uiError> {
         // Extract the "name" argument (already resolved by DataContext).
-        let name = args
-            .get("name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("World");
+        let name = args.get("name").and_then(|v| v.as_str()).unwrap_or("World");
 
         // Extract optional "emoji" argument.
-        let emoji = args
-            .get("emoji")
-            .and_then(|v| v.as_str())
-            .unwrap_or("👋");
+        let emoji = args.get("emoji").and_then(|v| v.as_str()).unwrap_or("👋");
 
         let greeting = format!("{} Hello, {}!", emoji, name);
         Ok(serde_json::Value::String(greeting))
@@ -101,10 +95,7 @@ impl FunctionImplementation for UpperFunction {
         args: &HashMap<String, serde_json::Value>,
         _context: &DataContext,
     ) -> Result<serde_json::Value, A2uiError> {
-        let value = args
-            .get("value")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let value = args.get("value").and_then(|v| v.as_str()).unwrap_or("");
         Ok(serde_json::Value::String(value.to_uppercase()))
     }
 }
@@ -222,9 +213,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .split(area);
 
             if let Some(surface) = processor.model.get_surface("custom") {
-                let renderer = a2ui::tui::surface::SurfaceRenderer::new(
-                    surface, &registry, &render_catalog,
-                );
+                let renderer =
+                    a2ui::tui::surface::SurfaceRenderer::new(surface, &registry, &render_catalog);
                 renderer.render(frame, chunks[0], None);
             }
 

@@ -212,7 +212,8 @@ impl eframe::App for ChatApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         // Whole-window layout: scroll list fills, input row pinned to the bottom.
         let full = ui.max_rect();
-        ui.painter().rect_filled(full, 0.0, Color32::from_rgb(0x12, 0x14, 0x18));
+        ui.painter()
+            .rect_filled(full, 0.0, Color32::from_rgb(0x12, 0x14, 0x18));
         if full.width() < 20.0 || full.height() < 20.0 {
             return;
         }
@@ -249,8 +250,7 @@ impl eframe::App for ChatApp {
                                 );
                             } else if role == "ai" {
                                 // Render this surface through the generic walker.
-                                let Some(surface) =
-                                    self.processor.model.get_surface(&surface_id)
+                                let Some(surface) = self.processor.model.get_surface(&surface_id)
                                 else {
                                     continue;
                                 };
@@ -311,21 +311,20 @@ impl eframe::App for ChatApp {
                 let resp = row.add_sized(
                     Vec2::new((row.available_width() - 140.0).max(40.0), 22.0),
                     egui::TextEdit::singleline(&mut self.input)
-                        .hint_text("Type a message (hello, weather, tasks, story, stats, quote, help)")
+                        .hint_text(
+                            "Type a message (hello, weather, tasks, story, stats, quote, help)",
+                        )
                         .interactive(!streaming)
                         .desired_width(f32::MAX),
                 );
-                if resp.lost_focus()
-                    && row.input(|i| i.key_pressed(egui::Key::Enter))
-                    && !streaming
+                if resp.lost_focus() && row.input(|i| i.key_pressed(egui::Key::Enter)) && !streaming
                 {
                     self.send();
                     resp.request_focus();
                 }
                 if streaming {
                     row.label(
-                        RichText::new("⏳ Streaming…")
-                            .color(Color32::from_rgb(0xff, 0xb4, 0x54)),
+                        RichText::new("⏳ Streaming…").color(Color32::from_rgb(0xff, 0xb4, 0x54)),
                     );
                 } else {
                     if row.button("Send").clicked() {

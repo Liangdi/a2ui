@@ -52,7 +52,10 @@ pub fn build_nodes(
     if !components.contains("root") {
         return Vec::new();
     }
-    let mut builder = FlatBuilder { nodes: Vec::new(), image_cache };
+    let mut builder = FlatBuilder {
+        nodes: Vec::new(),
+        image_cache,
+    };
     builder.add(
         "root",
         "",
@@ -95,7 +98,10 @@ pub fn build_overlay_nodes(
         return Vec::new();
     };
 
-    let mut builder = FlatBuilder { nodes: Vec::new(), image_cache };
+    let mut builder = FlatBuilder {
+        nodes: Vec::new(),
+        image_cache,
+    };
     builder.add(
         &content_id,
         "",
@@ -445,7 +451,10 @@ fn read_tab_titles(
     let Some(arr) = model.get_raw("tabs").and_then(Value::as_array) else {
         return Vec::new();
     };
-    arr.iter().filter_map(parse_tab_title).map(|t| resolve_title(ctx, t)).collect()
+    arr.iter()
+        .filter_map(parse_tab_title)
+        .map(|t| resolve_title(ctx, t))
+        .collect()
 }
 
 /// Parse the raw `title` field of a tab entry (string or DynamicString object).
@@ -608,7 +617,10 @@ fn to_string_model(items: Vec<String>) -> slint::ModelRc<slint::SharedString> {
 fn to_choice_model(items: Vec<(String, bool)>) -> slint::ModelRc<ChoiceOption> {
     let v: Vec<ChoiceOption> = items
         .into_iter()
-        .map(|(label, checked)| ChoiceOption { label: label.into(), checked })
+        .map(|(label, checked)| ChoiceOption {
+            label: label.into(),
+            checked,
+        })
         .collect();
     slint::ModelRc::new(std::rc::Rc::new(slint::VecModel::from(v)))
 }
@@ -684,7 +696,13 @@ mod tests {
     ) -> Vec<LiveNode> {
         let processor = setup(components_json, data);
         let surface = processor.model.get_surface("test").expect("surface exists");
-        build_nodes(surface, &HashMap::new(), focused_id, open_modal_ids, &HashMap::new())
+        build_nodes(
+            surface,
+            &HashMap::new(),
+            focused_id,
+            open_modal_ids,
+            &HashMap::new(),
+        )
     }
 
     /// Overlay node tree (first open Modal's content) for the same surface.
@@ -696,7 +714,13 @@ mod tests {
     ) -> Vec<LiveNode> {
         let processor = setup(components_json, data);
         let surface = processor.model.get_surface("test").expect("surface exists");
-        build_overlay_nodes(surface, &HashMap::new(), focused_id, open_modal_ids, &HashMap::new())
+        build_overlay_nodes(
+            surface,
+            &HashMap::new(),
+            focused_id,
+            open_modal_ids,
+            &HashMap::new(),
+        )
     }
 
     /// `build` with no locally-open modals (the common case in existing tests).
@@ -724,7 +748,16 @@ mod tests {
             .process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
             .unwrap();
         let surface = processor.model.get_surface("s").unwrap();
-        assert!(build_nodes(surface, &HashMap::new(), None, &HashSet::new(), &HashMap::new()).is_empty());
+        assert!(
+            build_nodes(
+                surface,
+                &HashMap::new(),
+                None,
+                &HashSet::new(),
+                &HashMap::new()
+            )
+            .is_empty()
+        );
     }
 
     #[test]
@@ -880,7 +913,10 @@ mod tests {
             .iter()
             .map(|o| (o.label.to_string(), o.checked))
             .collect();
-        assert_eq!(choices, vec![("A".to_string(), true), ("B".to_string(), false)]);
+        assert_eq!(
+            choices,
+            vec![("A".to_string(), true), ("B".to_string(), false)]
+        );
     }
 
     #[test]
@@ -899,7 +935,11 @@ mod tests {
         assert_eq!(nodes.len(), 2);
         assert_eq!(child_ids(&nodes, 0), vec![1]);
         assert_eq!(nodes[0].number, 1.0, "activeTab resolved to 1");
-        assert_eq!(nodes[1].text.to_string(), "Panel 2", "only the active panel is mounted");
+        assert_eq!(
+            nodes[1].text.to_string(),
+            "Panel 2",
+            "only the active panel is mounted"
+        );
         let titles: Vec<String> = nodes[0].tab_titles.iter().map(|s| s.to_string()).collect();
         assert_eq!(titles, vec!["One", "Two"]);
     }
@@ -943,19 +983,31 @@ mod tests {
 
         // Main tree always mounts the trigger, open or closed.
         let main_closed = build_open(components.clone(), None, None, &HashSet::new());
-        let main_open = build_open(components.clone(), None, None, &HashSet::from(["m".to_string()]));
+        let main_open = build_open(
+            components.clone(),
+            None,
+            None,
+            &HashSet::from(["m".to_string()]),
+        );
         assert_eq!(main_closed[1].kind.to_string(), "Modal");
         assert_eq!(child_ids(&main_closed, 1), vec![2]);
-        assert_eq!(main_closed[2].text.to_string(), "Open", "trigger in main tree when closed");
-        assert_eq!(main_open[2].text.to_string(), "Open", "trigger still in main tree when open");
+        assert_eq!(
+            main_closed[2].text.to_string(),
+            "Open",
+            "trigger in main tree when closed"
+        );
+        assert_eq!(
+            main_open[2].text.to_string(),
+            "Open",
+            "trigger still in main tree when open"
+        );
 
         // Overlay is empty when closed; the content subtree when open.
         assert!(
             build_overlay_open(components.clone(), None, None, &HashSet::new()).is_empty(),
             "no overlay when closed"
         );
-        let overlay =
-            build_overlay_open(components, None, None, &HashSet::from(["m".to_string()]));
+        let overlay = build_overlay_open(components, None, None, &HashSet::from(["m".to_string()]));
         assert!(!overlay.is_empty(), "overlay present when open");
         assert_eq!(
             overlay[0].text.to_string(),

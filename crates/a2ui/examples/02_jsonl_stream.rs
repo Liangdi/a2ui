@@ -18,7 +18,7 @@ use std::io;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Terminal,
@@ -50,9 +50,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // ── 2. Parse the entire JSONL stream at once ─────────────────────────
     let parsed = MessageProcessor::parse_jsonl(jsonl);
-    let messages: Vec<A2uiMessage> = parsed
-        .into_iter()
-        .collect::<Result<Vec<_>, _>>()?;
+    let messages: Vec<A2uiMessage> = parsed.into_iter().collect::<Result<Vec<_>, _>>()?;
 
     let total = messages.len();
 
@@ -79,13 +77,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Render the surface if it exists.
             if let Some(surface) = processor.model.get_surface("demo") {
-                let renderer = a2ui::tui::surface::SurfaceRenderer::new(
-                    surface, &registry, &render_catalog,
-                );
+                let renderer =
+                    a2ui::tui::surface::SurfaceRenderer::new(surface, &registry, &render_catalog);
                 renderer.render(frame, chunks[0], None);
             } else if processed == 0 {
-                let waiting = Paragraph::new("No surface yet. Press 'n' to process the first message.")
-                    .block(Block::default().borders(Borders::ALL).title(" Waiting "));
+                let waiting =
+                    Paragraph::new("No surface yet. Press 'n' to process the first message.")
+                        .block(Block::default().borders(Borders::ALL).title(" Waiting "));
                 frame.render_widget(waiting, chunks[0]);
             }
 
@@ -94,8 +92,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 " Messages: {}/{}  |  n: next  a: all  r: reset  q: quit ",
                 processed, total
             );
-            let status_bar = Paragraph::new(Line::from(status))
-                .style(Style::default().fg(Color::Cyan));
+            let status_bar =
+                Paragraph::new(Line::from(status)).style(Style::default().fg(Color::Cyan));
             frame.render_widget(status_bar, chunks[1]);
         })?;
 

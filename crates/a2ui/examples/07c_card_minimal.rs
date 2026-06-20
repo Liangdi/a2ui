@@ -9,7 +9,7 @@ use std::io;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Terminal,
@@ -88,14 +88,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .split(area);
 
             if let Some(surface) = processor.model.get_surface("test") {
-                let renderer = a2ui::tui::surface::SurfaceRenderer::new(
-                    surface, &registry, &render_catalog,
-                );
+                let renderer =
+                    a2ui::tui::surface::SurfaceRenderer::new(surface, &registry, &render_catalog);
                 renderer.render(frame, chunks[0], None);
             }
 
-            let bar = Paragraph::new(Line::from(" q: quit"))
-                .style(Style::default().fg(Color::DarkGray));
+            let bar =
+                Paragraph::new(Line::from(" q: quit")).style(Style::default().fg(Color::DarkGray));
             frame.render_widget(bar, chunks[1]);
         })?;
 

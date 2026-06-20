@@ -21,10 +21,10 @@
 
 use a2ui::core::message_processor::MessageProcessor;
 use a2ui::core::validate::{
-    analyze_topology, parse_and_fix, validate_component_integrity, RefFieldSpec, RELAXED_VALIDATION,
-    ROOT_ID, STRICT_VALIDATION, ValidationConfig, ValidationReport,
+    RELAXED_VALIDATION, ROOT_ID, RefFieldSpec, STRICT_VALIDATION, ValidationConfig,
+    ValidationReport, analyze_topology, parse_and_fix, validate_component_integrity,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 fn main() {
     println!("A2UI validate — examples\n");

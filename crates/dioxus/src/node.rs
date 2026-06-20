@@ -33,9 +33,9 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use a2ui_base::catalog::function_api::FunctionImplementation;
+use a2ui_base::message_processor::MessageProcessor;
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::model::component_model::ComponentModel;
-use a2ui_base::message_processor::MessageProcessor;
 use a2ui_base::protocol::common_types::{
     ChildList, DynamicBoolean, DynamicNumber, DynamicString, DynamicStringList,
 };
@@ -308,8 +308,18 @@ fn render_tabs_in_surface(
         .iter()
         .enumerate()
         .map(|(i, t)| {
-            let class = if i == active { "tab tab--active" } else { "tab" };
-            (i, ctx.data_context.resolve_dynamic_string(&t.title), class, active_path.clone(), sid.clone())
+            let class = if i == active {
+                "tab tab--active"
+            } else {
+                "tab"
+            };
+            (
+                i,
+                ctx.data_context.resolve_dynamic_string(&t.title),
+                class,
+                active_path.clone(),
+                sid.clone(),
+            )
         })
         .collect();
 
@@ -499,8 +509,17 @@ fn render_tabs(
         .iter()
         .enumerate()
         .map(|(i, t)| {
-            let class = if i == active { "tab tab--active" } else { "tab" };
-            (i, ctx.data_context.resolve_dynamic_string(&t.title), class, active_path.clone())
+            let class = if i == active {
+                "tab tab--active"
+            } else {
+                "tab"
+            };
+            (
+                i,
+                ctx.data_context.resolve_dynamic_string(&t.title),
+                class,
+                active_path.clone(),
+            )
         })
         .collect();
 
@@ -718,7 +737,11 @@ fn render_video(model: &ComponentModel, ctx: &ComponentContext) -> Element {
         .unwrap_or_default();
 
     if url.is_empty() {
-        let label = if description.is_empty() { "video" } else { &description };
+        let label = if description.is_empty() {
+            "video"
+        } else {
+            &description
+        };
         return chip("▷", &format!("video · {label}"));
     }
 
@@ -752,7 +775,11 @@ fn render_audio(model: &ComponentModel, ctx: &ComponentContext) -> Element {
         .unwrap_or_default();
 
     if url.is_empty() {
-        let label = if description.is_empty() { "audio" } else { &description };
+        let label = if description.is_empty() {
+            "audio"
+        } else {
+            &description
+        };
         return chip("♪", &format!("audio · {label}"));
     }
 
@@ -786,7 +813,11 @@ fn render_image(model: &ComponentModel, ctx: &ComponentContext) -> Element {
 
     // Empty URL → keep the placeholder chip for parity with the other backends.
     if url.is_empty() {
-        let label = if description.is_empty() { "image" } else { &description };
+        let label = if description.is_empty() {
+            "image"
+        } else {
+            &description
+        };
         return chip("🖼", &format!("image · {label}"));
     }
 
@@ -818,7 +849,11 @@ fn render_image(model: &ComponentModel, ctx: &ComponentContext) -> Element {
 /// Button — labeled press target. A press hands the component id up via the
 /// `on_activate` context callback (the gallery root runs the shared
 /// `dispatch_event` + `apply_event_result` pipeline + Modal bookkeeping).
-fn render_button(model: &ComponentModel, ctx: &ComponentContext, on_activate: &OnActivate) -> Element {
+fn render_button(
+    model: &ComponentModel,
+    ctx: &ComponentContext,
+    on_activate: &OnActivate,
+) -> Element {
     let label = resolve_child_text(ctx, model).unwrap_or_else(|| {
         model
             .accessibility()
@@ -848,7 +883,11 @@ fn render_button(model: &ComponentModel, ctx: &ComponentContext, on_activate: &O
 
 /// TextField — controlled `<input>`, value resolved from the data model and
 /// edits written straight back through the shared processor signal.
-fn render_text_field(model: &ComponentModel, ctx: &ComponentContext, mut processor: Signal<MessageProcessor>) -> Element {
+fn render_text_field(
+    model: &ComponentModel,
+    ctx: &ComponentContext,
+    mut processor: Signal<MessageProcessor>,
+) -> Element {
     let label = model
         .get_property::<DynamicString>("label")
         .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
@@ -887,7 +926,11 @@ fn render_text_field(model: &ComponentModel, ctx: &ComponentContext, mut process
 }
 
 /// CheckBox — controlled checkbox; toggles write back through the signal.
-fn render_checkbox(model: &ComponentModel, ctx: &ComponentContext, mut processor: Signal<MessageProcessor>) -> Element {
+fn render_checkbox(
+    model: &ComponentModel,
+    ctx: &ComponentContext,
+    mut processor: Signal<MessageProcessor>,
+) -> Element {
     let label = model
         .get_property::<DynamicString>("label")
         .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
@@ -924,7 +967,11 @@ fn render_checkbox(model: &ComponentModel, ctx: &ComponentContext, mut processor
 }
 
 /// Slider — controlled range input; value changes write back through the signal.
-fn render_slider(model: &ComponentModel, ctx: &ComponentContext, mut processor: Signal<MessageProcessor>) -> Element {
+fn render_slider(
+    model: &ComponentModel,
+    ctx: &ComponentContext,
+    mut processor: Signal<MessageProcessor>,
+) -> Element {
     let value_binding = model.get_property::<DynamicNumber>("value");
     let resolved = value_binding
         .as_ref()
@@ -1172,9 +1219,10 @@ fn resolve_child_text(ctx: &ComponentContext, model: &ComponentModel) -> Option<
 /// Evaluate all `checks` on the component. Returns `true` if all pass (or none).
 fn evaluate_checks(ctx: &ComponentContext, model: &ComponentModel) -> bool {
     match model.checks() {
-        Some(checks) => checks
-            .iter()
-            .all(|rule| ctx.data_context.resolve_dynamic_boolean_condition(&rule.condition)),
+        Some(checks) => checks.iter().all(|rule| {
+            ctx.data_context
+                .resolve_dynamic_boolean_condition(&rule.condition)
+        }),
         None => true,
     }
 }
@@ -1207,12 +1255,18 @@ mod tests {
 
     #[test]
     fn adapt_html_value_datetime_local_strips_seconds() {
-        assert_eq!(adapt_html_value("2026-06-13T14:30:05", "datetime-local"), "2026-06-13T14:30");
+        assert_eq!(
+            adapt_html_value("2026-06-13T14:30:05", "datetime-local"),
+            "2026-06-13T14:30"
+        );
     }
 
     #[test]
     fn adapt_html_value_date_is_first_ten() {
-        assert_eq!(adapt_html_value("2026-06-13T14:30:05", "date"), "2026-06-13");
+        assert_eq!(
+            adapt_html_value("2026-06-13T14:30:05", "date"),
+            "2026-06-13"
+        );
     }
 
     #[test]

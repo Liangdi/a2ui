@@ -21,7 +21,7 @@ use std::io;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Terminal,
@@ -113,9 +113,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let (dt, d, t) = {
                     let dm = surface.data_model.borrow();
                     (
-                        dm.get("/datetime").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                        dm.get("/dateonly").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                        dm.get("/timeonly").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        dm.get("/datetime")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        dm.get("/dateonly")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                        dm.get("/timeonly")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string(),
                     )
                 };
                 let bar = Paragraph::new(Line::from(format!(
@@ -153,7 +162,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     execute!(stdout, LeaveAlternateScreen)?;
     if let Some(surface) = processor.model.get_surface("dt") {
         let dm = surface.data_model.borrow();
-        println!("Final data model: {}", serde_json::to_string_pretty(&dm.as_value())?);
+        println!(
+            "Final data model: {}",
+            serde_json::to_string_pretty(&dm.as_value())?
+        );
     }
     Ok(())
 }

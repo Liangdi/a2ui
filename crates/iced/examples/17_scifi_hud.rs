@@ -38,7 +38,7 @@
 
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use a2ui_base::message_processor::MessageProcessor;
 use a2ui_base::model::data_model::DataModel;
@@ -49,8 +49,8 @@ use iced::widget::canvas::{Frame, Geometry, Path, Program, Stroke};
 use iced::widget::progress_bar::{ProgressBar, Style as BarStyle};
 use iced::widget::{Canvas, Space, column, container, row, text};
 use iced::{
-    Background, Border, Color, Element, Fill, Font, Length, Point, Rectangle,
-    Subscription, Task, Theme,
+    Background, Border, Color, Element, Fill, Font, Length, Point, Rectangle, Subscription, Task,
+    Theme,
 };
 
 // ─── Neon palette (mirrors the ratatui version's CSS tokens) ─────────────────
@@ -136,7 +136,8 @@ impl HudApp {
                 }
             }
         });
-        let _ = processor.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap());
+        let _ = processor
+            .process_message(MessageProcessor::parse_message(&create.to_string()).unwrap());
 
         Self {
             processor,
@@ -216,10 +217,12 @@ impl HudApp {
         .spacing(10.0)
         .height(Fill);
 
-        let footer = text("[ window-close ] exit   ·   a2ui-driven hud   ·   data flows via updateDataModel")
-            .color(DIM)
-            .size(11.0)
-            .font(Font::MONOSPACE);
+        let footer = text(
+            "[ window-close ] exit   ·   a2ui-driven hud   ·   data flows via updateDataModel",
+        )
+        .color(DIM)
+        .size(11.0)
+        .font(Font::MONOSPACE);
 
         let content = column![header, body, footer]
             .spacing(10.0)
@@ -261,8 +264,12 @@ impl HudApp {
 
     /// Telemetry panel: four neon [`progress_bar`] gauges bound to `/gauges/*`.
     fn render_telemetry(&self, model: &DataModel) -> Element<'static, Message> {
-        let defs: [(&str, &str); 4] =
-            [("CORE", "core"), ("PWR", "pwr"), ("HULL", "hull"), ("SHLD", "shld")];
+        let defs: [(&str, &str); 4] = [
+            ("CORE", "core"),
+            ("PWR", "pwr"),
+            ("HULL", "hull"),
+            ("SHLD", "shld"),
+        ];
 
         let mut col = column![panel_title("◈ TELEMETRY", CYAN)].spacing(10.0);
         for (label, key) in defs {
@@ -303,17 +310,23 @@ impl HudApp {
         let angle = read_num(model, "/radar/angle");
         let range = read_num(model, "/radar/range") as u32;
 
-        let radar = Canvas::new(Radar { angle: angle as f32 })
-            .width(Fill)
-            .height(Length::Fill);
+        let radar = Canvas::new(Radar {
+            angle: angle as f32,
+        })
+        .width(Fill)
+        .height(Length::Fill);
 
         let bearing = (angle * 57.2957795) % 360.0;
         let readout = row![
             text("BEARING").color(DIM).size(10.0).font(Font::MONOSPACE),
-            text(format!("{bearing:5.1}°")).color(TEXT).font(Font::MONOSPACE),
+            text(format!("{bearing:5.1}°"))
+                .color(TEXT)
+                .font(Font::MONOSPACE),
             Space::new().width(Length::Fixed(16.0)),
             text("RANGE").color(DIM).size(10.0).font(Font::MONOSPACE),
-            text(format!("{range:>5}m")).color(TEXT).font(Font::MONOSPACE),
+            text(format!("{range:>5}m"))
+                .color(TEXT)
+                .font(Font::MONOSPACE),
         ]
         .align_y(iced::alignment::Vertical::Center)
         .spacing(6.0);
@@ -328,14 +341,21 @@ impl HudApp {
     /// Event log: renders the bound `/events/items` array; the newest one is
     /// highlighted while `/events/fresh` is true.
     fn render_events(&self, model: &DataModel) -> Element<'static, Message> {
-        let fresh = model.get("/events/fresh").and_then(|v| v.as_bool()).unwrap_or(false);
+        let fresh = model
+            .get("/events/fresh")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let mut col = column![panel_title("▤ EVENT LOG", DIM)].spacing(4.0);
 
         if let Some(arr) = model.get("/events/items").and_then(|v| v.as_array()) {
             for (i, it) in arr.iter().enumerate() {
                 let msg = it.get("msg").and_then(|v| v.as_str()).unwrap_or("");
                 let level = it.get("level").and_then(|v| v.as_str()).unwrap_or("");
-                let c = if i == 0 && fresh { AMBER } else { level_color(level) };
+                let c = if i == 0 && fresh {
+                    AMBER
+                } else {
+                    level_color(level)
+                };
                 col = col.push(text(format!("› {msg}")).color(c).font(Font::MONOSPACE));
             }
         }
@@ -479,10 +499,12 @@ const EVENT_POOL: &[(&str, &str)] = &[
 /// channel's receiver is dropped (i.e. when the app closes).
 fn tick_stream() -> iced::futures::channel::mpsc::UnboundedReceiver<Message> {
     let (tx, rx) = iced::futures::channel::mpsc::unbounded();
-    std::thread::spawn(move || loop {
-        std::thread::sleep(Duration::from_millis(80));
-        if tx.unbounded_send(Message::Tick).is_err() {
-            break; // receiver dropped — app closed
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(Duration::from_millis(80));
+            if tx.unbounded_send(Message::Tick).is_err() {
+                break; // receiver dropped — app closed
+            }
         }
     });
     rx

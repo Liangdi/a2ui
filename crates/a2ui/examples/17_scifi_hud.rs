@@ -28,7 +28,7 @@ use std::time::Duration;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Frame, Terminal,
@@ -38,7 +38,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, List, ListItem, Paragraph},
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use a2ui::core::message_processor::MessageProcessor;
 use a2ui::core::model::component_context::ComponentContext;
@@ -139,12 +139,18 @@ impl TuiComponent for HudHeader {
         // Right-align the status in the space left after the title so it pins
         // to the right edge, whatever the terminal width.
         let title_span = format!(" {title}");
-        let field = (area.width as usize).saturating_sub(title_span.chars().count()).max(1);
+        let field = (area.width as usize)
+            .saturating_sub(title_span.chars().count())
+            .max(1);
         let right = format!("{:>width$}", status, width = field);
         let line = Line::from(vec![Span::raw(title_span), Span::raw(right)]);
         frame.render_widget(
-            Paragraph::new(line)
-                .style(Style::default().fg(CYAN).add_modifier(Modifier::BOLD).bg(BG)),
+            Paragraph::new(line).style(
+                Style::default()
+                    .fg(CYAN)
+                    .add_modifier(Modifier::BOLD)
+                    .bg(BG),
+            ),
             area,
         );
     }
@@ -181,7 +187,12 @@ impl TuiComponent for HudTelemetry {
         };
         let inner = titled_panel(frame, area, "◈ TELEMETRY", CYAN);
 
-        let defs: [(&str, &str); 4] = [("CORE", "core"), ("PWR", "pwr"), ("HULL", "hull"), ("SHLD", "shld")];
+        let defs: [(&str, &str); 4] = [
+            ("CORE", "core"),
+            ("PWR", "pwr"),
+            ("HULL", "hull"),
+            ("SHLD", "shld"),
+        ];
         let mut lines: Vec<Line<'_>> = Vec::new();
         for (label, key) in defs {
             let pct = gauges
@@ -307,7 +318,10 @@ impl TuiComponent for HudEvents {
         let Some(events) = bound_value(ctx, "source") else {
             return;
         };
-        let fresh = events.get("fresh").and_then(|v| v.as_bool()).unwrap_or(false);
+        let fresh = events
+            .get("fresh")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let inner = titled_panel(frame, area, "▤ EVENT LOG", DIM);
 
         let mut items: Vec<ListItem<'_>> = Vec::new();
@@ -315,7 +329,11 @@ impl TuiComponent for HudEvents {
             for (i, it) in arr.iter().enumerate() {
                 let msg = it.get("msg").and_then(|v| v.as_str()).unwrap_or("");
                 let level = it.get("level").and_then(|v| v.as_str()).unwrap_or("");
-                let col = if i == 0 && fresh { AMBER } else { level_color(level) };
+                let col = if i == 0 && fresh {
+                    AMBER
+                } else {
+                    level_color(level)
+                };
                 items.push(ListItem::new(
                     Line::from(format!(" › {msg}")).style(Style::default().fg(col)),
                 ));

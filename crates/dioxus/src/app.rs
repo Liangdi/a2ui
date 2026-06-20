@@ -59,8 +59,7 @@ pub fn Gallery() -> Element {
     let samples: Rc<Vec<(String, Vec<A2uiMessage>)>> = use_context();
 
     // Build the activation callback once; the signals it captures are `Copy`.
-    let on_activate =
-        use_hook(|| make_on_activate(processor, functions.clone(), open_modals));
+    let on_activate = use_hook(|| make_on_activate(processor, functions.clone(), open_modals));
     use_context_provider(|| on_activate.clone());
 
     // Deterministic overlay order: iterate modals sorted by id.
@@ -283,7 +282,9 @@ fn make_on_activate(
                 dispatch_event(
                     &comp_type,
                     &ctx,
-                    &InputEvent::KeyPress { key: InputKey::Enter },
+                    &InputEvent::KeyPress {
+                        key: InputKey::Enter,
+                    },
                 )
             };
             if let Some(result) = result {
@@ -323,14 +324,11 @@ fn apply_modal_interaction(
             Some(node_id.to_string()) // was open → close
         } else {
             // Opening a Modal whose trigger is this node.
-            components
-                .all()
-                .iter()
-                .find_map(|(id, m)| {
-                    (m.component_type == "Modal"
-                        && m.get_property::<String>("trigger").as_deref() == Some(node_id))
-                        .then(|| id.clone())
-                })
+            components.all().iter().find_map(|(id, m)| {
+                (m.component_type == "Modal"
+                    && m.get_property::<String>("trigger").as_deref() == Some(node_id))
+                .then(|| id.clone())
+            })
         }
     };
 

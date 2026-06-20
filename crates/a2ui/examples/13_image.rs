@@ -31,7 +31,7 @@ use std::io;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Terminal,
@@ -48,7 +48,10 @@ use a2ui::tui::catalogs::basic::{build_basic_catalog, build_basic_registry};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── 1. Resolve the image path: CLI arg, else the bundled sample asset ─
-    let default_path = format!("{}/examples/assets/bad-apple.png", env!("CARGO_MANIFEST_DIR"));
+    let default_path = format!(
+        "{}/examples/assets/bad-apple.png",
+        env!("CARGO_MANIFEST_DIR")
+    );
     let image_path = std::env::args().nth(1).unwrap_or(default_path);
     if !std::path::Path::new(&image_path).is_file() {
         return Err(format!("image file not found: {image_path}").into());
@@ -121,11 +124,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .split(area);
 
             if let Some(surface) = processor.model.get_surface("img") {
-                let renderer = a2ui::tui::surface::SurfaceRenderer::new(
-                    surface,
-                    &registry,
-                    &render_catalog,
-                );
+                let renderer =
+                    a2ui::tui::surface::SurfaceRenderer::new(surface, &registry, &render_catalog);
                 renderer.render(frame, chunks[0], None);
             }
 

@@ -53,9 +53,9 @@ use a2ui_tui::catalogs::basic::build_basic_catalog;
 
 use a2ui_iced::walker::render_node;
 
-use iced::widget::{Column, container, row, scrollable, text, text_input};
 use iced::widget::image;
 use iced::widget::operation::AbsoluteOffset;
+use iced::widget::{Column, container, row, scrollable, text, text_input};
 use iced::{
     Alignment, Background, Border, Color, Element, Fill, Font, Length, Padding, Subscription, Task,
     Theme, widget::Id,
@@ -139,9 +139,7 @@ enum Message {
 impl ChatApp {
     /// Boot: build the processor seeded with the basic catalog + function map,
     /// feed the welcome surface immediately, and push its AI chat entry.
-    fn new(
-        functions: HashMap<String, Box<dyn FunctionImplementation>>,
-    ) -> Self {
+    fn new(functions: HashMap<String, Box<dyn FunctionImplementation>>) -> Self {
         let mut processor = MessageProcessor::new(vec![build_basic_catalog()]);
 
         // Feed the welcome surface up front so it is fully rendered by the
@@ -203,7 +201,10 @@ impl ChatApp {
             // row — the simplest portable "scroll to bottom".
             return iced::widget::operation::scroll_to(
                 self.scroll_id.clone(),
-                AbsoluteOffset { x: 0.0, y: f32::MAX },
+                AbsoluteOffset {
+                    x: 0.0,
+                    y: f32::MAX,
+                },
             );
         }
 
@@ -312,20 +313,31 @@ impl ChatApp {
                 .font(Font::MONOSPACE)
         };
 
-        let composer = Column::new().spacing(4.0).width(Fill).push(input).push(status);
+        let composer = Column::new()
+            .spacing(4.0)
+            .width(Fill)
+            .push(input)
+            .push(status);
 
         // ── Stack chat + composer ──────────────────────────────────────────
         let body = Column::new()
             .push(
-                container(chat)
-                    .width(Fill)
-                    .height(Fill)
-                    .padding(Padding::new(0.0).top(12.0).bottom(0.0).left(16.0).right(16.0)),
+                container(chat).width(Fill).height(Fill).padding(
+                    Padding::new(0.0)
+                        .top(12.0)
+                        .bottom(0.0)
+                        .left(16.0)
+                        .right(16.0),
+                ),
             )
             .push(
-                container(composer)
-                    .width(Fill)
-                    .padding(Padding::new(0.0).top(8.0).bottom(12.0).left(16.0).right(16.0)),
+                container(composer).width(Fill).padding(
+                    Padding::new(0.0)
+                        .top(8.0)
+                        .bottom(12.0)
+                        .left(16.0)
+                        .right(16.0),
+                ),
             )
             .width(Fill)
             .height(Fill);
@@ -344,41 +356,43 @@ impl ChatApp {
     /// walker, wrapped in a bubble. Falls back to a muted placeholder if the
     /// surface or its root is not ready yet.
     fn ai_bubble(&self, entry: &ChatEntry) -> Element<'_, Message> {
-        let inner: Element<'_, Message> =
-            match self.processor.model.get_surface(&entry.surface_id) {
-                Some(surface) => {
-                    let dm = surface.data_model.borrow();
-                    let comps = surface.components.borrow();
-                    if comps.contains("root") {
-                        // The walker returns `Element<a2ui_iced::Message>`; map
-                        // each surface interaction into this app's `Message`
-                        // (the chat scenarios are static, so they are dropped).
-                        render_node(
-                            "root",
-                            &surface.id,
-                            "",
-                            &dm,
-                            &comps,
-                            &self.functions,
-                            None,
-                            &self.image_cache,
-                            &self.local_tabs,
-                        )
-                        .map(|_| Message::Surface)
-                    } else {
-                        text("…").color(DIM).into()
-                    }
+        let inner: Element<'_, Message> = match self.processor.model.get_surface(&entry.surface_id)
+        {
+            Some(surface) => {
+                let dm = surface.data_model.borrow();
+                let comps = surface.components.borrow();
+                if comps.contains("root") {
+                    // The walker returns `Element<a2ui_iced::Message>`; map
+                    // each surface interaction into this app's `Message`
+                    // (the chat scenarios are static, so they are dropped).
+                    render_node(
+                        "root",
+                        &surface.id,
+                        "",
+                        &dm,
+                        &comps,
+                        &self.functions,
+                        None,
+                        &self.image_cache,
+                        &self.local_tabs,
+                    )
+                    .map(|_| Message::Surface)
+                } else {
+                    text("…").color(DIM).into()
                 }
-                None => text("(surface not ready)").color(DIM).into(),
-            };
+            }
+            None => text("(surface not ready)").color(DIM).into(),
+        };
 
         bubble(inner, AI_ACCENT, Alignment::Start)
     }
 
     /// A user message: a one-line label, right-aligned, in the user accent.
     fn user_bubble(&self, text_content: &str) -> Element<'_, Message> {
-        let label: Element<'_, Message> =
-            text(format!("👤 You:  {text_content}")).color(TEXT).size(14.0).into();
+        let label: Element<'_, Message> = text(format!("👤 You:  {text_content}"))
+            .color(TEXT)
+            .size(14.0)
+            .into();
         bubble(label, USER_ACCENT, Alignment::End)
     }
 
@@ -419,8 +433,16 @@ fn bubble<'a>(
 
     // Two fill spacers flank the bubble; the alignment picks which one collapses
     // (width 0) so the bubble sits flush with the chosen edge.
-    let left = iced::widget::Space::new().width(if align_x == Alignment::End { Fill } else { Length::Shrink });
-    let right = iced::widget::Space::new().width(if align_x == Alignment::End { Length::Shrink } else { Fill });
+    let left = iced::widget::Space::new().width(if align_x == Alignment::End {
+        Fill
+    } else {
+        Length::Shrink
+    });
+    let right = iced::widget::Space::new().width(if align_x == Alignment::End {
+        Length::Shrink
+    } else {
+        Fill
+    });
 
     row![left, body, right]
         .align_y(Alignment::Center)
@@ -455,10 +477,12 @@ fn feed(processor: &mut MessageProcessor, value: &serde_json::Value) {
 /// exits cleanly when the receiver is dropped (i.e. when the app closes).
 fn tick_stream() -> iced::futures::channel::mpsc::UnboundedReceiver<Message> {
     let (tx, rx) = iced::futures::channel::mpsc::unbounded();
-    std::thread::spawn(move || loop {
-        std::thread::sleep(Duration::from_millis(100));
-        if tx.unbounded_send(Message::Tick).is_err() {
-            break; // receiver dropped — app closed
+    std::thread::spawn(move || {
+        loop {
+            std::thread::sleep(Duration::from_millis(100));
+            if tx.unbounded_send(Message::Tick).is_err() {
+                break; // receiver dropped — app closed
+            }
         }
     });
     rx

@@ -79,7 +79,10 @@ fn main() -> ExitCode {
     }
 
     // Always print the catalog so the user knows what to pass on the CLI.
-    println!("A2UI Slint gallery — {} sample(s) available:", samples.len());
+    println!(
+        "A2UI Slint gallery — {} sample(s) available:",
+        samples.len()
+    );
     for (i, s) in samples.iter().enumerate() {
         println!("  {:>2}. {} — {}", i + 1, s.name, s.description);
     }

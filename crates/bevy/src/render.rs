@@ -19,8 +19,8 @@
 //! [`ComponentContext`] and resolves `DynamicString`/`DynamicNumber`/
 //! `DynamicBoolean` through its [`DataContext`].
 
+use bevy::color::palettes::tailwind::{BLUE_600, GRAY_200, GRAY_400, GRAY_800};
 use bevy::prelude::*;
-use bevy::color::palettes::tailwind::{GRAY_200, GRAY_400, GRAY_800, BLUE_600};
 use bevy::ui::Checked;
 use bevy::ui_widgets::{Button, Checkbox, Slider, SliderRange, SliderValue};
 use bevy_ui_text_input::{TextInputMode, TextInputNode};
@@ -128,8 +128,17 @@ pub fn resolve_fields(kind: &str, ctx: &ComponentContext, model: &ComponentModel
     let enable_time: bool = model.get_property("enableTime").unwrap_or(true);
     let _ = kind;
     NodeFields {
-        text, label, checked, number, variant, value_string, icon_name, image_url,
-        image_description, enable_date, enable_time,
+        text,
+        label,
+        checked,
+        number,
+        variant,
+        value_string,
+        icon_name,
+        image_url,
+        image_description,
+        enable_date,
+        enable_time,
     }
 }
 
@@ -228,7 +237,10 @@ pub fn apply_text(mut cmd: EntityCommands, fields: &NodeFields) {
     };
     cmd.insert((
         Text::new(fields.text.clone()),
-        TextFont { font_size, ..default() },
+        TextFont {
+            font_size,
+            ..default()
+        },
         TextColor(Color::from(GRAY_800)),
     ));
 }
@@ -243,7 +255,11 @@ pub fn apply_icon(mut cmd: EntityCommands, fields: &NodeFields, icon_font: &Hand
     let glyph = map_icon_emoji(&fields.icon_name);
     cmd.insert((
         Text::new(glyph),
-        TextFont { font: icon_font.clone(), font_size: 18.0, ..default() },
+        TextFont {
+            font: icon_font.clone(),
+            font_size: 18.0,
+            ..default()
+        },
         TextColor(Color::from(GRAY_800)),
     ));
 }
@@ -335,7 +351,9 @@ pub fn apply_date_time_input(mut cmd: EntityCommands, _fields: &NodeFields, focu
 pub fn apply_image(mut cmd: EntityCommands, fields: &NodeFields, handle: Option<&Handle<Image>>) {
     match handle {
         Some(h) => {
-            cmd.remove::<Text>().remove::<TextFont>().remove::<TextColor>();
+            cmd.remove::<Text>()
+                .remove::<TextFont>()
+                .remove::<TextColor>();
             cmd.insert((
                 Node {
                     display: Display::Flex,
@@ -363,7 +381,10 @@ pub fn apply_image(mut cmd: EntityCommands, fields: &NodeFields, handle: Option<
                     ..default()
                 },
                 Text::new(format!("[🖼 {}]", label)),
-                TextFont { font_size: 14.0, ..default() },
+                TextFont {
+                    font_size: 14.0,
+                    ..default()
+                },
                 TextColor(Color::from(GRAY_400)),
             ));
         }
@@ -376,7 +397,10 @@ pub fn apply_image(mut cmd: EntityCommands, fields: &NodeFields, handle: Option<
 pub fn apply_media_placeholder(mut cmd: EntityCommands, kind: &str, fields: &NodeFields) {
     cmd.insert((
         Text::new(format!("[{kind}: {}]", fields.image_url)),
-        TextFont { font_size: 14.0, ..default() },
+        TextFont {
+            font_size: 14.0,
+            ..default()
+        },
         TextColor(Color::from(GRAY_400)),
     ));
 }
@@ -416,7 +440,10 @@ pub fn apply_tab_title(mut cmd: EntityCommands, fields: &NodeFields, active: boo
         },
         bg,
         Text::new(fields.text.clone()),
-        TextFont { font_size: 14.0, ..default() },
+        TextFont {
+            font_size: 14.0,
+            ..default()
+        },
         color,
     ));
 }
@@ -440,7 +467,10 @@ pub fn apply_choice_option(mut cmd: EntityCommands, fields: &NodeFields, selecte
             ..default()
         },
         Text::new(fields.text.clone()),
-        TextFont { font_size: 14.0, ..default() },
+        TextFont {
+            font_size: 14.0,
+            ..default()
+        },
         color,
     ));
 }
@@ -510,7 +540,10 @@ pub fn apply_modal_header(mut cmd: EntityCommands) {
 pub fn apply_modal_title(mut cmd: EntityCommands, fields: &NodeFields) {
     cmd.insert((
         Text::new(fields.text.clone()),
-        TextFont { font_size: 16.0, ..default() },
+        TextFont {
+            font_size: 16.0,
+            ..default()
+        },
         TextColor(Color::from(GRAY_800)),
     ));
 }
@@ -527,7 +560,10 @@ pub fn apply_modal_close(mut cmd: EntityCommands, fields: &NodeFields) {
         },
         BackgroundColor(Color::from(GRAY_400)),
         Text::new(fields.text.clone()),
-        TextFont { font_size: 14.0, ..default() },
+        TextFont {
+            font_size: 14.0,
+            ..default()
+        },
         TextColor(Color::from(GRAY_800)),
     ));
 }
@@ -554,7 +590,10 @@ pub fn apply_button(mut cmd: EntityCommands, fields: &NodeFields) {
             Some(BackgroundColor(Color::from(BLUE_600))),
             BorderColor::all(Color::from(BLUE_600)),
         ),
-        Some("borderless") => (Some(BackgroundColor(Color::NONE)), BorderColor::all(Color::NONE)),
+        Some("borderless") => (
+            Some(BackgroundColor(Color::NONE)),
+            BorderColor::all(Color::NONE),
+        ),
         _ => (
             Some(BackgroundColor(Color::from(GRAY_200))),
             BorderColor::all(Color::from(GRAY_400)),

@@ -22,7 +22,7 @@ use std::io;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Terminal,
@@ -406,16 +406,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .split(area);
 
             if let Some(surface) = processor.model.get_surface("tabs_demo") {
-                let renderer = a2ui::tui::surface::SurfaceRenderer::new(
-                    surface, &registry, &render_catalog,
-                );
+                let renderer =
+                    a2ui::tui::surface::SurfaceRenderer::new(surface, &registry, &render_catalog);
                 let focused = focus_manager.focused_id();
                 renderer.render(frame, chunks[0], focused);
 
                 // Build help bar.
                 let dm = surface.data_model.borrow();
                 let tab = dm.get("/activeTab").and_then(|v| v.as_u64()).unwrap_or(0);
-                let show = dm.get("/showHelp").and_then(|v| v.as_bool()).unwrap_or(false);
+                let show = dm
+                    .get("/showHelp")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
                 let tabs = ["Settings", "Profile", "About"];
                 let tab_name = tabs.get(tab as usize).unwrap_or(&"?");
                 drop(dm);
@@ -458,15 +460,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 // the "toggle_help" action flips /showHelp to
                                 // open/close the modal. Everything else goes
                                 // through the shared apply pipeline.
-                                EventResult::Action { event_name, context, .. } => {
+                                EventResult::Action {
+                                    event_name,
+                                    context,
+                                    ..
+                                } => {
                                     eprintln!("[ACTION] {} {:?}", event_name, context);
 
                                     // If the action is "toggle_help", flip /showHelp.
                                     if event_name == "toggle_help" {
-                                        let show = processor.model.get_surface("tabs_demo")
+                                        let show = processor
+                                            .model
+                                            .get_surface("tabs_demo")
                                             .map(|s| {
                                                 let dm = s.data_model.borrow();
-                                                dm.get("/showHelp").and_then(|v| v.as_bool()).unwrap_or(false)
+                                                dm.get("/showHelp")
+                                                    .and_then(|v| v.as_bool())
+                                                    .unwrap_or(false)
                                             })
                                             .unwrap_or(false);
                                         let msg = serde_json::json!({
@@ -478,7 +488,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             }
                                         });
                                         let _ = processor.process_message(
-                                            MessageProcessor::parse_message(&msg.to_string()).unwrap(),
+                                            MessageProcessor::parse_message(&msg.to_string())
+                                                .unwrap(),
                                         );
                                     }
                                 }
@@ -505,7 +516,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some(surface) = processor.model.get_surface("tabs_demo") {
         let dm = surface.data_model.borrow();
-        println!("Final data model: {}", serde_json::to_string_pretty(&dm.as_value())?);
+        println!(
+            "Final data model: {}",
+            serde_json::to_string_pretty(&dm.as_value())?
+        );
     }
     Ok(())
 }

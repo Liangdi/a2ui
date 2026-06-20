@@ -1,0 +1,4 @@
+# Pin the formatting edition so `cargo fmt` is deterministic across contributors
+# and toolchains. `cargo fmt --check` (in CI) is the source of truth — any diff it
+# reports is formatting drift to reject before merge.
+edition = "2024"

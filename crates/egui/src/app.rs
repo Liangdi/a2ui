@@ -297,7 +297,10 @@ impl EguiApp {
                         surface.data_model.borrow_mut().set(&path, value);
                     }
                 }
-                PendingInteraction::TabActivate { component_id, index } => {
+                PendingInteraction::TabActivate {
+                    component_id,
+                    index,
+                } => {
                     // Unbound Tabs (the gallery samples): track the selection
                     // locally so the next frame shows the newly active panel.
                     self.local_tabs.insert(component_id, index);
@@ -370,9 +373,8 @@ impl EguiApp {
 
         // Write pass: decode each URL and cache the handle (or None on failure).
         for url in urls {
-            let handle = crate::images::decode_url(&url).map(|image| {
-                ctx.load_texture(&url, image, egui::TextureOptions::LINEAR)
-            });
+            let handle = crate::images::decode_url(&url)
+                .map(|image| ctx.load_texture(&url, image, egui::TextureOptions::LINEAR));
             self.image_cache.insert(url, handle);
         }
     }
@@ -404,7 +406,9 @@ impl EguiApp {
             dispatch_event(
                 &comp_type,
                 &ctx,
-                &InputEvent::KeyPress { key: InputKey::Enter },
+                &InputEvent::KeyPress {
+                    key: InputKey::Enter,
+                },
             )
         };
 
@@ -477,7 +481,11 @@ fn install_icon_font(ctx: &egui::Context) {
         .push("a2ui-icons".to_owned());
     // Fallback so any stray emoji codepoint elsewhere still resolves.
     for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
-        fonts.families.entry(family).or_default().push("a2ui-icons".to_owned());
+        fonts
+            .families
+            .entry(family)
+            .or_default()
+            .push("a2ui-icons".to_owned());
     }
     ctx.set_fonts(fonts);
 }

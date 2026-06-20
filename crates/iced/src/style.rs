@@ -363,21 +363,30 @@ pub(crate) fn tab(active: bool) -> impl Fn(&Theme, button::Status) -> button::St
 /// A recessed text input: mantle fill, faint edge, accent ring when focused.
 pub(crate) fn text_field(_: &Theme, status: text_input::Status) -> text_input::Style {
     let (bg, border) = match status {
-        text_input::Status::Focused { .. } => (SURFACE0, Border {
-            color: ACCENT,
-            width: 1.5,
-            radius: 9.0.into(),
-        }),
-        text_input::Status::Hovered => (SURFACE0, Border {
-            color: OVERLAY_EDGE,
-            width: 1.0,
-            radius: 9.0.into(),
-        }),
-        _ => (MANTLE, Border {
-            color: EDGE,
-            width: 1.0,
-            radius: 9.0.into(),
-        }),
+        text_input::Status::Focused { .. } => (
+            SURFACE0,
+            Border {
+                color: ACCENT,
+                width: 1.5,
+                radius: 9.0.into(),
+            },
+        ),
+        text_input::Status::Hovered => (
+            SURFACE0,
+            Border {
+                color: OVERLAY_EDGE,
+                width: 1.0,
+                radius: 9.0.into(),
+            },
+        ),
+        _ => (
+            MANTLE,
+            Border {
+                color: EDGE,
+                width: 1.0,
+                radius: 9.0.into(),
+            },
+        ),
     };
     text_input::Style {
         background: Background::Color(bg),
@@ -398,21 +407,30 @@ const OVERLAY_EDGE: Color = rgba(0xC6, 0xD0, 0xF5, 0.14);
 /// agree.
 pub(crate) fn pick_list(_: &Theme, status: pick_list_w::Status) -> pick_list_w::Style {
     let (bg, border) = match status {
-        pick_list_w::Status::Opened { .. } => (SURFACE0, Border {
-            color: ACCENT,
-            width: 1.5,
-            radius: 9.0.into(),
-        }),
-        pick_list_w::Status::Hovered => (SURFACE0, Border {
-            color: OVERLAY_EDGE,
-            width: 1.0,
-            radius: 9.0.into(),
-        }),
-        pick_list_w::Status::Active => (MANTLE, Border {
-            color: EDGE,
-            width: 1.0,
-            radius: 9.0.into(),
-        }),
+        pick_list_w::Status::Opened { .. } => (
+            SURFACE0,
+            Border {
+                color: ACCENT,
+                width: 1.5,
+                radius: 9.0.into(),
+            },
+        ),
+        pick_list_w::Status::Hovered => (
+            SURFACE0,
+            Border {
+                color: OVERLAY_EDGE,
+                width: 1.0,
+                radius: 9.0.into(),
+            },
+        ),
+        pick_list_w::Status::Active => (
+            MANTLE,
+            Border {
+                color: EDGE,
+                width: 1.0,
+                radius: 9.0.into(),
+            },
+        ),
     };
     pick_list_w::Style {
         text_color: TEXT,

@@ -22,7 +22,7 @@ use std::io;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Terminal,
@@ -196,15 +196,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .split(area);
 
             if let Some(surface) = processor.model.get_surface("shopping") {
-                let renderer = a2ui::tui::surface::SurfaceRenderer::new(
-                    surface, &registry, &render_catalog,
-                );
+                let renderer =
+                    a2ui::tui::surface::SurfaceRenderer::new(surface, &registry, &render_catalog);
                 renderer.render(frame, chunks[0], None);
             }
 
             let help = " r: reset  s: shuffle prices  q: quit ";
-            let bar = Paragraph::new(Line::from(help))
-                .style(Style::default().fg(Color::DarkGray));
+            let bar = Paragraph::new(Line::from(help)).style(Style::default().fg(Color::DarkGray));
             frame.render_widget(bar, chunks[1]);
         })?;
 
@@ -244,10 +242,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .iter()
                                 .enumerate()
                                 .map(|(i, item)| {
-                                    let name = item.get("name").and_then(|v| v.as_str()).unwrap_or("?");
-                                    let price = item.get("price").and_then(|v| v.as_f64()).unwrap_or(1.0);
+                                    let name =
+                                        item.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+                                    let price =
+                                        item.get("price").and_then(|v| v.as_f64()).unwrap_or(1.0);
                                     // Pseudo-random price shift using index.
-                                    let new_price = ((price * (1.0 + (i as f64 * 0.37).sin()) * 100.0).round() / 100.0).max(0.10);
+                                    let new_price =
+                                        ((price * (1.0 + (i as f64 * 0.37).sin()) * 100.0).round()
+                                            / 100.0)
+                                            .max(0.10);
                                     serde_json::json!({"name": name, "price": new_price})
                                 })
                                 .collect();
@@ -277,7 +280,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some(surface) = processor.model.get_surface("shopping") {
         let dm = surface.data_model.borrow();
-        println!("Final data model: {}", serde_json::to_string_pretty(&dm.as_value())?);
+        println!(
+            "Final data model: {}",
+            serde_json::to_string_pretty(&dm.as_value())?
+        );
     }
     Ok(())
 }

@@ -63,11 +63,7 @@ pub(super) struct Walk<'a> {
 }
 
 /// Re-enter the walker for one child, returning its element.
-fn render_child<'a>(
-    walk: &Walk<'_>,
-    child_id: &str,
-    base_path: &str,
-) -> Element<'a, Message> {
+fn render_child<'a>(walk: &Walk<'_>, child_id: &str, base_path: &str) -> Element<'a, Message> {
     render_node(
         child_id,
         walk.surface_id,
@@ -113,7 +109,11 @@ fn build_child_plan(model: &ComponentModel, ctx: &ComponentContext) -> Vec<(Stri
 }
 
 /// Build the child elements of a container node as a `Vec<Element>`.
-fn build_children<'a>(walk: &Walk<'_>, model: &ComponentModel, ctx: &ComponentContext) -> Vec<Element<'a, Message>> {
+fn build_children<'a>(
+    walk: &Walk<'_>,
+    model: &ComponentModel,
+    ctx: &ComponentContext,
+) -> Vec<Element<'a, Message>> {
     build_child_plan(model, ctx)
         .into_iter()
         .map(|(cid, base)| render_child(walk, &cid, &base))
@@ -126,7 +126,9 @@ fn build_children<'a>(walk: &Walk<'_>, model: &ComponentModel, ctx: &ComponentCo
 
 /// Column / List — vertical stack of children.
 pub(super) fn render_column<'a>(
-    walk: &Walk<'_>, ctx: &ComponentContext, model: &ComponentModel,
+    walk: &Walk<'_>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) -> Element<'a, Message> {
     let children = build_children(walk, model, ctx);
     Column::with_children(children)
@@ -137,17 +139,19 @@ pub(super) fn render_column<'a>(
 
 /// Row — horizontal stack of children.
 pub(super) fn render_row<'a>(
-    walk: &Walk<'_>, ctx: &ComponentContext, model: &ComponentModel,
+    walk: &Walk<'_>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) -> Element<'a, Message> {
     let children = build_children(walk, model, ctx);
-    Row::with_children(children)
-        .spacing(8.0)
-        .into()
+    Row::with_children(children).spacing(8.0).into()
 }
 
 /// Card — a rounded, softly-elevated panel wrapping its children.
 pub(super) fn render_card<'a>(
-    walk: &Walk<'_>, ctx: &ComponentContext, model: &ComponentModel,
+    walk: &Walk<'_>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) -> Element<'a, Message> {
     let children = build_children(walk, model, ctx);
     let inner = Column::with_children(children).spacing(10.0);
@@ -162,7 +166,9 @@ pub(super) fn render_card<'a>(
 /// as a top-level overlay (built by [`crate::IcedApp::view`] via a `Stack`
 /// after the main tree), so the trigger keeps its place and focus.
 pub(super) fn render_modal<'a>(
-    walk: &Walk<'_>, _ctx: &ComponentContext, model: &ComponentModel,
+    walk: &Walk<'_>,
+    _ctx: &ComponentContext,
+    model: &ComponentModel,
 ) -> Element<'a, Message> {
     if let Some(trigger_id) = model.get_property::<String>("trigger") {
         render_child(walk, &trigger_id, "")
@@ -207,7 +213,9 @@ fn parse_tab_entry(v: &Value) -> Option<(DynamicString, String)> {
 /// are inert — read-only, mirroring the TUI `handle_event` bail-out). Mirrors
 /// the TUI reference and the Dioxus backend.
 pub(super) fn render_tabs<'a>(
-    walk: &Walk<'_>, ctx: &ComponentContext, model: &ComponentModel,
+    walk: &Walk<'_>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) -> Element<'a, Message> {
     let tabs = read_tabs(model);
     if tabs.is_empty() {
@@ -271,7 +279,10 @@ pub(super) fn render_tabs<'a>(
 // ===========================================================================
 
 /// Text — styled label; `variant` h1/h2/h3 select heading sizes.
-pub(super) fn render_text<'a>(ctx: &ComponentContext, model: &ComponentModel) -> Element<'a, Message> {
+pub(super) fn render_text<'a>(
+    ctx: &ComponentContext,
+    model: &ComponentModel,
+) -> Element<'a, Message> {
     let content = model
         .get_property::<DynamicString>("text")
         .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
@@ -296,7 +307,10 @@ pub(super) fn render_divider<'a>() -> Element<'a, Message> {
 /// renders emoji natively, so no icon font is needed; the mapping mirrors the
 /// TUI backend's `map_icon` so every renderer agrees on the same symbol set,
 /// and unknown names fall back to the first two characters in brackets.
-pub(super) fn render_icon<'a>(ctx: &ComponentContext, model: &ComponentModel) -> Element<'a, Message> {
+pub(super) fn render_icon<'a>(
+    ctx: &ComponentContext,
+    model: &ComponentModel,
+) -> Element<'a, Message> {
     let name = model
         .get_property::<DynamicString>("name")
         .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
@@ -353,7 +367,8 @@ fn map_icon(name: &str) -> String {
 /// is a `Binding`, edits emit a [`Message::DataUpdate`], mirroring
 /// `render_text_field`. A non-binding value is shown read-only.
 pub(super) fn render_date_time_input<'a>(
-    ctx: &ComponentContext, model: &ComponentModel,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) -> Element<'a, Message> {
     let label = model
         .get_property::<DynamicString>("label")
@@ -412,7 +427,9 @@ pub(super) fn render_date_time_input<'a>(
 /// also falls back to the chip. `fit` maps onto Iced `ContentFit` (default
 /// `Contain`, matching the Dioxus `object-fit` mapping).
 pub(super) fn render_image<'a>(
-    walk: &Walk<'_>, ctx: &ComponentContext, model: &ComponentModel,
+    walk: &Walk<'_>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) -> Element<'a, Message> {
     let url = model
         .get_property::<DynamicString>("url")
@@ -443,7 +460,11 @@ pub(super) fn render_image<'a>(
     }
 
     // Placeholder: empty / unsupported scheme / not-yet-loaded / failed fetch.
-    let label = if description.is_empty() { "image" } else { &description };
+    let label = if description.is_empty() {
+        "image"
+    } else {
+        &description
+    };
     chip("🖼", &format!("image · {label}"))
 }
 
@@ -451,7 +472,9 @@ pub(super) fn render_image<'a>(
 /// widget, and (unlike the Dioxus WebView) cannot play video/audio at all, so
 /// these stay placeholders.
 pub(super) fn render_media_placeholder<'a>(
-    kind: &str, ctx: &ComponentContext, model: &ComponentModel,
+    kind: &str,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) -> Element<'a, Message> {
     let url = model
         .get_property::<DynamicString>("url")
@@ -504,7 +527,8 @@ fn map_content_fit(fit: Option<&str>) -> ContentFit {
 /// [`crate::apply_event_result`] in `update`), like the egui/Slint hosts'
 /// `handle_activate`. The label is the Button's single `child` (a Text).
 pub(super) fn render_button<'a>(
-    ctx: &ComponentContext, model: &ComponentModel,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) -> Element<'a, Message> {
     let label = resolve_child_text(ctx, model).unwrap_or_else(|| {
         model
@@ -538,7 +562,8 @@ pub(super) fn render_button<'a>(
 /// value is resolved from the model each frame (owned, copied into the widget);
 /// edits emit a [`Message::DataUpdate`] carrying the absolute binding path.
 pub(super) fn render_text_field<'a>(
-    ctx: &ComponentContext, model: &ComponentModel,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) -> Element<'a, Message> {
     let label = model
         .get_property::<DynamicString>("label")
@@ -563,11 +588,7 @@ pub(super) fn render_text_field<'a>(
 
     let mut col = Column::new().spacing(6.0);
     if !label.is_empty() {
-        col = col.push(
-            text(label.clone())
-                .size(12.0)
-                .color(style::SUBTEXT0),
-        );
+        col = col.push(text(label.clone()).size(12.0).color(style::SUBTEXT0));
     }
     col = col.push(
         text_input(&label, &resolved)
@@ -580,7 +601,8 @@ pub(super) fn render_text_field<'a>(
 
 /// CheckBox — Iced native checkbox; toggles write back to the data model.
 pub(super) fn render_checkbox<'a>(
-    ctx: &ComponentContext, model: &ComponentModel,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) -> Element<'a, Message> {
     let label = model
         .get_property::<DynamicString>("label")
@@ -617,7 +639,8 @@ pub(super) fn render_checkbox<'a>(
 /// widened to `min..=min + 1.0` so Iced never sees an empty span. When `steps`
 /// is present and positive the slider snaps via Iced's `.step(...)`.
 pub(super) fn render_slider<'a>(
-    ctx: &ComponentContext, model: &ComponentModel,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) -> Element<'a, Message> {
     let value_binding = model.get_property::<DynamicNumber>("value");
     let resolved_value = value_binding
@@ -636,8 +659,7 @@ pub(super) fn render_slider<'a>(
         .get_property::<DynamicNumber>("steps")
         .map(|dn| ctx.data_context.resolve_dynamic_number(&dn));
 
-    let (range_min, range_max, clamped) =
-        resolve_slider_range_and_value(min, max, resolved_value);
+    let (range_min, range_max, clamped) = resolve_slider_range_and_value(min, max, resolved_value);
     let label = model
         .get_property::<DynamicString>("label")
         .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
@@ -650,9 +672,11 @@ pub(super) fn render_slider<'a>(
         Some(DynamicNumber::Binding(b)) => Some(ctx.data_context.resolve_pointer(&b.path)),
         _ => None,
     };
-    let mut track = slider(range_min..=range_max, clamped, move |v| Message::DataUpdate {
-        path: path_opt.clone().unwrap_or_default(),
-        value: serde_json::json!(v as f64),
+    let mut track = slider(range_min..=range_max, clamped, move |v| {
+        Message::DataUpdate {
+            path: path_opt.clone().unwrap_or_default(),
+            value: serde_json::json!(v as f64),
+        }
     });
     // Spec's `steps` is the discrete increment between adjacent values; only
     // apply it when present and strictly positive.
@@ -752,7 +776,8 @@ fn resolve_choice_value(ctx: &ComponentContext, dsl: &DynamicStringList) -> Vec<
 /// checkboxes with no `on_toggle`), matching how the TUI `handle_event` bails
 /// on non-binding values.
 pub(super) fn render_choice_picker<'a>(
-    ctx: &ComponentContext, model: &ComponentModel,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) -> Element<'a, Message> {
     let label = model
         .get_property::<DynamicString>("label")
@@ -865,7 +890,9 @@ pub(super) fn render_choice_picker<'a>(
 
 /// Unknown / not-yet-implemented kind — show the kind name + recurse children.
 pub(super) fn render_unknown<'a>(
-    walk: &Walk<'_>, ctx: &ComponentContext, model: &ComponentModel,
+    walk: &Walk<'_>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) -> Element<'a, Message> {
     let header = chip("?", &format!("{} · unknown", model.component_type));
     let mut col = Column::new().spacing(10.0).push(header);
@@ -888,7 +915,10 @@ fn chip<'a>(glyph: &str, label: &str) -> Element<'a, Message> {
         .align_y(iced::alignment::Vertical::Center)
         .push(text(glyph.to_string()).color(style::ACCENT).size(13.0))
         .push(text(label.to_string()).color(style::SUBTEXT0).size(12.0));
-    container(row).style(style::chip).padding([6.0, 12.0]).into()
+    container(row)
+        .style(style::chip)
+        .padding([6.0, 12.0])
+        .into()
 }
 
 /// Resolve a Button's child Text label (if its `child` is a Text component).
@@ -906,9 +936,10 @@ fn resolve_child_text(ctx: &ComponentContext, model: &ComponentModel) -> Option<
 /// Evaluate all `checks` on the component. Returns `true` if all pass (or none).
 fn evaluate_checks(ctx: &ComponentContext, model: &ComponentModel) -> bool {
     match model.checks() {
-        Some(checks) => checks
-            .iter()
-            .all(|rule| ctx.data_context.resolve_dynamic_boolean_condition(&rule.condition)),
+        Some(checks) => checks.iter().all(|rule| {
+            ctx.data_context
+                .resolve_dynamic_boolean_condition(&rule.condition)
+        }),
         None => true,
     }
 }
@@ -922,10 +953,7 @@ mod tests {
         let v = serde_json::json!({ "title": "Overview", "child": "overview-col" });
         let (title, child) = parse_tab_entry(&v).expect("valid entry");
         assert_eq!(child, "overview-col");
-        assert_eq!(
-            title,
-            DynamicString::Literal("Overview".to_string())
-        );
+        assert_eq!(title, DynamicString::Literal("Overview".to_string()));
     }
 
     #[test]

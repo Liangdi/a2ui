@@ -43,7 +43,7 @@
 
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use a2ui_base::message_processor::MessageProcessor;
 use a2ui_base::model::data_model::DataModel;
@@ -163,18 +163,30 @@ fn hud() -> Element {
         };
         let model = surface.data_model.borrow();
 
-        status = model.get("/status").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        gauges = [("CORE", "core"), ("PWR", "pwr"), ("HULL", "hull"), ("SHLD", "shld")]
-            .into_iter()
-            .map(|(label, key)| {
-                let pct = read_num(&model, &format!("/gauges/{key}")).clamp(0.0, 100.0);
-                let style = format!("width:{:.0}%;background:{}", pct, value_color(pct));
-                (label.to_string(), format!("{pct:>3.0}%"), style)
-            })
-            .collect();
+        status = model
+            .get("/status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        gauges = [
+            ("CORE", "core"),
+            ("PWR", "pwr"),
+            ("HULL", "hull"),
+            ("SHLD", "shld"),
+        ]
+        .into_iter()
+        .map(|(label, key)| {
+            let pct = read_num(&model, &format!("/gauges/{key}")).clamp(0.0, 100.0);
+            let style = format!("width:{:.0}%;background:{}", pct, value_color(pct));
+            (label.to_string(), format!("{pct:>3.0}%"), style)
+        })
+        .collect();
         angle = read_num(&model, "/radar/angle");
         range = read_num(&model, "/radar/range") as u32;
-        let fresh = model.get("/events/fresh").and_then(|v| v.as_bool()).unwrap_or(false);
+        let fresh = model
+            .get("/events/fresh")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         event_rows = model
             .get("/events/items")
             .and_then(|v| v.as_array())
@@ -182,9 +194,17 @@ fn hud() -> Element {
                 arr.iter()
                     .enumerate()
                     .map(|(i, it)| {
-                        let msg = it.get("msg").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let msg = it
+                            .get("msg")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
                         let level = it.get("level").and_then(|v| v.as_str()).unwrap_or("");
-                        let c = if i == 0 && fresh { AMBER } else { level_color(level) };
+                        let c = if i == 0 && fresh {
+                            AMBER
+                        } else {
+                            level_color(level)
+                        };
                         (msg, c.to_string())
                     })
                     .collect()
@@ -314,7 +334,8 @@ fn build_processor() -> MessageProcessor {
             }
         }
     });
-    let _ = processor.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap());
+    let _ =
+        processor.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap());
     processor
 }
 

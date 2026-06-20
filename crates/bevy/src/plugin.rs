@@ -17,8 +17,10 @@
 use bevy::ecs::prelude::*;
 use bevy::prelude::*;
 
-use crate::interaction::{apply_interactions_full, collect_button_activate, collect_checkbox_change,
-    collect_slider_change, collect_text_field_changes};
+use crate::interaction::{
+    apply_interactions_full, collect_button_activate, collect_checkbox_change,
+    collect_slider_change, collect_text_field_changes,
+};
 use crate::reconcile::reconcile;
 use crate::state::{A2uiState, PendingInteractions};
 
@@ -35,7 +37,11 @@ impl Plugin for A2uiPlugin {
         // Resources (NonSend — see `state.rs`: the processor is !Sync). The host
         // inserts `A2uiState` via `insert_non_send_resource`; we init the queue
         // here so the observers can write to it before `apply_interactions_full`.
-        if app.world().get_non_send_resource::<PendingInteractions>().is_none() {
+        if app
+            .world()
+            .get_non_send_resource::<PendingInteractions>()
+            .is_none()
+        {
             app.insert_non_send_resource(PendingInteractions::default());
         }
 

@@ -107,7 +107,10 @@ fn main() -> ExitCode {
 
     // 5. Construct the A2UI runtime state and load the samples.
     let mut state = A2uiState::new(catalogs, functions);
-    let entries: Vec<(String, Vec<a2ui_base::protocol::server_to_client::A2uiMessage>)> = samples
+    let entries: Vec<(
+        String,
+        Vec<a2ui_base::protocol::server_to_client::A2uiMessage>,
+    )> = samples
         .iter()
         .map(|s| (s.name.clone(), s.messages.clone()))
         .collect();
@@ -119,15 +122,15 @@ fn main() -> ExitCode {
     //    NonSend resource (the processor is !Sync).
     let mut app = App::new();
     app.add_plugins(DefaultPlugins.set(WindowPlugin {
-            primary_window: Some(Window {
-                title: "A2UI Bevy Gallery".into(),
-                resolution: bevy::window::WindowResolution::new(1000, 700),
-                ..default()
-            }),
+        primary_window: Some(Window {
+            title: "A2UI Bevy Gallery".into(),
+            resolution: bevy::window::WindowResolution::new(1000, 700),
             ..default()
-        }))
-        .insert_non_send_resource(state)
-        .add_plugins(A2uiPlugin);
+        }),
+        ..default()
+    }))
+    .insert_non_send_resource(state)
+    .add_plugins(A2uiPlugin);
 
     // Optional self-screenshot mode (compositor-independent, like the sci-fi HUD
     // example): warm up a few dozen frames, capture one PNG to the path, exit.
@@ -135,7 +138,9 @@ fn main() -> ExitCode {
     // screenshot can show the modal chrome), and is useful for non-screenshot
     // debugging too.
     let screenshot = std::env::var("A2UI_SCREENSHOT_PATH").ok();
-    let open_modals = std::env::var("A2UI_OPEN_MODALS").map(|v| !v.is_empty()).unwrap_or(false);
+    let open_modals = std::env::var("A2UI_OPEN_MODALS")
+        .map(|v| !v.is_empty())
+        .unwrap_or(false);
     if open_modals || screenshot.is_some() {
         app.insert_resource(ForceOpenModals(open_modals));
         // Run before the reconciler so the overlay content mounts same-frame.
@@ -162,10 +167,7 @@ struct ForceOpenModals(bool);
 /// Insert every `Modal` component id into `open_modals` so the reconciler mounts
 /// the overlay content (for screenshots / debugging modal chrome). Driven by
 /// `A2UI_OPEN_MODALS=1`.
-fn force_open_modals(
-    force: Res<ForceOpenModals>,
-    mut state: NonSendMut<A2uiState>,
-) {
+fn force_open_modals(force: Res<ForceOpenModals>, mut state: NonSendMut<A2uiState>) {
     if !force.0 {
         return;
     }
@@ -207,10 +209,15 @@ fn capture_and_exit(
 ) {
     req.frame += 1;
     if req.frame == 45 {
-        eprintln!("Capturing Bevy gallery screenshot -> {}", req.path.display());
+        eprintln!(
+            "Capturing Bevy gallery screenshot -> {}",
+            req.path.display()
+        );
         commands
             .spawn(bevy::render::view::screenshot::Screenshot::primary_window())
-            .observe(bevy::render::view::screenshot::save_to_disk(req.path.clone()));
+            .observe(bevy::render::view::screenshot::save_to_disk(
+                req.path.clone(),
+            ));
     }
     if req.frame == 100 {
         exit.write(bevy::app::AppExit::Success);

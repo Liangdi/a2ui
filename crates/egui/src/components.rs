@@ -112,8 +112,12 @@ fn build_child_plan(model: &ComponentModel, ctx: &ComponentContext) -> Vec<(Stri
 
 /// Column / List — vertical stack of children.
 pub(super) fn render_column(
-    walk: &Walk<'_>, ui: &mut Ui, eb: &mut EditBuffers, p: &mut Vec<PendingInteraction>,
-    ctx: &ComponentContext, model: &ComponentModel,
+    walk: &Walk<'_>,
+    ui: &mut Ui,
+    eb: &mut EditBuffers,
+    p: &mut Vec<PendingInteraction>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) {
     ui.vertical(|ui| {
         for (child_id, child_base) in build_child_plan(model, ctx) {
@@ -124,8 +128,12 @@ pub(super) fn render_column(
 
 /// Row — horizontal stack of children.
 pub(super) fn render_row(
-    walk: &Walk<'_>, ui: &mut Ui, eb: &mut EditBuffers, p: &mut Vec<PendingInteraction>,
-    ctx: &ComponentContext, model: &ComponentModel,
+    walk: &Walk<'_>,
+    ui: &mut Ui,
+    eb: &mut EditBuffers,
+    p: &mut Vec<PendingInteraction>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) {
     ui.horizontal(|ui| {
         for (child_id, child_base) in build_child_plan(model, ctx) {
@@ -136,8 +144,12 @@ pub(super) fn render_row(
 
 /// Card — bordered panel wrapping its child.
 pub(super) fn render_card(
-    walk: &Walk<'_>, ui: &mut Ui, eb: &mut EditBuffers, p: &mut Vec<PendingInteraction>,
-    ctx: &ComponentContext, model: &ComponentModel,
+    walk: &Walk<'_>,
+    ui: &mut Ui,
+    eb: &mut EditBuffers,
+    p: &mut Vec<PendingInteraction>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) {
     egui::Frame::group(ui.style())
         .stroke(egui::Stroke::new(1.0, egui::Color32::from_gray(208)))
@@ -154,8 +166,12 @@ pub(super) fn render_card(
 /// as a top-level `egui::Window` overlay (built by [`crate::app`] after the main
 /// tree), so the trigger keeps its place and focus.
 pub(super) fn render_modal(
-    walk: &Walk<'_>, ui: &mut Ui, eb: &mut EditBuffers, p: &mut Vec<PendingInteraction>,
-    _ctx: &ComponentContext, model: &ComponentModel,
+    walk: &Walk<'_>,
+    ui: &mut Ui,
+    eb: &mut EditBuffers,
+    p: &mut Vec<PendingInteraction>,
+    _ctx: &ComponentContext,
+    model: &ComponentModel,
 ) {
     if let Some(trigger_id) = model.get_property::<String>("trigger") {
         render_child(walk, ui, eb, p, &trigger_id, "");
@@ -195,8 +211,12 @@ pub(super) fn render_divider(ui: &mut Ui) {
 /// [`crate::apply_event_result`] in `apply_pending`), like the Slint host's
 /// `handle_activate`. The label is the Button's single `child` (a Text).
 pub(super) fn render_button(
-    walk: &Walk<'_>, ui: &mut Ui, _eb: &mut EditBuffers, p: &mut Vec<PendingInteraction>,
-    ctx: &ComponentContext, model: &ComponentModel,
+    walk: &Walk<'_>,
+    ui: &mut Ui,
+    _eb: &mut EditBuffers,
+    p: &mut Vec<PendingInteraction>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) {
     let label = resolve_child_text(ctx, model).unwrap_or_else(|| {
         model
@@ -225,7 +245,9 @@ pub(super) fn render_button(
         Some("primary") => button
             .fill(egui::Color32::from_rgb(37, 99, 235))
             .stroke(egui::Stroke::NONE),
-        Some("borderless") => button.fill(egui::Color32::TRANSPARENT).stroke(egui::Stroke::NONE),
+        Some("borderless") => button
+            .fill(egui::Color32::TRANSPARENT)
+            .stroke(egui::Stroke::NONE),
         _ => button,
     };
     let response = ui.add_enabled(checks_pass, button);
@@ -239,8 +261,12 @@ pub(super) fn render_button(
 
 /// TextField — egui native single-line edit, bridged to the data model.
 pub(super) fn render_text_field(
-    _walk: &Walk<'_>, ui: &mut Ui, eb: &mut EditBuffers, p: &mut Vec<PendingInteraction>,
-    ctx: &ComponentContext, model: &ComponentModel,
+    _walk: &Walk<'_>,
+    ui: &mut Ui,
+    eb: &mut EditBuffers,
+    p: &mut Vec<PendingInteraction>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) {
     let label = model
         .get_property::<DynamicString>("label")
@@ -272,8 +298,12 @@ pub(super) fn render_text_field(
 
 /// CheckBox — egui native checkbox; toggles write back to the data model.
 pub(super) fn render_checkbox(
-    _walk: &Walk<'_>, ui: &mut Ui, eb: &mut EditBuffers, p: &mut Vec<PendingInteraction>,
-    ctx: &ComponentContext, model: &ComponentModel,
+    _walk: &Walk<'_>,
+    ui: &mut Ui,
+    eb: &mut EditBuffers,
+    p: &mut Vec<PendingInteraction>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) {
     let label = model
         .get_property::<DynamicString>("label")
@@ -300,8 +330,12 @@ pub(super) fn render_checkbox(
 
 /// Slider — egui native slider; value changes write back to the data model.
 pub(super) fn render_slider(
-    _walk: &Walk<'_>, ui: &mut Ui, eb: &mut EditBuffers, p: &mut Vec<PendingInteraction>,
-    ctx: &ComponentContext, model: &ComponentModel,
+    _walk: &Walk<'_>,
+    ui: &mut Ui,
+    eb: &mut EditBuffers,
+    p: &mut Vec<PendingInteraction>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) {
     let value_binding = model.get_property::<DynamicNumber>("value");
     let resolved = value_binding
@@ -341,8 +375,12 @@ pub(super) fn render_slider(
 /// the selection from the data model each frame, so — unlike TextField — no
 /// `EditBuffers` slot is needed.
 pub(super) fn render_choice_picker(
-    _walk: &Walk<'_>, ui: &mut Ui, _eb: &mut EditBuffers, p: &mut Vec<PendingInteraction>,
-    ctx: &ComponentContext, model: &ComponentModel,
+    _walk: &Walk<'_>,
+    ui: &mut Ui,
+    _eb: &mut EditBuffers,
+    p: &mut Vec<PendingInteraction>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) {
     let label = model
         .get_property::<DynamicString>("label")
@@ -403,14 +441,12 @@ pub(super) fn render_choice_picker(
         });
     } else {
         // Single selection — a native ComboBox dropdown.
-        let selected_label = selected_values
-            .first()
-            .and_then(|v| {
-                options
-                    .iter()
-                    .find(|(_, val)| val == v)
-                    .map(|(lbl, _)| lbl.clone())
-            });
+        let selected_label = selected_values.first().and_then(|v| {
+            options
+                .iter()
+                .find(|(_, val)| val == v)
+                .map(|(lbl, _)| lbl.clone())
+        });
         let mut picked: Option<String> = None;
         egui::ComboBox::from_id_salt(format!("{}_choice", ctx.component_id))
             .selected_text(selected_label.unwrap_or_default())
@@ -444,8 +480,12 @@ pub(super) fn render_choice_picker(
 /// the selection locally via `walk.local_tabs` — the gallery samples don't bind
 /// `activeTab`). Mirrors the Iced backend and the TUI reference.
 pub(super) fn render_tabs(
-    walk: &Walk<'_>, ui: &mut Ui, eb: &mut EditBuffers, p: &mut Vec<PendingInteraction>,
-    ctx: &ComponentContext, model: &ComponentModel,
+    walk: &Walk<'_>,
+    ui: &mut Ui,
+    eb: &mut EditBuffers,
+    p: &mut Vec<PendingInteraction>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) {
     let tabs = read_tabs(model);
     if tabs.is_empty() {
@@ -527,8 +567,12 @@ pub(super) fn render_icon(ui: &mut Ui, ctx: &ComponentContext, model: &Component
 /// is a `Binding`, edits emit a [`PendingInteraction::DataUpdate`], mirroring
 /// `render_text_field` (and the Iced backend). Mirrors the Iced/Bevy backends.
 pub(super) fn render_date_time_input(
-    _walk: &Walk<'_>, ui: &mut Ui, eb: &mut EditBuffers, p: &mut Vec<PendingInteraction>,
-    ctx: &ComponentContext, model: &ComponentModel,
+    _walk: &Walk<'_>,
+    ui: &mut Ui,
+    eb: &mut EditBuffers,
+    p: &mut Vec<PendingInteraction>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) {
     let label = model
         .get_property::<DynamicString>("label")
@@ -549,7 +593,11 @@ pub(super) fn render_date_time_input(
     };
 
     if !label.is_empty() {
-        ui.label(egui::RichText::new(format!("{label}: {hint}")).weak().small());
+        ui.label(
+            egui::RichText::new(format!("{label}: {hint}"))
+                .weak()
+                .small(),
+        );
     }
 
     let focused = ctx.focused_id.as_deref() == Some(ctx.component_id.as_str());
@@ -573,7 +621,10 @@ pub(super) fn render_date_time_input(
 /// displayed at its natural size capped to a 480 px max width (preserving
 /// aspect), matching the gallery-friendly sizing the other backends use.
 pub(super) fn render_image(
-    walk: &Walk<'_>, ui: &mut Ui, ctx: &ComponentContext, model: &ComponentModel,
+    walk: &Walk<'_>,
+    ui: &mut Ui,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) {
     let url = model
         .get_property::<DynamicString>("url")
@@ -591,14 +642,21 @@ pub(super) fn render_image(
     }
 
     // Placeholder: empty / unsupported scheme / not-yet-loaded / failed decode.
-    let label = if description.is_empty() { "image" } else { &description };
+    let label = if description.is_empty() {
+        "image"
+    } else {
+        &description
+    };
     ui.label(format!("🖼 image · {label}"));
 }
 
 /// Video / AudioPlayer — a labeled placeholder. egui (like the TUI/Iced/Slint/
 /// Bevy backends) cannot play media; only the Dioxus WebView covers these.
 pub(super) fn render_media_placeholder(
-    ui: &mut Ui, kind: &str, ctx: &ComponentContext, model: &ComponentModel,
+    ui: &mut Ui,
+    kind: &str,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) {
     let url = model
         .get_property::<DynamicString>("url")
@@ -813,8 +871,12 @@ mod tests {
 
 /// Unknown / not-yet-implemented kind — show the kind name + recurse children.
 pub(super) fn render_unknown(
-    walk: &Walk<'_>, ui: &mut Ui, eb: &mut EditBuffers, p: &mut Vec<PendingInteraction>,
-    ctx: &ComponentContext, model: &ComponentModel,
+    walk: &Walk<'_>,
+    ui: &mut Ui,
+    eb: &mut EditBuffers,
+    p: &mut Vec<PendingInteraction>,
+    ctx: &ComponentContext,
+    model: &ComponentModel,
 ) {
     ui.label(format!("[{}]", model.component_type));
     for (child_id, child_base) in build_child_plan(model, ctx) {
@@ -841,9 +903,10 @@ fn resolve_child_text(ctx: &ComponentContext, model: &ComponentModel) -> Option<
 /// Evaluate all `checks` on the component. Returns `true` if all pass (or none).
 fn evaluate_checks(ctx: &ComponentContext, model: &ComponentModel) -> bool {
     match model.checks() {
-        Some(checks) => checks
-            .iter()
-            .all(|rule| ctx.data_context.resolve_dynamic_boolean_condition(&rule.condition)),
+        Some(checks) => checks.iter().all(|rule| {
+            ctx.data_context
+                .resolve_dynamic_boolean_condition(&rule.condition)
+        }),
         None => true,
     }
 }

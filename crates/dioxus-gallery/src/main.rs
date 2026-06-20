@@ -73,7 +73,10 @@ fn main() -> ExitCode {
         return ExitCode::from(1);
     }
 
-    println!("A2UI dioxus gallery — {} sample(s) available:", samples.len());
+    println!(
+        "A2UI dioxus gallery — {} sample(s) available:",
+        samples.len()
+    );
     for (i, s) in samples.iter().enumerate() {
         println!("  {:>2}. {} — {}", i + 1, s.name, s.description);
     }

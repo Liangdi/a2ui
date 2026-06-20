@@ -18,7 +18,7 @@ use std::io;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{Terminal, backend::CrosstermBackend};
 
@@ -91,9 +91,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let surface = processor.model.get_surface("hello").unwrap();
         terminal.draw(|frame| {
-            let renderer = a2ui::tui::surface::SurfaceRenderer::new(
-                surface, &registry, &render_catalog,
-            );
+            let renderer =
+                a2ui::tui::surface::SurfaceRenderer::new(surface, &registry, &render_catalog);
             renderer.render(frame, frame.area(), None);
         })?;
 

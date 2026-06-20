@@ -197,7 +197,10 @@ impl IcedApp {
                 self.open_modals.insert(modal_id);
                 Task::none()
             }
-            Message::TabActivate { component_id, index } => {
+            Message::TabActivate {
+                component_id,
+                index,
+            } => {
                 // Unbound Tabs (the gallery samples): track the selection
                 // locally so the next `view` shows the newly active panel.
                 self.local_tabs.insert(component_id, index);
@@ -226,7 +229,10 @@ impl IcedApp {
             .height(Fill);
         // Paint the crust backdrop behind the whole window so any sub-pixel gap
         // between sidebar / preview reads as intentional rather than white.
-        let content = container(content).style(style::app_bg).width(Fill).height(Fill);
+        let content = container(content)
+            .style(style::app_bg)
+            .width(Fill)
+            .height(Fill);
 
         if self.open_modals.is_empty() {
             content.into()
@@ -279,11 +285,7 @@ impl IcedApp {
             } else {
                 style::SUBTEXT1
             };
-            let name_color = if is_sel {
-                style::TEXT
-            } else {
-                style::SUBTEXT0
-            };
+            let name_color = if is_sel { style::TEXT } else { style::SUBTEXT0 };
             let idx = text(format!("{:>2}", i + 1))
                 .size(11.0)
                 .color(idx_color)
@@ -362,7 +364,10 @@ impl IcedApp {
         .align_y(iced::alignment::Vertical::Center)
         .spacing(8.0)
         .width(Fill);
-        let top_bar = container(bar).style(style::top_bar).padding([14.0, 20.0]).width(Fill);
+        let top_bar = container(bar)
+            .style(style::top_bar)
+            .padding([14.0, 20.0])
+            .width(Fill);
 
         let preview = self.render_preview();
 
@@ -530,7 +535,9 @@ impl IcedApp {
             dispatch_event(
                 &comp_type,
                 &ctx,
-                &InputEvent::KeyPress { key: InputKey::Enter },
+                &InputEvent::KeyPress {
+                    key: InputKey::Enter,
+                },
             )
         };
 
@@ -593,7 +600,10 @@ impl IcedApp {
 /// failure (network or read) returns `None` so the caller can record it as a
 /// failed attempt and keep the placeholder.
 fn fetch_handle(url: &str) -> Option<image::Handle> {
-    let resp = ureq::get(url).timeout(Duration::from_secs(10)).call().ok()?;
+    let resp = ureq::get(url)
+        .timeout(Duration::from_secs(10))
+        .call()
+        .ok()?;
     let mut bytes = Vec::new();
     resp.into_reader().read_to_end(&mut bytes).ok()?;
     // `Handle::from_bytes` does no decoding up front — the renderer decodes

@@ -37,9 +37,13 @@ use a2ui_base::components::dispatch_event;
 use a2ui_base::event::{InputEvent, InputKey};
 use a2ui_base::interaction::apply_event_result;
 use a2ui_base::model::component_context::ComponentContext;
-use a2ui_base::protocol::common_types::{DynamicBoolean, DynamicNumber, DynamicString, DynamicStringList};
+use a2ui_base::protocol::common_types::{
+    DynamicBoolean, DynamicNumber, DynamicString, DynamicStringList,
+};
 
-use crate::state::{A2uiNode, A2uiState, ChoiceOption, ModalDismiss, PendingInteractions, TabTitle};
+use crate::state::{
+    A2uiNode, A2uiState, ChoiceOption, ModalDismiss, PendingInteractions, TabTitle,
+};
 
 /// One deferred interaction, collected during a frame and applied after.
 ///
@@ -63,7 +67,11 @@ pub enum PendingInteraction {
     /// model); `None` for an unbound Tabs (the selection is tracked locally in
     /// `A2uiState::local_tabs`). Carried from the [`TabTitle`] marker, which
     /// captured it at plan time against the node's base path.
-    TabActivate { tabs_id: String, index: usize, active_path: Option<String> },
+    TabActivate {
+        tabs_id: String,
+        index: usize,
+        active_path: Option<String>,
+    },
     /// A single-select ChoicePicker option was chosen — write `json!([value])`
     /// to its `value` binding.
     ChoiceSelect { picker_id: String, value: String },
@@ -149,10 +157,7 @@ pub fn collect_button_activate(trigger: On<Activate>, mut world: DeferredWorld) 
 /// path, which lives in the A2UI model, not on the entity — so we stash it on
 /// the entity via [`crate::render::BindingPath`] when the reconciler spawns the
 /// checkbox.
-pub fn collect_checkbox_change(
-    trigger: On<ValueChange<bool>>,
-    mut world: DeferredWorld,
-) {
+pub fn collect_checkbox_change(trigger: On<ValueChange<bool>>, mut world: DeferredWorld) {
     let entity = trigger.event().source;
     let component_id = match world.entity(entity).get::<A2uiNode>().map(|n| n.id.clone()) {
         Some(id) => id,
@@ -169,10 +174,7 @@ pub fn collect_checkbox_change(
 }
 
 /// Slider drag → `DataUpdate` (absolute path from the `value` binding).
-pub fn collect_slider_change(
-    trigger: On<ValueChange<f32>>,
-    mut world: DeferredWorld,
-) {
+pub fn collect_slider_change(trigger: On<ValueChange<f32>>, mut world: DeferredWorld) {
     let entity = trigger.event().source;
     let component_id = match world.entity(entity).get::<A2uiNode>().map(|n| n.id.clone()) {
         Some(id) => id,
@@ -208,15 +210,15 @@ pub fn collect_text_field_changes(
     let focused_entity = focus.0;
 
     for (entity, node, buffer) in nodes.iter() {
-        let Some(model) = components.get(&node.id) else { continue };
+        let Some(model) = components.get(&node.id) else {
+            continue;
+        };
         // DateTimeInput reuses the TextField widget + write-back machinery, so
         // it is polled here too (both keep their editable content under `value`).
         if model.component_type != "TextField" && model.component_type != "DateTimeInput" {
             continue;
         }
-        let Some(DynamicString::Binding(b)) =
-            model.get_property::<DynamicString>("value")
-        else {
+        let Some(DynamicString::Binding(b)) = model.get_property::<DynamicString>("value") else {
             continue;
         };
 
@@ -314,7 +316,11 @@ pub fn apply_interactions_full(
                 state.open_modals.remove(&modal_id);
                 changed = true;
             }
-            PendingInteraction::TabActivate { tabs_id, index, active_path } => {
+            PendingInteraction::TabActivate {
+                tabs_id,
+                index,
+                active_path,
+            } => {
                 // Bound Tabs → write the index to the data model; unbound →
                 // track locally (the gallery samples fall here). Either way the
                 // reconciler re-walks and swaps the active panel next frame.
@@ -398,14 +404,10 @@ fn resolve_widget_binding(
         return (String::new(), value);
     };
     // CheckBox binds via DynamicBoolean; Slider via DynamicNumber.
-    if let Some(DynamicBoolean::Binding(b)) =
-        model.get_property::<DynamicBoolean>("value")
-    {
+    if let Some(DynamicBoolean::Binding(b)) = model.get_property::<DynamicBoolean>("value") {
         return (data_context_resolve_pointer(&data_model, &b.path), value);
     }
-    if let Some(DynamicNumber::Binding(b)) =
-        model.get_property::<DynamicNumber>("value")
-    {
+    if let Some(DynamicNumber::Binding(b)) = model.get_property::<DynamicNumber>("value") {
         return (data_context_resolve_pointer(&data_model, &b.path), value);
     }
     (String::new(), value)
@@ -423,9 +425,7 @@ fn resolve_choice_binding(state: &A2uiState, component_id: &str) -> Option<Strin
     let data_model = surface.data_model.borrow();
     let model = components.get(component_id)?;
     match model.get_property::<DynamicStringList>("value")? {
-        DynamicStringList::Binding(b) => {
-            Some(data_context_resolve_pointer(&data_model, &b.path))
-        }
+        DynamicStringList::Binding(b) => Some(data_context_resolve_pointer(&data_model, &b.path)),
         _ => None,
     }
 }
@@ -458,7 +458,9 @@ fn handle_activate(state: &mut A2uiState, node_id: &str) {
         dispatch_event(
             &comp_type,
             &ctx,
-            &InputEvent::KeyPress { key: InputKey::Enter },
+            &InputEvent::KeyPress {
+                key: InputKey::Enter,
+            },
         )
     };
 

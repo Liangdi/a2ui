@@ -67,7 +67,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::time::Duration;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use a2ui_base::message_processor::MessageProcessor;
 use a2ui_base::model::data_model::DataModel;
@@ -283,8 +283,12 @@ fn level_color(level: &str) -> Color {
 }
 
 /// The four gauges: `(label, data-model key)`.
-const GAUGE_DEFS: [(&str, &str); 4] =
-    [("CORE", "core"), ("PWR", "pwr"), ("HULL", "hull"), ("SHLD", "shld")];
+const GAUGE_DEFS: [(&str, &str); 4] = [
+    ("CORE", "core"),
+    ("PWR", "pwr"),
+    ("HULL", "hull"),
+    ("SHLD", "shld"),
+];
 
 // ─── Runtime state ───────────────────────────────────────────────────────────
 
@@ -333,7 +337,12 @@ impl HudState {
         let _ = processor
             .process_message(MessageProcessor::parse_message(&create.to_string()).unwrap());
 
-        Self { processor, tick: 0, events: EVENT_POOL[..6].to_vec(), next_pool: 6 }
+        Self {
+            processor,
+            tick: 0,
+            events: EVENT_POOL[..6].to_vec(),
+            next_pool: 6,
+        }
     }
 
     /// Apply one clock tick: compute the next telemetry snapshot and ship it as a
@@ -400,7 +409,11 @@ fn apply_state(hud: &Hud, state: &HudState) {
     let model = surface.data_model.borrow();
 
     hud.set_status(
-        model.get("/status").and_then(|v| v.as_str()).unwrap_or("").into(),
+        model
+            .get("/status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .into(),
     );
 
     // Gauges — each carries its own threshold-tinted color.
@@ -426,7 +439,10 @@ fn apply_state(hud: &Hud, state: &HudState) {
     hud.set_range(format!("{range:>5}m").into());
 
     // Event log — newest highlighted while fresh.
-    let fresh = model.get("/events/fresh").and_then(|v| v.as_bool()).unwrap_or(false);
+    let fresh = model
+        .get("/events/fresh")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     let events: Vec<EventLine> = model
         .get("/events/items")
         .and_then(|v| v.as_array())
@@ -436,8 +452,15 @@ fn apply_state(hud: &Hud, state: &HudState) {
                 .map(|(i, it)| {
                     let msg = it.get("msg").and_then(|v| v.as_str()).unwrap_or("");
                     let level = it.get("level").and_then(|v| v.as_str()).unwrap_or("");
-                    let color = if i == 0 && fresh { AMBER } else { level_color(level) };
-                    EventLine { text: format!("> {msg}").into(), color }
+                    let color = if i == 0 && fresh {
+                        AMBER
+                    } else {
+                        level_color(level)
+                    };
+                    EventLine {
+                        text: format!("> {msg}").into(),
+                        color,
+                    }
                 })
                 .collect()
         })
@@ -526,7 +549,8 @@ fn capture_screenshot(path: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     let state = Rc::new(RefCell::new(HudState::new()));
     let hud = Hud::new()?;
-    hud.window().set_size(slint::LogicalSize::new(W as f32, H as f32));
+    hud.window()
+        .set_size(slint::LogicalSize::new(W as f32, H as f32));
     // One frame of telemetry so the HUD has live (non-default) values.
     state.borrow_mut().tick();
     apply_state(&hud, &state.borrow());

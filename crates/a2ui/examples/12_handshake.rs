@@ -84,8 +84,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n== Server capabilities (a2uiServerCapabilities, round-tripped) ==");
     println!("{server_json}");
 
-    println!("\nHandshake complete: server accepts inline catalogs = {}",
-        server_env.v1_0.accepts_inline_catalogs);
+    println!(
+        "\nHandshake complete: server accepts inline catalogs = {}",
+        server_env.v1_0.accepts_inline_catalogs
+    );
 
     Ok(())
 }

@@ -88,9 +88,9 @@ const DIM: Color = Color::srgb(0.451, 0.466, 0.490);
 /// One row of the conversation. A user row carries `text`; an AI row carries the
 /// `surface_id` of the streamed A2UI surface to render.
 struct ChatEntry {
-    role: String, // "user" | "ai"
+    role: String,       // "user" | "ai"
     surface_id: String, // empty for user messages
-    text: String, // user message text
+    text: String,       // user message text
 }
 
 /// The chat's runtime state. Held as a **`NonSend` resource**: `MessageProcessor`
@@ -178,16 +178,14 @@ struct HelpLine;
 
 fn main() {
     App::new()
-        .add_plugins(
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "A2UI Agent Chat (Bevy)".into(),
-                    resolution: WindowResolution::new(820, 640),
-                    ..default()
-                }),
+        .add_plugins(DefaultPlugins.set(WindowPlugin {
+            primary_window: Some(Window {
+                title: "A2UI Agent Chat (Bevy)".into(),
+                resolution: WindowResolution::new(820, 640),
                 ..default()
             }),
-        )
+            ..default()
+        }))
         .insert_non_send_resource(ChatState::new())
         .insert_resource(StreamTimer(Timer::new(
             Duration::from_millis(100),
@@ -235,7 +233,10 @@ fn spawn_layout(mut commands: Commands) {
             // Header.
             root.spawn((
                 Text::new("🤖 A2UI Agent Chat"),
-                TextFont { font_size: 18.0, ..default() },
+                TextFont {
+                    font_size: 18.0,
+                    ..default()
+                },
                 TextColor(CYAN),
             ));
 
@@ -262,7 +263,10 @@ fn spawn_layout(mut commands: Commands) {
             // Help / status line.
             root.spawn((
                 Text::new(""),
-                TextFont { font_size: 12.0, ..default() },
+                TextFont {
+                    font_size: 12.0,
+                    ..default()
+                },
                 TextColor(DIM),
                 HelpLine,
             ));
@@ -281,7 +285,10 @@ fn spawn_layout(mut commands: Commands) {
             .with_children(|bar| {
                 bar.spawn((
                     Text::new("> "),
-                    TextFont { font_size: 16.0, ..default() },
+                    TextFont {
+                        font_size: 16.0,
+                        ..default()
+                    },
                     TextColor(CYAN),
                     InputBar,
                 ));
@@ -297,11 +304,7 @@ fn spawn_layout(mut commands: Commands) {
 /// process), and — for `createSurface` — push a new AI `ChatEntry` so the new
 /// surface renders as its own chat bubble. Marks the UI dirty so `rebuild_ui`
 /// re-runs. Matches the ratatui original's streaming block.
-fn stream_tick(
-    mut state: NonSendMut<ChatState>,
-    time: Res<Time>,
-    mut timer: ResMut<StreamTimer>,
-) {
+fn stream_tick(mut state: NonSendMut<ChatState>, time: Res<Time>, mut timer: ResMut<StreamTimer>) {
     if !timer.0.tick(time.delta()).just_finished() {
         return;
     }
@@ -509,7 +512,10 @@ fn rebuild_ui(
         if typing && !streaming {
             parent.spawn((
                 Text::new("🤖 AI is thinking …"),
-                TextFont { font_size: 14.0, ..default() },
+                TextFont {
+                    font_size: 14.0,
+                    ..default()
+                },
                 TextColor(DIM),
             ));
         }
@@ -520,7 +526,9 @@ fn rebuild_ui(
     // during the next layout pass, so setting a large `offset_y` reliably parks
     // the view at the bottom once the freshly-spawned children measure.
     if auto_scroll {
-        commands.entity(container).insert(ScrollPosition(Vec2::new(0.0, f32::MAX)));
+        commands
+            .entity(container)
+            .insert(ScrollPosition(Vec2::new(0.0, f32::MAX)));
     }
 }
 
@@ -528,7 +536,10 @@ fn rebuild_ui(
 fn spawn_user_entry(parent: &mut RelatedSpawnerCommands<ChildOf>, text: &str) {
     parent.spawn((
         Text::new(format!("👤 You:  {text}")),
-        TextFont { font_size: 15.0, ..default() },
+        TextFont {
+            font_size: 15.0,
+            ..default()
+        },
         TextColor(CYAN),
     ));
 }
@@ -545,7 +556,10 @@ fn spawn_ai_entry(
     let Some(surface) = processor.model.get_surface(surface_id) else {
         parent.spawn((
             Text::new(format!("🤖 [missing surface: {surface_id}]")),
-            TextFont { font_size: 14.0, ..default() },
+            TextFont {
+                font_size: 14.0,
+                ..default()
+            },
             TextColor(DIM),
         ));
         return;
@@ -555,7 +569,10 @@ fn spawn_ai_entry(
         // "composing" placeholder.
         parent.spawn((
             Text::new("🤖 …"),
-            TextFont { font_size: 14.0, ..default() },
+            TextFont {
+                font_size: 14.0,
+                ..default()
+            },
             TextColor(DIM),
         ));
         return;
@@ -566,7 +583,14 @@ fn spawn_ai_entry(
     let data_model = surface.data_model.borrow();
     let functions = std::collections::HashMap::new();
 
-    build_subtree(parent, "root", &components, &data_model, &functions, surface_id);
+    build_subtree(
+        parent,
+        "root",
+        &components,
+        &data_model,
+        &functions,
+        surface_id,
+    );
 }
 
 /// Recursive Bevy entity builder for the static subset the chat scenarios use:
@@ -579,7 +603,10 @@ fn build_subtree(
     component_id: &str,
     components: &SurfaceComponentsModel,
     data_model: &DataModel,
-    functions: &std::collections::HashMap<String, Box<dyn a2ui_base::catalog::function_api::FunctionImplementation>>,
+    functions: &std::collections::HashMap<
+        String,
+        Box<dyn a2ui_base::catalog::function_api::FunctionImplementation>,
+    >,
     surface_id: &str,
 ) {
     let Some(model) = components.get(component_id) else {
@@ -609,7 +636,9 @@ fn build_subtree(
                 })
                 .with_children(|col| {
                     for (cid, base) in child_plan(model, &ctx) {
-                        build_subtree_with_base(col, &cid, &base, components, data_model, functions, surface_id);
+                        build_subtree_with_base(
+                            col, &cid, &base, components, data_model, functions, surface_id,
+                        );
                     }
                 });
         }
@@ -625,7 +654,9 @@ fn build_subtree(
                 })
                 .with_children(|row| {
                     for (cid, base) in child_plan(model, &ctx) {
-                        build_subtree_with_base(row, &cid, &base, components, data_model, functions, surface_id);
+                        build_subtree_with_base(
+                            row, &cid, &base, components, data_model, functions, surface_id,
+                        );
                     }
                 });
         }
@@ -646,7 +677,9 @@ fn build_subtree(
             // Card has a single `child`.
             if let Some(child_id) = model.child() {
                 cmd.with_children(|card| {
-                    build_subtree_with_base(card, &child_id, "", components, data_model, functions, surface_id);
+                    build_subtree_with_base(
+                        card, &child_id, "", components, data_model, functions, surface_id,
+                    );
                 });
             }
         }
@@ -656,7 +689,10 @@ fn build_subtree(
             let (size, color) = text_style(&variant);
             parent.spawn((
                 Text::new(text),
-                TextFont { font_size: size, ..default() },
+                TextFont {
+                    font_size: size,
+                    ..default()
+                },
                 TextColor(color),
             ));
         }
@@ -675,7 +711,10 @@ fn build_subtree(
         _ => {
             parent.spawn((
                 Text::new(format!("[{kind}]")),
-                TextFont { font_size: 13.0, ..default() },
+                TextFont {
+                    font_size: 13.0,
+                    ..default()
+                },
                 TextColor(DIM),
             ));
         }
@@ -693,7 +732,10 @@ fn build_subtree_with_base(
     base: &str,
     components: &SurfaceComponentsModel,
     data_model: &DataModel,
-    functions: &std::collections::HashMap<String, Box<dyn a2ui_base::catalog::function_api::FunctionImplementation>>,
+    functions: &std::collections::HashMap<
+        String,
+        Box<dyn a2ui_base::catalog::function_api::FunctionImplementation>,
+    >,
     surface_id: &str,
 ) {
     // For the static chat scenarios the base path is irrelevant (Text bindings
@@ -701,7 +743,14 @@ fn build_subtree_with_base(
     // future scenario needs template scoping, thread `base` into the
     // ComponentContext here.
     let _ = base;
-    build_subtree(parent, component_id, components, data_model, functions, surface_id);
+    build_subtree(
+        parent,
+        component_id,
+        components,
+        data_model,
+        functions,
+        surface_id,
+    );
 }
 
 /// Resolve a `Text` component's `text` property — literal or `{"path":"/x"}`
@@ -730,10 +779,7 @@ fn text_style(variant: &Option<String>) -> (f32, Color) {
 /// three A2UI child shapes `render.rs::build_child_plan` handles. The chat
 /// scenarios use only static `children` / single `child`, but we support the
 /// template shape too for completeness.
-fn child_plan(
-    model: &ComponentModel,
-    ctx: &ComponentContext,
-) -> Vec<(String, String)> {
+fn child_plan(model: &ComponentModel, ctx: &ComponentContext) -> Vec<(String, String)> {
     let mut plan = Vec::new();
     let base = ctx.data_context.base_path().to_string();
     if let Some(child_id) = model.child() {
@@ -775,7 +821,8 @@ fn update_input_bar(
         if streaming {
             prompt.0 = "⏳ Streaming…".to_string();
         } else if state.input.is_empty() {
-            prompt.0 = "> type a message (hello, weather, tasks, story, stats, quote, help)…".to_string();
+            prompt.0 =
+                "> type a message (hello, weather, tasks, story, stats, quote, help)…".to_string();
         } else {
             prompt.0 = format!("> {}█", state.input);
         }
@@ -798,4 +845,3 @@ fn exit_on_esc(keys: Res<ButtonInput<KeyCode>>, mut exit: MessageWriter<AppExit>
         exit.write(AppExit::Success);
     }
 }
-

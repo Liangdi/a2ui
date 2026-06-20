@@ -25,7 +25,7 @@ use std::io;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Terminal,
@@ -260,7 +260,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 // (log + status banner) on top of the shared
                                 // apply pipeline, so handle Action here and
                                 // route everything else through `apply_event_result`.
-                                EventResult::Action { event_name, context, .. } => {
+                                EventResult::Action {
+                                    event_name,
+                                    context,
+                                    ..
+                                } => {
                                     eprintln!("[ACTION] {} {:?}", event_name, context);
                                     // Show success status in data model.
                                     let msg = serde_json::json!({
@@ -292,7 +296,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some(surface) = processor.model.get_surface("contact") {
         let dm = surface.data_model.borrow();
-        println!("Final data model: {}", serde_json::to_string_pretty(&dm.as_value())?);
+        println!(
+            "Final data model: {}",
+            serde_json::to_string_pretty(&dm.as_value())?
+        );
     }
     Ok(())
 }

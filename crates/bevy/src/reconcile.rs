@@ -20,8 +20,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use bevy::prelude::*;
 use bevy::ecs::hierarchy::ChildOf;
+use bevy::prelude::*;
 use serde_json::Value as JsonValue;
 
 use a2ui_base::catalog::function_api::FunctionImplementation;
@@ -30,11 +30,13 @@ use a2ui_base::model::components_model::SurfaceComponentsModel;
 use a2ui_base::model::data_model::DataModel;
 use a2ui_base::protocol::common_types::{DynamicNumber, DynamicString, DynamicStringList};
 
-use crate::render::{NodeFields, build_child_plan, resolve_fields, apply_button, apply_card,
-    apply_checkbox, apply_choice_option, apply_column, apply_date_time_input, apply_divider,
-    apply_flex_column, apply_icon, apply_image, apply_media_placeholder, apply_modal,
-    apply_modal_close, apply_modal_header, apply_modal_panel, apply_modal_scrim, apply_modal_title,
-    apply_row, apply_slider, apply_tab_bar, apply_tab_title, apply_tabs, apply_text, apply_text_field};
+use crate::render::{
+    NodeFields, apply_button, apply_card, apply_checkbox, apply_choice_option, apply_column,
+    apply_date_time_input, apply_divider, apply_flex_column, apply_icon, apply_image,
+    apply_media_placeholder, apply_modal, apply_modal_close, apply_modal_header, apply_modal_panel,
+    apply_modal_scrim, apply_modal_title, apply_row, apply_slider, apply_tab_bar, apply_tab_title,
+    apply_tabs, apply_text, apply_text_field, build_child_plan, resolve_fields,
+};
 use crate::state::{A2uiNode, A2uiState, ChoiceOption, ModalDismiss, TabTitle};
 
 /// Which top-level root a planned node hangs under.
@@ -55,7 +57,12 @@ enum Root {
 #[derive(Clone)]
 enum SyntheticMarker {
     /// A tab title button. `active` selects the highlight.
-    TabTitle { tabs_id: String, index: usize, active_path: Option<String>, active: bool },
+    TabTitle {
+        tabs_id: String,
+        index: usize,
+        active_path: Option<String>,
+        active: bool,
+    },
     /// A choice-option button. `selected` selects the highlight.
     ChoiceOption {
         picker_id: String,
@@ -117,10 +124,18 @@ fn plan_tree(state: &A2uiState) -> (Vec<PlanNode>, HashSet<String>) {
     // Overlay: each open Modal's `content` subtree.
     let open_modals: Vec<String> = state.open_modals.iter().cloned().collect();
     for modal_id in open_modals {
-        let Some(m) = components.get(&modal_id) else { continue };
-        if m.component_type != "Modal" { continue; }
-        let Some(content_id) = m.get_property::<String>("content") else { continue };
-        if !components.contains(&content_id) { continue };
+        let Some(m) = components.get(&modal_id) else {
+            continue;
+        };
+        if m.component_type != "Modal" {
+            continue;
+        }
+        let Some(content_id) = m.get_property::<String>("content") else {
+            continue;
+        };
+        if !components.contains(&content_id) {
+            continue;
+        };
         let title = m
             .get_property::<String>("title")
             .unwrap_or_else(|| "Dialog".to_string());
@@ -131,34 +146,66 @@ fn plan_tree(state: &A2uiState) -> (Vec<PlanNode>, HashSet<String>) {
         // title + close-button header above the content subtree.
         let scrim_id = format!("__a2ui_mscrim:{modal_id}");
         push_synthetic(
-            &mut nodes, &mut touched, &scrim_id, None, Root::Overlay, "__ModalScrim",
+            &mut nodes,
+            &mut touched,
+            &scrim_id,
+            None,
+            Root::Overlay,
+            "__ModalScrim",
             NodeFields::empty(),
-            Some(SyntheticMarker::ModalDismiss { modal_id: modal_id.clone() }),
+            Some(SyntheticMarker::ModalDismiss {
+                modal_id: modal_id.clone(),
+            }),
         );
         let panel_id = format!("__a2ui_mpanel:{modal_id}");
         push_synthetic(
-            &mut nodes, &mut touched, &panel_id, Some(scrim_id.clone()), Root::Overlay,
-            "__ModalPanel", NodeFields::empty(), None,
+            &mut nodes,
+            &mut touched,
+            &panel_id,
+            Some(scrim_id.clone()),
+            Root::Overlay,
+            "__ModalPanel",
+            NodeFields::empty(),
+            None,
         );
         let header_id = format!("__a2ui_mhdr:{modal_id}");
         push_synthetic(
-            &mut nodes, &mut touched, &header_id, Some(panel_id.clone()), Root::Overlay,
-            "__ModalHeader", NodeFields::empty(), None,
+            &mut nodes,
+            &mut touched,
+            &header_id,
+            Some(panel_id.clone()),
+            Root::Overlay,
+            "__ModalHeader",
+            NodeFields::empty(),
+            None,
         );
         let mut title_fields = NodeFields::empty();
         title_fields.text = title;
         let title_node_id = format!("__a2ui_mtitle:{modal_id}");
         push_synthetic(
-            &mut nodes, &mut touched, &title_node_id, Some(header_id.clone()), Root::Overlay,
-            "__ModalTitle", title_fields, None,
+            &mut nodes,
+            &mut touched,
+            &title_node_id,
+            Some(header_id.clone()),
+            Root::Overlay,
+            "__ModalTitle",
+            title_fields,
+            None,
         );
         let mut close_fields = NodeFields::empty();
         close_fields.text = "✕".to_string();
         let close_id = format!("__a2ui_mclose:{modal_id}");
         push_synthetic(
-            &mut nodes, &mut touched, &close_id, Some(header_id.clone()), Root::Overlay,
-            "__ModalClose", close_fields,
-            Some(SyntheticMarker::ModalDismiss { modal_id: modal_id.clone() }),
+            &mut nodes,
+            &mut touched,
+            &close_id,
+            Some(header_id.clone()),
+            Root::Overlay,
+            "__ModalClose",
+            close_fields,
+            Some(SyntheticMarker::ModalDismiss {
+                modal_id: modal_id.clone(),
+            }),
         );
         // The Modal's content subtree, parented to the panel (after the header).
         walk(
@@ -230,7 +277,9 @@ fn walk(
     nodes: &mut Vec<PlanNode>,
     touched: &mut HashSet<String>,
 ) {
-    let Some(model) = components.get(id) else { return };
+    let Some(model) = components.get(id) else {
+        return;
+    };
     touched.insert(id.to_string());
 
     let ctx = ComponentContext::new(
@@ -249,7 +298,9 @@ fn walk(
     // Resolve a decoded image handle for Image nodes (None while loading /
     // failed → the placeholder renders until `load_images` populates the cache).
     let image_handle = if kind == "Image" {
-        image_cache.get(&fields.image_url).and_then(|opt| opt.clone())
+        image_cache
+            .get(&fields.image_url)
+            .and_then(|opt| opt.clone())
     } else {
         None
     };
@@ -268,9 +319,20 @@ fn walk(
     // Modal: walk the trigger in-tree (content is handled as an overlay above).
     if kind == "Modal" {
         if let Some(trigger_id) = model.get_property::<String>("trigger") {
-            walk(&trigger_id, base_path, Some(id.to_string()), root,
-                components, data_model, functions, focused_id, local_tabs, image_cache,
-                nodes, touched);
+            walk(
+                &trigger_id,
+                base_path,
+                Some(id.to_string()),
+                root,
+                components,
+                data_model,
+                functions,
+                focused_id,
+                local_tabs,
+                image_cache,
+                nodes,
+                touched,
+            );
         }
         return;
     }
@@ -333,9 +395,20 @@ fn walk(
         // The active panel's child, parented to the Tabs container (below the bar).
         let active_child = tabs[active].1.clone();
         let child_base = ctx.data_context.base_path().to_string();
-        walk(&active_child, &child_base, Some(id.to_string()), root,
-            components, data_model, functions, focused_id, local_tabs, image_cache,
-            nodes, touched);
+        walk(
+            &active_child,
+            &child_base,
+            Some(id.to_string()),
+            root,
+            components,
+            data_model,
+            functions,
+            focused_id,
+            local_tabs,
+            image_cache,
+            nodes,
+            touched,
+        );
         return;
     }
 
@@ -349,9 +422,7 @@ fn walk(
             .map(|dsl| resolve_choice_value(&ctx, dsl))
             .unwrap_or_default();
         let value_path = match &value_binding {
-            Some(DynamicStringList::Binding(b)) => {
-                Some(ctx.data_context.resolve_pointer(&b.path))
-            }
+            Some(DynamicStringList::Binding(b)) => Some(ctx.data_context.resolve_pointer(&b.path)),
             _ => None,
         };
         let multiple = model
@@ -414,15 +485,28 @@ fn walk(
     }
 
     for (child_id, child_base) in build_child_plan(model, &ctx) {
-        walk(&child_id, &child_base, Some(id.to_string()), root,
-            components, data_model, functions, focused_id, local_tabs, image_cache,
-            nodes, touched);
+        walk(
+            &child_id,
+            &child_base,
+            Some(id.to_string()),
+            root,
+            components,
+            data_model,
+            functions,
+            focused_id,
+            local_tabs,
+            image_cache,
+            nodes,
+            touched,
+        );
     }
 }
 
 /// Read a Tabs component's `tabs` property into `(title, child_id)` pairs.
 /// Ported from the Iced backend's `read_tabs` (itself from the TUI reference).
-fn read_tabs(model: &a2ui_base::model::component_model::ComponentModel) -> Vec<(DynamicString, String)> {
+fn read_tabs(
+    model: &a2ui_base::model::component_model::ComponentModel,
+) -> Vec<(DynamicString, String)> {
     let Some(arr) = model.get_raw("tabs").and_then(JsonValue::as_array) else {
         return Vec::new();
     };
@@ -509,10 +593,7 @@ mod tests {
 
 /// Resolve a ChoicePicker's selection as `Vec<String>` from its `value`
 /// `DynamicStringList`. Ported from the Iced backend's `resolve_choice_value`.
-fn resolve_choice_value(
-    ctx: &ComponentContext,
-    dsl: &DynamicStringList,
-) -> Vec<String> {
+fn resolve_choice_value(ctx: &ComponentContext, dsl: &DynamicStringList) -> Vec<String> {
     use a2ui_base::protocol::common_types::DynamicValue;
     match dsl {
         DynamicStringList::Literal(v) => v.clone(),
@@ -620,15 +701,17 @@ pub fn reconcile(mut state: NonSendMut<A2uiState>, mut commands: Commands) {
             && !node.fields.value_string.is_empty()
         {
             let text = node.fields.value_string.clone();
-            commands.entity(entity).queue(move |mut entity: EntityWorldMut| {
-                if let Some(mut q) = entity.get_mut::<bevy_ui_text_input::TextInputQueue>() {
-                    // `Paste` (unit variant) reads the clipboard; to set text
-                    // directly we use an `Edit::Paste(String)` action.
-                    q.add(bevy_ui_text_input::actions::TextInputAction::Edit(
-                        bevy_ui_text_input::actions::TextInputEdit::Paste(text),
-                    ));
-                }
-            });
+            commands
+                .entity(entity)
+                .queue(move |mut entity: EntityWorldMut| {
+                    if let Some(mut q) = entity.get_mut::<bevy_ui_text_input::TextInputQueue>() {
+                        // `Paste` (unit variant) reads the clipboard; to set text
+                        // directly we use an `Edit::Paste(String)` action.
+                        q.add(bevy_ui_text_input::actions::TextInputAction::Edit(
+                            bevy_ui_text_input::actions::TextInputEdit::Paste(text),
+                        ));
+                    }
+                });
         }
 
         // Track child ordering.
@@ -732,8 +815,12 @@ fn apply_kind(mut cmd: EntityCommands, node: &PlanNode, icon_font: Option<&Handl
         // ── Synthetic interactive chrome (not A2UI components) ──────────────
         "__TabBar" => apply_tab_bar(cmd),
         "__TabTitle" => {
-            if let Some(SyntheticMarker::TabTitle { tabs_id, index, active_path, active }) =
-                &node.marker
+            if let Some(SyntheticMarker::TabTitle {
+                tabs_id,
+                index,
+                active_path,
+                active,
+            }) = &node.marker
             {
                 let marker = TabTitle {
                     tabs_id: tabs_id.clone(),
@@ -749,7 +836,11 @@ fn apply_kind(mut cmd: EntityCommands, node: &PlanNode, icon_font: Option<&Handl
         "__ChoiceLabel" => apply_text(cmd, &node.fields),
         "__ChoiceOption" => {
             if let Some(SyntheticMarker::ChoiceOption {
-                picker_id, value, multiple, value_path, selected,
+                picker_id,
+                value,
+                multiple,
+                value_path,
+                selected,
             }) = &node.marker
             {
                 let marker = ChoiceOption {
@@ -768,7 +859,9 @@ fn apply_kind(mut cmd: EntityCommands, node: &PlanNode, icon_font: Option<&Handl
         // ── Synthetic Modal overlay chrome ─────────────────────────────────
         "__ModalScrim" => {
             if let Some(SyntheticMarker::ModalDismiss { modal_id }) = &node.marker {
-                cmd.insert(ModalDismiss { modal_id: modal_id.clone() });
+                cmd.insert(ModalDismiss {
+                    modal_id: modal_id.clone(),
+                });
             }
             apply_modal_scrim(cmd);
         }
@@ -777,7 +870,9 @@ fn apply_kind(mut cmd: EntityCommands, node: &PlanNode, icon_font: Option<&Handl
         "__ModalTitle" => apply_modal_title(cmd, &node.fields),
         "__ModalClose" => {
             if let Some(SyntheticMarker::ModalDismiss { modal_id }) = &node.marker {
-                cmd.insert(ModalDismiss { modal_id: modal_id.clone() });
+                cmd.insert(ModalDismiss {
+                    modal_id: modal_id.clone(),
+                });
             }
             apply_modal_close(cmd, &node.fields);
         }

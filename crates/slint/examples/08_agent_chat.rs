@@ -468,26 +468,12 @@ fn flatten_node(
                 // Template children are encoded as "componentId#path"; split them.
                 if let Some((comp, path)) = cid.split_once('#') {
                     flatten_template(
-                        comp,
-                        path,
-                        rows,
-                        indent,
-                        in_card,
-                        surface,
-                        data_model,
-                        components,
+                        comp, path, rows, indent, in_card, surface, data_model, components,
                         functions,
                     );
                 } else {
                     flatten_node(
-                        cid,
-                        rows,
-                        indent,
-                        in_card,
-                        surface,
-                        data_model,
-                        components,
-                        functions,
+                        cid, rows, indent, in_card, surface, data_model, components, functions,
                     );
                 }
             }

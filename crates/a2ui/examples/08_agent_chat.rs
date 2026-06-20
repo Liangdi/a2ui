@@ -27,11 +27,10 @@ use std::io;
 
 use crossterm::{
     event::{
-        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind,
-        MouseEventKind,
+        self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind, MouseEventKind,
     },
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Frame, Terminal,
@@ -39,9 +38,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{
-        Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
-    },
+    widgets::{Block, Borders, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
 use a2ui::core::catalog::Catalog;
@@ -67,7 +64,9 @@ fn render_user_entry(frame: &mut Frame, area: Rect, text: &str) {
     let content = Line::from(vec![
         Span::styled(
             " 👤 You ",
-            Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
         ),
         Span::styled(text, Style::default().fg(Color::White)),
     ]);
@@ -289,16 +288,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         render_user_entry(frame, rect, &entry.text);
                     }
                     "ai" => {
-                        if let Some(surface) =
-                            processor.model.get_surface(&entry.surface_id)
-                        {
+                        if let Some(surface) = processor.model.get_surface(&entry.surface_id) {
                             if surface.has_root() {
-                                let renderer =
-                                    a2ui::tui::surface::SurfaceRenderer::new(
-                                        surface,
-                                        &registry,
-                                        &render_catalog,
-                                    );
+                                let renderer = a2ui::tui::surface::SurfaceRenderer::new(
+                                    surface,
+                                    &registry,
+                                    &render_catalog,
+                                );
                                 // Rows of *this* surface scrolled above the
                                 // viewport. The library renders the surface at its
                                 // natural height off-screen and blits the visible
@@ -413,21 +409,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         _ => {}
                     }
                 }
-                Event::Mouse(mouse) => {
-                    match mouse.kind {
-                        MouseEventKind::ScrollUp => {
-                            scroll_from_bottom += 3;
-                            auto_scroll = false;
-                        }
-                        MouseEventKind::ScrollDown => {
-                            scroll_from_bottom = scroll_from_bottom.saturating_sub(3);
-                            if scroll_from_bottom == 0 {
-                                auto_scroll = true;
-                            }
-                        }
-                        _ => {}
+                Event::Mouse(mouse) => match mouse.kind {
+                    MouseEventKind::ScrollUp => {
+                        scroll_from_bottom += 3;
+                        auto_scroll = false;
                     }
-                }
+                    MouseEventKind::ScrollDown => {
+                        scroll_from_bottom = scroll_from_bottom.saturating_sub(3);
+                        if scroll_from_bottom == 0 {
+                            auto_scroll = true;
+                        }
+                    }
+                    _ => {}
+                },
                 _ => {}
             }
         }

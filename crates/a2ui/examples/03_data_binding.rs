@@ -19,7 +19,7 @@ use std::io;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Terminal,
@@ -120,9 +120,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .split(area);
 
             if let Some(surface) = processor.model.get_surface("profile") {
-                let renderer = a2ui::tui::surface::SurfaceRenderer::new(
-                    surface, &registry, &render_catalog,
-                );
+                let renderer =
+                    a2ui::tui::surface::SurfaceRenderer::new(surface, &registry, &render_catalog);
                 renderer.render(frame, chunks[0], None);
             }
 
@@ -130,8 +129,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 " Data: name={:?}  role={:?}  count={} ",
                 names[name_idx], roles[role_idx], count
             );
-            let bar = Paragraph::new(Line::from(data))
-                .style(Style::default().fg(Color::DarkGray));
+            let bar = Paragraph::new(Line::from(data)).style(Style::default().fg(Color::DarkGray));
             frame.render_widget(bar, chunks[1]);
         })?;
 
@@ -151,7 +149,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         });
                         let _ = processor.process_message(
-                            MessageProcessor::parse_message(&msg.to_string()).unwrap()
+                            MessageProcessor::parse_message(&msg.to_string()).unwrap(),
                         );
                     }
                     KeyCode::Char('r') => {
@@ -166,7 +164,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         });
                         let _ = processor.process_message(
-                            MessageProcessor::parse_message(&msg.to_string()).unwrap()
+                            MessageProcessor::parse_message(&msg.to_string()).unwrap(),
                         );
                     }
                     KeyCode::Char('c') => {
@@ -181,7 +179,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             }
                         });
                         let _ = processor.process_message(
-                            MessageProcessor::parse_message(&msg.to_string()).unwrap()
+                            MessageProcessor::parse_message(&msg.to_string()).unwrap(),
                         );
                     }
                     _ => {}

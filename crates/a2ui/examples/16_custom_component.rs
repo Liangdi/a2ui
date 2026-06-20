@@ -36,7 +36,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Frame, Terminal,
@@ -108,11 +108,7 @@ impl TuiComponent for ProgressMeterComponent {
         frame.render_widget(Paragraph::new(line), area);
     }
 
-    fn handle_event(
-        &self,
-        ctx: &ComponentContext,
-        event: &InputEvent,
-    ) -> Option<EventResult> {
+    fn handle_event(&self, ctx: &ComponentContext, event: &InputEvent) -> Option<EventResult> {
         let InputEvent::KeyPress { key } = event;
         let step = match key {
             InputKey::Right | InputKey::Up => 10.0,
@@ -270,11 +266,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .and_then(|v| v.as_f64())
                     .unwrap_or(0.0);
                 let done = pct >= 100.0;
-                let status = if done { "✓ complete" } else { "downloading…" };
+                let status = if done {
+                    "✓ complete"
+                } else {
+                    "downloading…"
+                };
                 let bar = Paragraph::new(Line::from(format!(
                     " q:quit   ←/→:±10   |  {status}   /progress = {pct:.0}%"
                 )))
-                .style(Style::default().fg(if done { Color::Green } else { Color::DarkGray }));
+                .style(Style::default().fg(if done {
+                    Color::Green
+                } else {
+                    Color::DarkGray
+                }));
                 frame.render_widget(bar, chunks[1]);
             }
         })?;

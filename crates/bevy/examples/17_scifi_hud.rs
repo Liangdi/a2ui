@@ -53,9 +53,9 @@
 use std::time::Duration;
 
 use bevy::prelude::*;
-use bevy::render::view::screenshot::{save_to_disk, Screenshot};
+use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 use bevy::window::WindowResolution;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use a2ui_base::message_processor::MessageProcessor;
 use a2ui_base::model::data_model::DataModel;
@@ -96,7 +96,12 @@ fn level_color(level: &str) -> Color {
 }
 
 /// The four gauges: `(label, data-model key)`.
-const GAUGE_DEFS: [(&str, &str); 4] = [("CORE", "core"), ("PWR", "pwr"), ("HULL", "hull"), ("SHLD", "shld")];
+const GAUGE_DEFS: [(&str, &str); 4] = [
+    ("CORE", "core"),
+    ("PWR", "pwr"),
+    ("HULL", "hull"),
+    ("SHLD", "shld"),
+];
 
 // ─── Runtime state ───────────────────────────────────────────────────────────
 
@@ -193,26 +198,24 @@ struct EventLine(usize);
 
 fn main() {
     let mut app = App::new();
-    app.add_plugins(
-            DefaultPlugins.set(WindowPlugin {
-                primary_window: Some(Window {
-                    title: "A2UI // TACTICAL HUD".into(),
-                    resolution: WindowResolution::new(1000, 680),
-                    ..default()
-                }),
-                ..default()
-            }),
-        )
-        .insert_non_send_resource(HudState::new())
-        .insert_resource(TickTimer(Timer::new(
-            Duration::from_millis(80),
-            TimerMode::Repeating,
-        )))
-        .add_systems(Startup, spawn_hud)
-        // Tick (data source) then render (apply) — chained so a fresh snapshot
-        // lands before this frame's re-apply.
-        .add_systems(Update, (tick_hud, update_hud).chain())
-        .add_systems(Update, exit_on_esc);
+    app.add_plugins(DefaultPlugins.set(WindowPlugin {
+        primary_window: Some(Window {
+            title: "A2UI // TACTICAL HUD".into(),
+            resolution: WindowResolution::new(1000, 680),
+            ..default()
+        }),
+        ..default()
+    }))
+    .insert_non_send_resource(HudState::new())
+    .insert_resource(TickTimer(Timer::new(
+        Duration::from_millis(80),
+        TimerMode::Repeating,
+    )))
+    .add_systems(Startup, spawn_hud)
+    // Tick (data source) then render (apply) — chained so a fresh snapshot
+    // lands before this frame's re-apply.
+    .add_systems(Update, (tick_hud, update_hud).chain())
+    .add_systems(Update, exit_on_esc);
 
     // Optional self-screenshot mode — compositor-independent: it reads the
     // window's render target directly via Bevy's `Screenshot` API, so it works
@@ -576,13 +579,21 @@ fn update_hud(
             return;
         };
         let model = surface.data_model.borrow();
-        let status = model.get("/status").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let pcts = GAUGE_DEFS.map(|(_, key)| read_num(&model, &format!("/gauges/{key}")).clamp(0.0, 100.0));
+        let status = model
+            .get("/status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let pcts = GAUGE_DEFS
+            .map(|(_, key)| read_num(&model, &format!("/gauges/{key}")).clamp(0.0, 100.0));
         let angle = read_num(&model, "/radar/angle");
         let range = read_num(&model, "/radar/range") as u32;
         let radar = radar_grid(angle);
         let bearing = (angle * 57.2957795) % 360.0;
-        let fresh = model.get("/events/fresh").and_then(|v| v.as_bool()).unwrap_or(false);
+        let fresh = model
+            .get("/events/fresh")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let items: Vec<Value> = model
             .get("/events/items")
             .and_then(|v| v.as_array())
@@ -624,7 +635,11 @@ fn update_hud(
             let msg = it.get("msg").and_then(|v| v.as_str()).unwrap_or("");
             let level = it.get("level").and_then(|v| v.as_str()).unwrap_or("");
             t.0 = format!("> {msg}");
-            *color = TextColor(if line.0 == 0 && fresh { AMBER } else { level_color(level) });
+            *color = TextColor(if line.0 == 0 && fresh {
+                AMBER
+            } else {
+                level_color(level)
+            });
         } else {
             t.0.clear();
         }

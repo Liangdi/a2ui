@@ -88,8 +88,13 @@ fn app() -> Element {
     // Conversation + agent state. All Copy signal handles; the spawn loop below
     // captures them by value. Declared `mut` because `.set()`/`.write()` take
     // `&mut self`.
-    let mut entries: Signal<Vec<ChatEntry>> =
-        use_signal(|| vec![ChatEntry { role: "ai".into(), surface_id: "welcome".into(), text: String::new() }]);
+    let mut entries: Signal<Vec<ChatEntry>> = use_signal(|| {
+        vec![ChatEntry {
+            role: "ai".into(),
+            surface_id: "welcome".into(),
+            text: String::new(),
+        }]
+    });
     let mut input: Signal<String> = use_signal(String::new);
     let mut pending: Signal<Vec<Value>> = use_signal(Vec::new);
     let mut typing: Signal<bool> = use_signal(|| false);
@@ -127,7 +132,9 @@ fn app() -> Element {
                     let p = pending.read();
                     p.first().cloned()
                 };
-                let Some(msg) = front else { continue; };
+                let Some(msg) = front else {
+                    continue;
+                };
 
                 // A createSurface starts a new AI bubble: push the entry first
                 // (copy → edit → set, the Signal write idiom).
@@ -138,7 +145,11 @@ fn app() -> Element {
                     .map(|s| s.to_string());
                 if let Some(sid) = new_sid {
                     let mut local = entries.read().clone();
-                    local.push(ChatEntry { role: "ai".into(), surface_id: sid, text: String::new() });
+                    local.push(ChatEntry {
+                        role: "ai".into(),
+                        surface_id: sid,
+                        text: String::new(),
+                    });
                     entries.set(local);
                     typing.set(false);
                 }
@@ -183,7 +194,13 @@ fn app() -> Element {
     let rows: Vec<(String, String, String)> = {
         let e = entries.read();
         e.iter()
-            .map(|entry| (entry.role.clone(), entry.surface_id.clone(), entry.text.clone()))
+            .map(|entry| {
+                (
+                    entry.role.clone(),
+                    entry.surface_id.clone(),
+                    entry.text.clone(),
+                )
+            })
             .collect()
     };
 
@@ -252,7 +269,11 @@ fn do_send(
     input.set(String::new());
 
     let mut local_entries = entries.read().clone();
-    local_entries.push(ChatEntry { role: "user".into(), surface_id: String::new(), text: msg.clone() });
+    local_entries.push(ChatEntry {
+        role: "user".into(),
+        surface_id: String::new(),
+        text: msg.clone(),
+    });
     entries.set(local_entries);
 
     typing.set(true);

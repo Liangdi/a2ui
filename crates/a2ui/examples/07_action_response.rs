@@ -22,7 +22,7 @@ use std::io;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Terminal,
@@ -141,7 +141,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         m.insert("app", vec!["apple", "application", "approved"]);
         m.insert("rust", vec!["rustacean", "rustic", "rustproof"]);
         m.insert("terminal", vec!["terminal", "terminate", "terminology"]);
-        m.insert("a2ui", vec!["a2ui protocol", "a2ui catalog", "a2ui surface"]);
+        m.insert(
+            "a2ui",
+            vec!["a2ui protocol", "a2ui catalog", "a2ui surface"],
+        );
         m
     };
 
@@ -154,15 +157,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .split(area);
 
             if let Some(surface) = processor.model.get_surface("search") {
-                let renderer = a2ui::tui::surface::SurfaceRenderer::new(
-                    surface, &registry, &render_catalog,
-                );
+                let renderer =
+                    a2ui::tui::surface::SurfaceRenderer::new(surface, &registry, &render_catalog);
                 renderer.render(frame, chunks[0], None);
             }
 
             let help = " s: search  e: error response  n: change query  q: quit ";
-            let bar = Paragraph::new(Line::from(help))
-                .style(Style::default().fg(Color::DarkGray));
+            let bar = Paragraph::new(Line::from(help)).style(Style::default().fg(Color::DarkGray));
             frame.render_widget(bar, chunks[1]);
         })?;
 
@@ -182,9 +183,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 "value": queries[query_idx]
                             }
                         });
-                        processor.process_message(
-                            MessageProcessor::parse_message(&msg.to_string())?,
-                        )?;
+                        processor
+                            .process_message(MessageProcessor::parse_message(&msg.to_string())?)?;
                     }
 
                     KeyCode::Char('s') => {
@@ -209,9 +209,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 "value": format!("⏳ Searching for '{}'...", queries[query_idx])
                             }
                         });
-                        processor.process_message(
-                            MessageProcessor::parse_message(&status_msg.to_string())?,
-                        )?;
+                        processor.process_message(MessageProcessor::parse_message(
+                            &status_msg.to_string(),
+                        )?)?;
 
                         // Step 2: Register the pending action with responsePath
                         //   This tells the processor where to store the server's response.
@@ -225,9 +225,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         //   The responsePath "/searchResult" will be auto-written.
                         let suggestions = results
                             .get(queries[query_idx])
-                            .map(|v| serde_json::Value::Array(
-                                v.iter().map(|s| serde_json::Value::String(s.to_string())).collect()
-                            ))
+                            .map(|v| {
+                                serde_json::Value::Array(
+                                    v.iter()
+                                        .map(|s| serde_json::Value::String(s.to_string()))
+                                        .collect(),
+                                )
+                            })
                             .unwrap_or(serde_json::json!([]));
 
                         let response_msg = serde_json::json!({
@@ -237,9 +241,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 "value": suggestions
                             }
                         });
-                        processor.process_message(
-                            MessageProcessor::parse_message(&response_msg.to_string())?,
-                        )?;
+                        processor.process_message(MessageProcessor::parse_message(
+                            &response_msg.to_string(),
+                        )?)?;
 
                         // Step 4: Update status to show success
                         let status_msg = serde_json::json!({
@@ -250,9 +254,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 "value": format!("✓ action '{}' completed — responsePath updated /searchResult", action_id)
                             }
                         });
-                        processor.process_message(
-                            MessageProcessor::parse_message(&status_msg.to_string())?,
-                        )?;
+                        processor.process_message(MessageProcessor::parse_message(
+                            &status_msg.to_string(),
+                        )?)?;
                     }
 
                     KeyCode::Char('e') => {
@@ -280,9 +284,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
                         });
-                        processor.process_message(
-                            MessageProcessor::parse_message(&response_msg.to_string())?,
-                        )?;
+                        processor.process_message(MessageProcessor::parse_message(
+                            &response_msg.to_string(),
+                        )?)?;
 
                         // Update status to show the error
                         let status_msg = serde_json::json!({
@@ -293,9 +297,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 "value": format!("✗ action '{}' failed — SEARCH_FAILED", action_id)
                             }
                         });
-                        processor.process_message(
-                            MessageProcessor::parse_message(&status_msg.to_string())?,
-                        )?;
+                        processor.process_message(MessageProcessor::parse_message(
+                            &status_msg.to_string(),
+                        )?)?;
                     }
 
                     _ => {}
@@ -310,7 +314,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Show final state
     if let Some(surface) = processor.model.get_surface("search") {
         let dm = surface.data_model.borrow();
-        println!("Final data model: {}", serde_json::to_string_pretty(&dm.as_value())?);
+        println!(
+            "Final data model: {}",
+            serde_json::to_string_pretty(&dm.as_value())?
+        );
     }
     Ok(())
 }

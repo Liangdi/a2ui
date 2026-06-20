@@ -55,7 +55,7 @@ use eframe::egui::{
     self, Color32, ColorImage, FontId, Frame, Layout, Pos2, RichText, Sense, Stroke, Vec2,
     ViewportCommand,
 };
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use a2ui_base::message_processor::MessageProcessor;
 use a2ui_base::model::data_model::DataModel;
@@ -94,12 +94,18 @@ fn level_color(level: &str) -> Color32 {
 }
 
 /// The four gauges: `(label, data-model key)`.
-const GAUGE_DEFS: [(&str, &str); 4] =
-    [("CORE", "core"), ("PWR", "pwr"), ("HULL", "hull"), ("SHLD", "shld")];
+const GAUGE_DEFS: [(&str, &str); 4] = [
+    ("CORE", "core"),
+    ("PWR", "pwr"),
+    ("HULL", "hull"),
+    ("SHLD", "shld"),
+];
 
 /// Monospace rich text at `size`, in `color`.
 fn mono(text: impl Into<String>, size: f32, color: Color32) -> RichText {
-    RichText::new(text).font(FontId::monospace(size)).color(color)
+    RichText::new(text)
+        .font(FontId::monospace(size))
+        .color(color)
 }
 
 /// A dark, neon-bordered panel `Frame` filling its allotted space.
@@ -239,25 +245,48 @@ impl HudApp {
             return Snapshot::default();
         };
         let model = surface.data_model.borrow();
-        let status = model.get("/status").and_then(|v| v.as_str()).unwrap_or("").to_string();
-        let gauges = GAUGE_DEFS.map(|(_, key)| read_num(&model, &format!("/gauges/{key}")).clamp(0.0, 100.0));
+        let status = model
+            .get("/status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let gauges = GAUGE_DEFS
+            .map(|(_, key)| read_num(&model, &format!("/gauges/{key}")).clamp(0.0, 100.0));
         let angle = read_num(&model, "/radar/angle");
         let range = read_num(&model, "/radar/range") as u32;
-        let fresh = model.get("/events/fresh").and_then(|v| v.as_bool()).unwrap_or(false);
+        let fresh = model
+            .get("/events/fresh")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let items = model
             .get("/events/items")
             .and_then(|v| v.as_array())
             .map(|arr| {
                 arr.iter()
                     .map(|it| {
-                        let msg = it.get("msg").and_then(|v| v.as_str()).unwrap_or("").to_string();
-                        let level = it.get("level").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                        let msg = it
+                            .get("msg")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let level = it
+                            .get("level")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
                         (msg, level)
                     })
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        Snapshot { status, gauges, angle, range, fresh, items }
+        Snapshot {
+            status,
+            gauges,
+            angle,
+            range,
+            fresh,
+            items,
+        }
     }
 
     /// In-app, compositor-independent screenshot: after the HUD has warmed up a
@@ -290,7 +319,9 @@ impl HudApp {
                 }
             })
         };
-        if let Some(image) = ctx.input(|i| find_shot(&i.raw.events).or_else(|| find_shot(&i.events))) {
+        if let Some(image) =
+            ctx.input(|i| find_shot(&i.raw.events).or_else(|| find_shot(&i.events)))
+        {
             match save_colorimage(&image, &cap.path) {
                 Ok(()) => {
                     eprintln!("Captured egui HUD screenshot -> {}", cap.path.display());
@@ -468,8 +499,7 @@ fn render_scanner(ui: &mut egui::Ui, snap: &Snapshot) {
 
         // Radar grid: take the available square and draw rings + sweep on it.
         let avail = (ui.available_width().min(ui.available_height()) - 6.0).max(40.0);
-        let (rect, _) =
-            ui.allocate_exact_size(Vec2::splat(avail), Sense::hover());
+        let (rect, _) = ui.allocate_exact_size(Vec2::splat(avail), Sense::hover());
         let painter = ui.painter_at(rect);
         paint_radar(&painter, rect, snap.angle as f32);
 
@@ -494,7 +524,11 @@ fn render_events(ui: &mut egui::Ui, snap: &Snapshot) {
         ui.label(mono("[ EVENT LOG ]", 13.0, DIM));
         ui.add_space(2.0);
         for (i, (msg, level)) in snap.items.iter().enumerate() {
-            let color = if i == 0 && snap.fresh { AMBER } else { level_color(level) };
+            let color = if i == 0 && snap.fresh {
+                AMBER
+            } else {
+                level_color(level)
+            };
             ui.label(mono(format!("> {msg}"), 13.0, color));
         }
     });
@@ -536,7 +570,10 @@ fn paint_radar(painter: &egui::Painter, rect: egui::Rect, angle: f32) {
         Stroke::new(1.0, DIM),
     );
     // Sweep beam + tip pip.
-    let tip = Pos2::new(center.x + angle.cos() * radius, center.y + angle.sin() * radius);
+    let tip = Pos2::new(
+        center.x + angle.cos() * radius,
+        center.y + angle.sin() * radius,
+    );
     painter.line_segment([center, tip], Stroke::new(2.0, CYAN));
     painter.circle_filled(tip, 3.0, CYAN);
     // Center pip.
@@ -561,7 +598,10 @@ fn read_num(model: &DataModel, path: &str) -> f64 {
 
 /// Encode an egui `ColorImage` (RGBA, already top-down — egui's `read_screen_rgba`
 /// flips the GL read) to a PNG at `path`.
-fn save_colorimage(image: &ColorImage, path: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+fn save_colorimage(
+    image: &ColorImage,
+    path: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
     let [w, h] = image.size;
     let bytes: Vec<u8> = image.pixels.iter().flat_map(|c| c.to_array()).collect();
     image::RgbaImage::from_raw(w as u32, h as u32, bytes)
@@ -587,12 +627,14 @@ const EVENT_POOL: &[(&str, &str)] = &[
 fn main() -> eframe::Result {
     // Optional self-screenshot mode (env-gated; driven by
     // scripts/capture_egui_screenshot.sh): capture one PNG to `path`, then exit.
-    let capture = std::env::var("A2UI_SCREENSHOT_PATH").ok().map(|p| CaptureState {
-        path: PathBuf::from(p),
-        frames: 0,
-        requested: false,
-        done: false,
-    });
+    let capture = std::env::var("A2UI_SCREENSHOT_PATH")
+        .ok()
+        .map(|p| CaptureState {
+            path: PathBuf::from(p),
+            frames: 0,
+            requested: false,
+            done: false,
+        });
 
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

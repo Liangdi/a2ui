@@ -6,8 +6,8 @@
 //! Rebuilt by [`update_browser`] whenever the row count drifts from the sample
 //! count; clicks handled by [`on_sample_row_click`] (a picking observer).
 
-use bevy::prelude::*;
 use bevy::ecs::hierarchy::ChildOf;
+use bevy::prelude::*;
 
 use crate::state::A2uiState;
 
@@ -75,7 +75,10 @@ pub fn update_browser(
         let row = row.id();
         commands.spawn((
             Text::new(name.clone()),
-            TextFont { font_size: 13.0, ..default() },
+            TextFont {
+                font_size: 13.0,
+                ..default()
+            },
             TextColor(if is_sel {
                 Color::srgb(0.1, 0.25, 0.7)
             } else {

@@ -16,10 +16,12 @@ use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::model::components_model::SurfaceComponentsModel;
 use a2ui_base::model::data_model::DataModel;
 
-use crate::components::{Walk, render_button, render_card, render_checkbox, render_choice_picker,
-    render_column, render_date_time_input, render_divider, render_icon, render_image,
-    render_media_placeholder, render_modal, render_row, render_slider, render_tabs, render_text,
-    render_text_field, render_unknown};
+use crate::components::{
+    Walk, render_button, render_card, render_checkbox, render_choice_picker, render_column,
+    render_date_time_input, render_divider, render_icon, render_image, render_media_placeholder,
+    render_modal, render_row, render_slider, render_tabs, render_text, render_text_field,
+    render_unknown,
+};
 use crate::edit_state::EditBuffers;
 use crate::interaction::PendingInteraction;
 

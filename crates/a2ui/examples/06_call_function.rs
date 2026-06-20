@@ -21,7 +21,7 @@ use std::io;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Terminal,
@@ -142,9 +142,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "value": value
                     }
                 });
-                processor.process_message(
-                    MessageProcessor::parse_message(&write_msg.to_string())?,
-                )?;
+                processor
+                    .process_message(MessageProcessor::parse_message(&write_msg.to_string())?)?;
                 status_text = format!(
                     "functionResponse: call={}, value={}",
                     fr.function_response.call, value
@@ -191,15 +190,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .split(area);
 
             if let Some(surface) = processor.model.get_surface("demo") {
-                let renderer = a2ui::tui::surface::SurfaceRenderer::new(
-                    surface, &registry, &render_catalog,
-                );
+                let renderer =
+                    a2ui::tui::surface::SurfaceRenderer::new(surface, &registry, &render_catalog);
                 renderer.render(frame, chunks[0], None);
             }
 
             let help = " f: call function  e: call invalid  n: cycle name  q: quit ";
-            let bar = Paragraph::new(Line::from(help))
-                .style(Style::default().fg(Color::DarkGray));
+            let bar = Paragraph::new(Line::from(help)).style(Style::default().fg(Color::DarkGray));
             frame.render_widget(bar, chunks[1]);
         })?;
 
@@ -217,9 +214,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 "value": names[name_idx]
                             }
                         });
-                        processor.process_message(
-                            MessageProcessor::parse_message(&msg.to_string())?,
-                        )?;
+                        processor
+                            .process_message(MessageProcessor::parse_message(&msg.to_string())?)?;
                     }
                     KeyCode::Char('f') => {
                         // Call formatString with data binding, wantResponse: true
@@ -234,9 +230,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 "args": { "value": "Hello, ${/name}! The answer is 42." }
                             }
                         });
-                        processor.process_message(
-                            MessageProcessor::parse_message(&call_msg.to_string())?,
-                        )?;
+                        processor.process_message(MessageProcessor::parse_message(
+                            &call_msg.to_string(),
+                        )?)?;
 
                         let outgoing = processor.drain_outgoing();
                         let new_status = if let Some(msg) = outgoing.first() {
@@ -252,9 +248,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             "value": value
                                         }
                                     });
-                                    processor.process_message(
-                                        MessageProcessor::parse_message(&write_msg.to_string())?,
-                                    )?;
+                                    processor.process_message(MessageProcessor::parse_message(
+                                        &write_msg.to_string(),
+                                    )?)?;
                                     format!("✓ functionResponse: {}", value)
                                 }
                                 ClientPayload::Error(err) => {
@@ -274,9 +270,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 "value": new_status
                             }
                         });
-                        processor.process_message(
-                            MessageProcessor::parse_message(&status_update.to_string())?,
-                        )?;
+                        processor.process_message(MessageProcessor::parse_message(
+                            &status_update.to_string(),
+                        )?)?;
                     }
                     KeyCode::Char('e') => {
                         // Call a nonexistent function → should produce an error
@@ -291,15 +287,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 "args": {}
                             }
                         });
-                        processor.process_message(
-                            MessageProcessor::parse_message(&call_msg.to_string())?,
-                        )?;
+                        processor.process_message(MessageProcessor::parse_message(
+                            &call_msg.to_string(),
+                        )?)?;
 
                         let outgoing = processor.drain_outgoing();
                         if let Some(msg) = outgoing.first() {
                             match &msg.payload {
                                 ClientPayload::Error(err) => {
-                                    let status = format!("✗ Error: {} (code: {})", err.error.message, err.error.code);
+                                    let status = format!(
+                                        "✗ Error: {} (code: {})",
+                                        err.error.message, err.error.code
+                                    );
                                     let status_update = serde_json::json!({
                                         "version": "v1.0",
                                         "updateDataModel": {
@@ -308,9 +307,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             "value": status
                                         }
                                     });
-                                    processor.process_message(
-                                        MessageProcessor::parse_message(&status_update.to_string())?,
-                                    )?;
+                                    processor.process_message(MessageProcessor::parse_message(
+                                        &status_update.to_string(),
+                                    )?)?;
                                 }
                                 other => {
                                     let status = format!("Unexpected response: {:?}", other);
@@ -322,9 +321,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             "value": status
                                         }
                                     });
-                                    processor.process_message(
-                                        MessageProcessor::parse_message(&status_update.to_string())?,
-                                    )?;
+                                    processor.process_message(MessageProcessor::parse_message(
+                                        &status_update.to_string(),
+                                    )?)?;
                                 }
                             }
                         }
@@ -341,7 +340,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Show final state
     if let Some(surface) = processor.model.get_surface("demo") {
         let dm = surface.data_model.borrow();
-        println!("Final data model: {}", serde_json::to_string_pretty(&dm.as_value())?);
+        println!(
+            "Final data model: {}",
+            serde_json::to_string_pretty(&dm.as_value())?
+        );
     }
     Ok(())
 }

@@ -107,44 +107,62 @@ impl SurfaceHost {
         // TextField / DateTimeInput text edit → direct data-model write.
         {
             let s = Rc::clone(&state);
-            state.surface.global::<Events>().on_text_edited(move |id, text| {
-                s.handle_text_edited(id.as_str(), text.as_str());
-            });
+            state
+                .surface
+                .global::<Events>()
+                .on_text_edited(move |id, text| {
+                    s.handle_text_edited(id.as_str(), text.as_str());
+                });
         }
         // Slider drag → direct data-model write.
         {
             let s = Rc::clone(&state);
-            state.surface.global::<Events>().on_slider_changed(move |id, value| {
-                s.handle_slider_changed(id.as_str(), value);
-            });
+            state
+                .surface
+                .global::<Events>()
+                .on_slider_changed(move |id, value| {
+                    s.handle_slider_changed(id.as_str(), value);
+                });
         }
         // CheckBox toggle → direct data-model write.
         {
             let s = Rc::clone(&state);
-            state.surface.global::<Events>().on_check_toggled(move |id, checked| {
-                s.handle_check_toggled(id.as_str(), checked);
-            });
+            state
+                .surface
+                .global::<Events>()
+                .on_check_toggled(move |id, checked| {
+                    s.handle_check_toggled(id.as_str(), checked);
+                });
         }
         // ChoicePicker single-select pick → resolve label to value, write json!([value]).
         {
             let s = Rc::clone(&state);
-            state.surface.global::<Events>().on_choice_selected(move |id, label| {
-                s.handle_choice_selected(id.as_str(), label.as_str());
-            });
+            state
+                .surface
+                .global::<Events>()
+                .on_choice_selected(move |id, label| {
+                    s.handle_choice_selected(id.as_str(), label.as_str());
+                });
         }
         // ChoicePicker multi-select toggle → recompute the selection array.
         {
             let s = Rc::clone(&state);
-            state.surface.global::<Events>().on_choice_toggled(move |id, index, checked| {
-                s.handle_choice_toggled(id.as_str(), index, checked);
-            });
+            state
+                .surface
+                .global::<Events>()
+                .on_choice_toggled(move |id, index, checked| {
+                    s.handle_choice_toggled(id.as_str(), index, checked);
+                });
         }
         // Tabs header click → write the active index.
         {
             let s = Rc::clone(&state);
-            state.surface.global::<Events>().on_tab_selected(move |id, index| {
-                s.handle_tab_selected(id.as_str(), index);
-            });
+            state
+                .surface
+                .global::<Events>()
+                .on_tab_selected(move |id, index| {
+                    s.handle_tab_selected(id.as_str(), index);
+                });
         }
         // Gallery sidebar click → load the selected sample.
         {
@@ -171,7 +189,9 @@ impl SurfaceHost {
     pub fn set_samples(&self, samples: Vec<(String, Vec<A2uiMessage>)>, initial: usize) {
         let entries: Vec<SampleEntry> = samples
             .iter()
-            .map(|(name, _)| SampleEntry { name: name.as_str().into() })
+            .map(|(name, _)| SampleEntry {
+                name: name.as_str().into(),
+            })
             .collect();
         let model = slint::ModelRc::new(Rc::new(slint::VecModel::from(entries)));
         self.state.surface.set_samples(model);
@@ -193,7 +213,10 @@ impl SurfaceHost {
         let proc = self.state.processor.borrow();
         if let Some(surface) = proc.model.surfaces().next() {
             let components = surface.components.borrow();
-            self.state.focus.borrow_mut().rebuild_from_components(&components);
+            self.state
+                .focus
+                .borrow_mut()
+                .rebuild_from_components(&components);
         }
     }
 
@@ -223,10 +246,21 @@ impl HostState {
         let focused = self.focus.borrow().focused_id().map(str::to_string);
         let open_modals = self.open_modals.borrow();
         let image_cache = self.image_cache.borrow();
-        let nodes = build_nodes(surface, &self.functions, focused.as_deref(), &open_modals, &image_cache);
+        let nodes = build_nodes(
+            surface,
+            &self.functions,
+            focused.as_deref(),
+            &open_modals,
+            &image_cache,
+        );
         self.surface.set_nodes(to_node_model(nodes));
-        let overlay_nodes =
-            build_overlay_nodes(surface, &self.functions, focused.as_deref(), &open_modals, &image_cache);
+        let overlay_nodes = build_overlay_nodes(
+            surface,
+            &self.functions,
+            focused.as_deref(),
+            &open_modals,
+            &image_cache,
+        );
         self.surface.set_overlay_visible(!overlay_nodes.is_empty());
         self.surface.set_overlay_nodes(to_node_model(overlay_nodes));
     }
@@ -258,7 +292,9 @@ impl HostState {
             dispatch_event(
                 &comp_type,
                 &ctx,
-                &InputEvent::KeyPress { key: InputKey::Enter },
+                &InputEvent::KeyPress {
+                    key: InputKey::Enter,
+                },
             )
         };
 
@@ -412,7 +448,11 @@ impl HostState {
     /// Borrow the surface, build a [`ComponentContext`] for `node_id`, and run
     /// `f` with the model + context. Returns `None` if the node doesn't exist.
     /// All borrows are dropped before `f`'s result is used.
-    fn with_ctx<R>(&self, node_id: &str, f: impl FnOnce(&ComponentModel, &ComponentContext) -> R) -> Option<R> {
+    fn with_ctx<R>(
+        &self,
+        node_id: &str,
+        f: impl FnOnce(&ComponentModel, &ComponentContext) -> R,
+    ) -> Option<R> {
         let proc = self.processor.borrow();
         let surface = proc.model.surfaces().next()?;
         let components = surface.components.borrow();
@@ -506,11 +546,7 @@ impl HostState {
     /// messages, refresh focus + image cache, highlight the row, and redraw.
     /// No-op if the index is out of range.
     fn select(&self, idx: usize) {
-        let messages = self
-            .samples
-            .borrow()
-            .get(idx)
-            .map(|(_, msgs)| msgs.clone());
+        let messages = self.samples.borrow().get(idx).map(|(_, msgs)| msgs.clone());
         let Some(messages) = messages else {
             return;
         };
@@ -604,11 +640,8 @@ fn decode_bytes(bytes: &[u8]) -> Option<slint::Image> {
     let img = image::load_from_memory(bytes).ok()?;
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
-    let buffer = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(
-        rgba.as_raw(),
-        w,
-        h,
-    );
+    let buffer =
+        slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(rgba.as_raw(), w, h);
     Some(slint::Image::from_rgba8(buffer))
 }
 

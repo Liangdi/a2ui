@@ -37,7 +37,7 @@ use std::io;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Terminal,
@@ -151,7 +151,12 @@ fn build_state() -> Result<State, Box<dyn std::error::Error>> {
         focus.rebuild_from_components(&components);
     }
 
-    Ok(State { processor, registry, catalog, focus })
+    Ok(State {
+        processor,
+        registry,
+        catalog,
+        focus,
+    })
 }
 
 /// Send a printable character or editing key (e.g. `Backspace`) to the focused
@@ -199,8 +204,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .split(area);
 
             if let Some(surface) = state.processor.model.get_surface(SURFACE_ID) {
-                let renderer =
-                    a2ui::tui::surface::SurfaceRenderer::new(surface, &state.registry, &state.catalog);
+                let renderer = a2ui::tui::surface::SurfaceRenderer::new(
+                    surface,
+                    &state.registry,
+                    &state.catalog,
+                );
                 let focused = state.focus.focused_id();
                 renderer.render(frame, chunks[0], focused);
 
@@ -240,7 +248,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if let Some(surface) = state.processor.model.get_surface(SURFACE_ID) {
         let dm = surface.data_model.borrow();
-        println!("Final data model: {}", serde_json::to_string_pretty(&dm.as_value())?);
+        println!(
+            "Final data model: {}",
+            serde_json::to_string_pretty(&dm.as_value())?
+        );
     }
     Ok(())
 }
@@ -273,8 +284,11 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
         terminal
             .draw(|frame| {
-                let renderer =
-                    a2ui::tui::surface::SurfaceRenderer::new(surface, &state.registry, &state.catalog);
+                let renderer = a2ui::tui::surface::SurfaceRenderer::new(
+                    surface,
+                    &state.registry,
+                    &state.catalog,
+                );
                 renderer.render(frame, frame.area(), state.focus.focused_id());
             })
             .unwrap();
@@ -352,7 +366,10 @@ mod tests {
         assert!(send_key(&mut state, KeyCode::Backspace));
         let text = buffer_text(&render_buffer(&state, 80, 24));
         assert!(text.contains("Hell"), "expected 'Hell':\n{text}");
-        assert!(!text.contains("Hello"), "should no longer be 'Hello':\n{text}");
+        assert!(
+            !text.contains("Hello"),
+            "should no longer be 'Hello':\n{text}"
+        );
         assert_eq!(input_value(&state), "hell");
     }
 
@@ -364,7 +381,10 @@ mod tests {
             send_key(&mut state, KeyCode::Char(ch));
         }
         let text = buffer_text(&render_buffer(&state, 80, 24));
-        assert!(text.contains("HELLO"), "expected 'HELLO' (only first char uppercased):\n{text}");
+        assert!(
+            text.contains("HELLO"),
+            "expected 'HELLO' (only first char uppercased):\n{text}"
+        );
         assert_eq!(input_value(&state), "hELLO");
     }
 }
