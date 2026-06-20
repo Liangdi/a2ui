@@ -1,4 +1,36 @@
 
+# Default stack + every opt-in GUI backend, each as its own `cargo` invocation.
+# GUI backends are opt-in, AND bevy+iced can't be resolved together in one
+# `--workspace` build (upstream codespan-reporting 0.12 / naga `termcolor`
+# conflict — see the KNOWN LIMITATION note in Cargo.toml), so lint/test/check
+# must iterate them per-backend rather than `--workspace`.
+default-stack := "a2ui-base a2ui-image a2ui-tui a2ui-gallery a2ui"
+gui-backends := "slint egui bevy iced dioxus"
+
+# Lint everything: default stack (`--all-targets`) + each GUI backend.
+clippy:
+    cargo clippy -p {{default-stack}} --all-targets
+    @for b in {{gui-backends}}; do \
+        echo "==> clippy a2ui-$$b"; \
+        cargo clippy -p a2ui-$$b --features backend --all-targets || exit 1; \
+    done
+
+# Test everything: default stack + each GUI backend.
+test:
+    cargo test -p {{default-stack}}
+    @for b in {{gui-backends}}; do \
+        echo "==> test a2ui-$$b"; \
+        cargo test -p a2ui-$$b --features backend || exit 1; \
+    done
+
+# Type-check everything (faster than clippy/test): default stack + each backend.
+check:
+    cargo check -p {{default-stack}} --all-targets
+    @for b in {{gui-backends}}; do \
+        echo "==> check a2ui-$$b"; \
+        cargo check -p a2ui-$$b --features backend --all-targets || exit 1; \
+    done
+
 release-patch:
     cargo release patch --no-publish --execute
 

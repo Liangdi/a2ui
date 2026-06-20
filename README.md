@@ -128,15 +128,29 @@ cargo run -p a2ui --example 12_handshake
 ² TUI 经 `ratatui-image` 真实解码并显示图像像素(kitty / iTerm2 / Sixel / Halfblocks 自动降级,仅本地路径)。
 ³ Dioxus 经 WebView 原生 `<img>` 显示图像(支持 `file://` / `http(s)` / `data:` URL)。
 ⁴ Dioxus 经 WebView 原生 `<audio>` / `<video>` 元素真实播放(浏览器提供播放/暂停/进度/音量/全屏等完整传输控件)——这是终端及其它桌面后端做不到的。
-⁵ Iced 没有内置的 URL 图片加载器(其 `image` 组件只接受本地路径或内存字节),因此 `Image` 的 `http(s)` URL 由后台用 `ureq` 拉取字节、`Handle::from_bytes` 解码后缓存(切换样例时清空);本地路径则直接走 `Handle::from_path`。`fit` 映射到 `ContentFit`。
-⁶ Slint 经原生 `Image` 组件 + `image` crate 解码渲染图像像素:本地路径(含 `file://`)直接读文件,`http(s)` URL 由 `ureq` 拉取字节后解码(切换样例时清空缓存);`data:` URL 及解码失败的图片为带标签占位符。
-⁷ Bevy 经原生 `ImageNode`(wgpu 纹理)渲染图像像素:`image` crate 解码为 `bevy::image::Image` 后缓存 `Handle`(切换样例时清空)。本地路径(含 `file://`)直接读文件;`http(s)` URL 由 `ureq` 在 UI 线程同步拉取(样例图片少,与 Slint 同构);`data:` URL 及解码失败为带标签占位符。Icon 经内嵌的 ~12 KB NotoEmoji 子集字体显示 emoji(图标名映射表与 TUI / Iced 同名,Bevy 用 emoji 码点)。
-⁸ egui 经原生 `Image` 组件(wgpu/glow 纹理)渲染图像像素:`image` crate 解码为 `egui::ColorImage` → `TextureHandle` 后缓存(切换样例时清空)。本地路径(含 `file://`)直接读文件;`http(s)` URL 由 `ureq` 在每帧渲染前同步拉取一次(样例图片少,与 Bevy / Slint 同构;失败者缓存为占位符不重试);`data:` URL 及解码失败为带标签占位符。Icon 同样经内嵌的 ~12 KB NotoEmoji 子集字体显示 emoji(与 Bevy 同名 `a2ui-icons.ttf`,映射表用 emoji 码点)。
+⁵ Iced 没有内置的 URL 图片加载器(其 `image` 组件只接受本地路径或内存字节),因此 `Image` 的 URL 由共享的 `a2ui-image` crate 统一解析:`http(s)` 后台用 `ureq` 拉取、`data:` URI(base64 / percent-decode)就地解码、本地路径(含 `file://`)直接读文件,字节交给 `Handle::from_bytes` 缓存(切换样例时清空)。`fit` 映射到 `ContentFit`。
+⁶ Slint 经原生 `Image` 组件 + `image` crate 解码渲染图像像素:URL 经共享 `a2ui-image` 解析——本地路径(含 `file://`)直接读文件,`http(s)` URL 由 `ureq` 拉取字节,`data:` URI(base64 / percent-decode)就地解码(切换样例时清空缓存);仅解码失败的图片为带标签占位符。
+⁷ Bevy 经原生 `ImageNode`(wgpu 纹理)渲染图像像素:URL 经共享 `a2ui-image` 解析、`image` crate 解码为 `bevy::image::Image` 后缓存 `Handle`(切换样例时清空)。本地路径(含 `file://`)直接读文件;`http(s)` URL 由 `ureq` 在 UI 线程同步拉取(样例图片少,与 Slint 同构);`data:` URI(base64 / percent-decode)就地解码;仅解码失败为带标签占位符。Icon 经内嵌的 ~12 KB NotoEmoji 子集字体显示 emoji(图标名映射表与 TUI / Iced 同名,Bevy 用 emoji 码点)。
+⁸ egui 经原生 `Image` 组件(wgpu/glow 纹理)渲染图像像素:URL 经共享 `a2ui-image` 解析、`image` crate 解码为 `egui::ColorImage` → `TextureHandle` 后缓存(切换样例时清空)。本地路径(含 `file://`)直接读文件;`http(s)` URL 由 `ureq` 在每帧渲染前同步拉取一次(样例图片少,与 Bevy / Slint 同构;失败者缓存为占位符不重试);`data:` URI(base64 / percent-decode)就地解码;仅解码失败为带标签占位符。Icon 同样经内嵌的 ~12 KB NotoEmoji 子集字体显示 emoji(与 Bevy 同名 `a2ui-icons.ttf`,映射表用 emoji 码点)。
 
 - **TUI 是参考实现**:18 组件全部完整渲染;图片默认开启(`ratatui-image`),音频需 `audio` 特性,视频始终为占位符。
 - **可交互输入控件(TextField / Slider / CheckBox / ChoicePicker / DateTimeInput)的「真输入」**:Slint、egui、Bevy、Iced、Dioxus 与 TUI 完整支持(Slint 用原生 `LineEdit` / `Slider` / `CheckBox` / `ComboBox` 控件,变化回调直接写回 data model,与 Iced / egui 同构)。
 - **Bevy 的可交互控件**(保留式 ECS reconciler + 原生 `bevy_ui_widgets`):ChoicePicker 由 reconciler 为每个选项 spawn 可点击行(单选 `●`/`○`、多选 `☑`/`☐`),点击经 marker 写回 data model;Tabs 有可点击 tab 栈 + 仅渲染激活面板(`activeTab` 绑定时写回 model,否则本地跟踪);DateTimeInput 复用 TextField 的 `TextInputNode` 绑定到 `value`;Icon 显示 emoji;Image 经 wgpu 纹理真实渲染。
 - **Iced 是映射最干净的后端**(无状态桥 / 无 diff),五个可交互控件全部原生 —— ChoicePicker 用原生 `pick_list`(单选)/ checkbox 组(多选),DateTimeInput 用绑定到 data model 的可编辑文本框,Tabs 有可点击 tab 栏(绑定的 `activeTab` 写回 data model;gallery 样例未绑定 `activeTab`,则选中的 tab 在本地跟踪,点击仍能切换面板);Icon 直接显示 emoji(映射表与 TUI 一致);**Image 也真实渲染**(本地路径即时解码,远程 URL 后台拉取 + 缓存,见脚注⁵);**Dioxus 架构最独特**(响应式 signals + WebView/CSS 渲染),且借 WebView 之力,Image / Video / AudioPlayer 均用原生 HTML 媒体元素真实渲染——**它是唯一覆盖全部 18 个 A2UI 组件的后端**(连 TUI 的 Video 都是占位符,终端无法播放视频)。
+
+## 已知构建限制(bevy + iced 不能同构建)
+
+各 GUI 后端是 **opt-in**(`cargo build -p a2ui-<backend> --features backend`)。**不要**用 `cargo build/check/test/clippy --workspace` 或 `--all-features` 把它们一起编译:`iced 0.14`(→ wgpu 27 → naga 27)与 `bevy 0.19`(→ bevy_shader → naga_oil 0.22)都解析到 `codespan-reporting 0.12.0`,但 feature 需求互斥——naga_oil **需要**其 `termcolor` feature,而 naga 27.0.3 只在 termcolor **关闭**时编译。Cargo 把两者统一到同一份 codespan 0.12.0(termcolor 被开启),naga 27 随即编译失败(`String: WriteColor not satisfied`)。
+
+每个后端单独构建/lint/测试都正常(`-p a2ui-<backend> --features backend`),只有 bevy + iced 出现在同一次 `cargo` 调用里才触发。仓库提供 `just` recipe 按后端逐个跑,避开此冲突:
+
+```
+just check    # 默认栈 + 每个 GUI 后端分别 type-check
+just clippy   # 同上,分别 clippy
+just test     # 同上,分别测试
+```
+
+默认栈(`cargo build`,无 `-p`)只编译 core / tui / gallery / umbrella,不受影响。这是上游生态冲突(待 iced 升级到 naga 29 后会自动消失),非本仓库代码问题。
 
 ## Slint 桌面后端
 

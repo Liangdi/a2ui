@@ -1,10 +1,21 @@
 [workspace]
 resolver = "3"
 members = ["crates/core", "crates/image", "crates/tui", "crates/gallery", "crates/a2ui", "crates/slint", "crates/slint-gallery", "crates/egui", "crates/egui-gallery", "crates/bevy", "crates/bevy-gallery", "crates/iced", "crates/iced-gallery", "crates/dioxus", "crates/dioxus-gallery"]
-# `cargo build` / `cargo run` with no `-p` only compile the ratatui stack. The
-# Slint backend (`a2ui-slint`) is opt-in: it pulls a sizeable GUI toolchain, so
-# it is excluded from the default build and built explicitly with
-# `cargo build -p a2ui-slint --features backend`.
+# `cargo build` / `cargo run` with no `-p` compile only the ratatui stack. Every
+# GUI backend (slint / egui / bevy / iced / dioxus) is opt-in — each pulls a
+# sizeable GUI toolchain, so build one explicitly, e.g.
+# `cargo build -p a2ui-bevy --features backend`.
+#
+# KNOWN LIMITATION — never build/lint/test the GUI backends together with a bare
+# `--workspace` / `--all-features`: `iced 0.14` (→ wgpu 27 → naga 27) and
+# `bevy 0.19` (→ bevy_shader → naga_oil 0.22) both resolve `codespan-reporting
+# 0.12.0` with conflicting feature needs — naga_oil *requires* its `termcolor`
+# feature, while naga 27.0.3 only compiles with it *off*. Cargo unifies them
+# onto one codespan 0.12.0 build with `termcolor` ON, and naga 27 then fails
+# (`String: WriteColor not satisfied`). Each backend builds cleanly on its own
+# (`-p a2ui-<backend> --features backend`); only resolving bevy + iced in the
+# same invocation triggers it. The `just clippy` / `just test` recipes below
+# iterate the default stack + each backend separately to avoid this.
 default-members = ["crates/core", "crates/tui", "crates/gallery", "crates/a2ui"]
 
 [workspace.package]
