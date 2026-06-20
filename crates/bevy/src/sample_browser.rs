@@ -76,7 +76,7 @@ pub fn update_browser(
         commands.spawn((
             Text::new(name.clone()),
             TextFont {
-                font_size: 13.0,
+                font_size: FontSize::Px(13.0),
                 ..default()
             },
             TextColor(if is_sel {

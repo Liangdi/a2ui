@@ -22,7 +22,7 @@ path = "src/main.rs"
 a2ui-base = { workspace = true }
 a2ui-tui = { workspace = true }
 ratatui = { workspace = true }
-ratatui-sci-fi = "0.1.2"
+ratatui-sci-fi = "0.2"
 crossterm = { workspace = true }
 uuid = { workspace = true }
 include_dir = { workspace = true }

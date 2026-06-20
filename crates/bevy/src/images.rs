@@ -17,7 +17,6 @@
 //! - **`data:` URL / decode failure / missing file**: `None` (placeholder stays,
 //!   not retried).
 
-use std::io::Read;
 use std::time::Duration;
 
 use bevy::asset::RenderAssetUsages;
@@ -86,10 +85,13 @@ pub fn load_images(mut state: NonSendMut<A2uiState>, mut assets: ResMut<Assets<I
 /// failure / unsupported scheme). Blocking — see the module docs.
 fn load_image_sync(url: &str, assets: &mut Assets<Image>) -> Option<Handle<Image>> {
     let bytes: Vec<u8> = if url.starts_with("http://") || url.starts_with("https://") {
-        let resp = ureq::get(url).timeout(Duration::from_secs(5)).call().ok()?;
-        let mut buf = Vec::new();
-        resp.into_reader().read_to_end(&mut buf).ok()?;
-        buf
+        // ureq 3: timeout moved from a per-request method to `Agent` config.
+        let agent: ureq::Agent = ureq::Agent::config_builder()
+            .timeout_global(Some(Duration::from_secs(5)))
+            .build()
+            .into();
+        let mut resp = agent.get(url).call().ok()?;
+        resp.body_mut().read_to_vec().ok()?
     } else if url.starts_with("data:") {
         // `data:` URLs are not decoded (placeholder), matching the Slint backend.
         return None;

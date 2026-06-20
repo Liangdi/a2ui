@@ -9,9 +9,9 @@
 //! 2. `apply_interactions_full` consumes the queue, mutates `A2uiState`.
 //! 3. `reconcile` diff/patches the entity tree to match the model.
 //!
-//! The plugin pulls in the widget plugins: `bevy_ui_widgets::UiWidgetsPlugins`
-//! (registers Button/Checkbox/Slider observers) and
-//! `bevy_ui_text_input::TextInputPlugin`. The host app supplies
+//! The plugin pulls in `bevy_ui_widgets::UiWidgetsPlugins`, which registers
+//! the Button/Checkbox/Slider observers **and** Bevy 0.19's first-party
+//! `EditableText` text-input plugin. The host app supplies
 //! `DefaultPlugins` (which carries `UiPlugin`, windowing, picking, render).
 
 use bevy::ecs::prelude::*;
@@ -30,19 +30,15 @@ pub struct A2uiPlugin;
 
 impl Plugin for A2uiPlugin {
     fn build(&self, app: &mut App) {
-        // Widget runtimes: the headless widget observers + the text-input widget.
+        // Widget runtimes: the headless widget observers (Button/Checkbox/Slider)
+        // + Bevy 0.19's first-party `EditableText` (registered by UiWidgetsPlugins).
         app.add_plugins(bevy::ui_widgets::UiWidgetsPlugins);
-        app.add_plugins(bevy_ui_text_input::TextInputPlugin);
 
         // Resources (NonSend — see `state.rs`: the processor is !Sync). The host
-        // inserts `A2uiState` via `insert_non_send_resource`; we init the queue
+        // inserts `A2uiState` via `insert_non_send`; we init the queue
         // here so the observers can write to it before `apply_interactions_full`.
-        if app
-            .world()
-            .get_non_send_resource::<PendingInteractions>()
-            .is_none()
-        {
-            app.insert_non_send_resource(PendingInteractions::default());
+        if app.world().get_non_send::<PendingInteractions>().is_none() {
+            app.insert_non_send(PendingInteractions::default());
         }
 
         // Interaction-collection observers — fire on widget events, push to the
@@ -93,9 +89,8 @@ fn setup_base_ui(
     // the A2UI icon glyph set). Stored on the state so every Icon's `TextFont`
     // can reference it.
     let icon_bytes = include_bytes!("../assets/fonts/a2ui-icons.ttf");
-    if let Ok(font) = Font::try_from_bytes(icon_bytes.to_vec()) {
-        state.icon_font = Some(fonts.add(font));
-    }
+    let font = Font::from_bytes(icon_bytes.to_vec());
+    state.icon_font = Some(fonts.add(font));
 
     // UI camera.
     commands.spawn(Camera2d);

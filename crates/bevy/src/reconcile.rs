@@ -3,7 +3,7 @@
 //!
 //! This is the pattern unique to the Bevy backend. egui rebuilds every frame;
 //! Slint rebuilds a flat array every frame. Bevy's interactive widgets
-//! (`bevy_ui_widgets` Button/Checkbox/Slider + `bevy_ui_text_input`) only keep
+//! (`bevy_ui_widgets` Button/Checkbox/Slider + first-party `EditableText`) only keep
 //! correct drag/focus/cursor state when their entities persist, so we:
 //!
 //! 1. **Plan** (read-only pass over the A2UI model): collect a `Vec<PlanNode>`
@@ -542,55 +542,6 @@ fn parse_choice_option(v: &JsonValue) -> Option<(String, String)> {
     Some((label, value))
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_tab_entry_literal_title() {
-        let v = serde_json::json!({ "title": "Overview", "child": "overview-col" });
-        let (title, child) = parse_tab_entry(&v).expect("valid entry");
-        assert_eq!(child, "overview-col");
-        assert_eq!(title, DynamicString::Literal("Overview".to_string()));
-    }
-
-    #[test]
-    fn parse_tab_entry_bound_title() {
-        let v = serde_json::json!({ "title": { "path": "/title" }, "child": "c1" });
-        let (title, child) = parse_tab_entry(&v).expect("valid entry");
-        assert_eq!(child, "c1");
-        assert!(matches!(title, DynamicString::Binding(_)));
-    }
-
-    #[test]
-    fn parse_tab_entry_missing_child_is_skipped() {
-        let v = serde_json::json!({ "title": "Overview" });
-        assert!(parse_tab_entry(&v).is_none());
-    }
-
-    #[test]
-    fn parse_choice_option_defaults_value_to_empty() {
-        let v = serde_json::json!({ "label": "Code" });
-        let (label, value) = parse_choice_option(&v).expect("valid option");
-        assert_eq!(label, "Code");
-        assert_eq!(value, "");
-    }
-
-    #[test]
-    fn parse_choice_option_full() {
-        let v = serde_json::json!({ "label": "Grand Ballroom", "value": "ballroom" });
-        let (label, value) = parse_choice_option(&v).expect("valid option");
-        assert_eq!(label, "Grand Ballroom");
-        assert_eq!(value, "ballroom");
-    }
-
-    #[test]
-    fn parse_choice_option_missing_label_is_skipped() {
-        let v = serde_json::json!({ "value": "ballroom" });
-        assert!(parse_choice_option(&v).is_none());
-    }
-}
-
 /// Resolve a ChoicePicker's selection as `Vec<String>` from its `value`
 /// `DynamicStringList`. Ported from the Iced backend's `resolve_choice_value`.
 fn resolve_choice_value(ctx: &ComponentContext, dsl: &DynamicStringList) -> Vec<String> {
@@ -704,12 +655,12 @@ pub fn reconcile(mut state: NonSendMut<A2uiState>, mut commands: Commands) {
             commands
                 .entity(entity)
                 .queue(move |mut entity: EntityWorldMut| {
-                    if let Some(mut q) = entity.get_mut::<bevy_ui_text_input::TextInputQueue>() {
-                        // `Paste` (unit variant) reads the clipboard; to set text
-                        // directly we use an `Edit::Paste(String)` action.
-                        q.add(bevy_ui_text_input::actions::TextInputAction::Edit(
-                            bevy_ui_text_input::actions::TextInputEdit::Paste(text),
-                        ));
+                    // Seed the resolved value directly into the `EditableText`
+                    // editor (Bevy 0.19's first-party text input). `set_text`
+                    // replaces the buffer without touching the widget's other
+                    // config (e.g. `allow_newlines: false` for single-line).
+                    if let Some(mut et) = entity.get_mut::<bevy::text::EditableText>() {
+                        et.editor_mut().set_text(&text);
                     }
                 });
         }
@@ -881,5 +832,54 @@ fn apply_kind(mut cmd: EntityCommands, node: &PlanNode, icon_font: Option<&Handl
             // Unknown — a placeholder label + recurse (children are planned).
             apply_flex_column(cmd);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_tab_entry_literal_title() {
+        let v = serde_json::json!({ "title": "Overview", "child": "overview-col" });
+        let (title, child) = parse_tab_entry(&v).expect("valid entry");
+        assert_eq!(child, "overview-col");
+        assert_eq!(title, DynamicString::Literal("Overview".to_string()));
+    }
+
+    #[test]
+    fn parse_tab_entry_bound_title() {
+        let v = serde_json::json!({ "title": { "path": "/title" }, "child": "c1" });
+        let (title, child) = parse_tab_entry(&v).expect("valid entry");
+        assert_eq!(child, "c1");
+        assert!(matches!(title, DynamicString::Binding(_)));
+    }
+
+    #[test]
+    fn parse_tab_entry_missing_child_is_skipped() {
+        let v = serde_json::json!({ "title": "Overview" });
+        assert!(parse_tab_entry(&v).is_none());
+    }
+
+    #[test]
+    fn parse_choice_option_defaults_value_to_empty() {
+        let v = serde_json::json!({ "label": "Code" });
+        let (label, value) = parse_choice_option(&v).expect("valid option");
+        assert_eq!(label, "Code");
+        assert_eq!(value, "");
+    }
+
+    #[test]
+    fn parse_choice_option_full() {
+        let v = serde_json::json!({ "label": "Grand Ballroom", "value": "ballroom" });
+        let (label, value) = parse_choice_option(&v).expect("valid option");
+        assert_eq!(label, "Grand Ballroom");
+        assert_eq!(value, "ballroom");
+    }
+
+    #[test]
+    fn parse_choice_option_missing_label_is_skipped() {
+        let v = serde_json::json!({ "value": "ballroom" });
+        assert!(parse_choice_option(&v).is_none());
     }
 }

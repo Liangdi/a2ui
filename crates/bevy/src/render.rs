@@ -5,7 +5,7 @@
 //! difference: egui rebuilds widgets every frame (immediate mode), while Bevy
 //! keeps entities alive across frames. So each `apply_*` fn here is an
 //! **idempotent updater** — given an existing entity, it re-applies the state
-//! components (`Text`, `Checked`, `SliderValue`, `TextInputBuffer`, styling) to
+//! components (`Text`, `Checked`, `SliderValue`, `EditableText`, styling) to
 //! match the resolved values. The reconciler ([`crate::reconcile`]) owns
 //! spawn/despawn and calls these.
 //!
@@ -21,9 +21,9 @@
 
 use bevy::color::palettes::tailwind::{BLUE_600, GRAY_200, GRAY_400, GRAY_800};
 use bevy::prelude::*;
+use bevy::text::EditableText;
 use bevy::ui::Checked;
 use bevy::ui_widgets::{Button, Checkbox, Slider, SliderRange, SliderValue};
-use bevy_ui_text_input::{TextInputMode, TextInputNode};
 
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::model::component_model::ComponentModel;
@@ -238,7 +238,7 @@ pub fn apply_text(mut cmd: EntityCommands, fields: &NodeFields) {
     cmd.insert((
         Text::new(fields.text.clone()),
         TextFont {
-            font_size,
+            font_size: FontSize::Px(font_size),
             ..default()
         },
         TextColor(Color::from(GRAY_800)),
@@ -256,8 +256,8 @@ pub fn apply_icon(mut cmd: EntityCommands, fields: &NodeFields, icon_font: &Hand
     cmd.insert((
         Text::new(glyph),
         TextFont {
-            font: icon_font.clone(),
-            font_size: 18.0,
+            font: icon_font.clone().into(),
+            font_size: FontSize::Px(18.0),
             ..default()
         },
         TextColor(Color::from(GRAY_800)),
@@ -308,8 +308,8 @@ fn map_icon_emoji(name: &str) -> String {
     glyph.to_string()
 }
 
-/// DateTimeInput — a native, editable `TextInputNode` bound to `value` (reusing
-/// the TextField chrome). Bevy 0.18 ships no calendar/clock widget, so the value
+/// DateTimeInput — a native, editable `EditableText` bound to `value` (reusing
+/// the TextField chrome). Bevy ships no calendar/clock widget, so the value
 /// is an editable ISO text field: the user types the ISO string and edits write
 /// back to the data model — a genuinely interactive control, not the read-only
 /// label this backend showed before. `enableDate` / `enableTime` are not exposed
@@ -317,10 +317,8 @@ fn map_icon_emoji(name: &str) -> String {
 /// field), but the resolved value is seeded on first spawn like a TextField.
 pub fn apply_date_time_input(mut cmd: EntityCommands, _fields: &NodeFields, focused: bool) {
     cmd.insert((
-        TextInputNode {
-            mode: TextInputMode::SingleLine,
-            clear_on_submit: false,
-            unfocus_on_submit: false,
+        EditableText {
+            allow_newlines: false,
             ..default()
         },
         Node {
@@ -382,7 +380,7 @@ pub fn apply_image(mut cmd: EntityCommands, fields: &NodeFields, handle: Option<
                 },
                 Text::new(format!("[🖼 {}]", label)),
                 TextFont {
-                    font_size: 14.0,
+                    font_size: FontSize::Px(14.0),
                     ..default()
                 },
                 TextColor(Color::from(GRAY_400)),
@@ -398,7 +396,7 @@ pub fn apply_media_placeholder(mut cmd: EntityCommands, kind: &str, fields: &Nod
     cmd.insert((
         Text::new(format!("[{kind}: {}]", fields.image_url)),
         TextFont {
-            font_size: 14.0,
+            font_size: FontSize::Px(14.0),
             ..default()
         },
         TextColor(Color::from(GRAY_400)),
@@ -441,7 +439,7 @@ pub fn apply_tab_title(mut cmd: EntityCommands, fields: &NodeFields, active: boo
         bg,
         Text::new(fields.text.clone()),
         TextFont {
-            font_size: 14.0,
+            font_size: FontSize::Px(14.0),
             ..default()
         },
         color,
@@ -468,7 +466,7 @@ pub fn apply_choice_option(mut cmd: EntityCommands, fields: &NodeFields, selecte
         },
         Text::new(fields.text.clone()),
         TextFont {
-            font_size: 14.0,
+            font_size: FontSize::Px(14.0),
             ..default()
         },
         color,
@@ -541,7 +539,7 @@ pub fn apply_modal_title(mut cmd: EntityCommands, fields: &NodeFields) {
     cmd.insert((
         Text::new(fields.text.clone()),
         TextFont {
-            font_size: 16.0,
+            font_size: FontSize::Px(16.0),
             ..default()
         },
         TextColor(Color::from(GRAY_800)),
@@ -561,7 +559,7 @@ pub fn apply_modal_close(mut cmd: EntityCommands, fields: &NodeFields) {
         BackgroundColor(Color::from(GRAY_400)),
         Text::new(fields.text.clone()),
         TextFont {
-            font_size: 14.0,
+            font_size: FontSize::Px(14.0),
             ..default()
         },
         TextColor(Color::from(GRAY_800)),
@@ -637,16 +635,14 @@ pub fn apply_slider(mut cmd: EntityCommands, fields: &NodeFields) {
     ));
 }
 
-/// TextField — `bevy_ui_text_input::TextInputNode` (single-line). The buffer is
-/// seeded from the resolved data-model value on first spawn (via the widget's
-/// own `TextInputQueue`, which its `process_text_input_queues` system applies).
+/// TextField — Bevy's first-party `EditableText` (single-line). The buffer is
+/// seeded from the resolved data-model value on first spawn (the reconciler
+/// writes it directly via `EditableText::editor_mut().set_text`).
 /// See [`crate::interaction::collect_text_field_changes`] for the write-back.
 pub fn apply_text_field(mut cmd: EntityCommands, fields: &NodeFields, focused: bool) {
     cmd.insert((
-        TextInputNode {
-            mode: TextInputMode::SingleLine,
-            clear_on_submit: false,
-            unfocus_on_submit: false,
+        EditableText {
+            allow_newlines: false,
             ..default()
         },
         Node {
@@ -664,8 +660,8 @@ pub fn apply_text_field(mut cmd: EntityCommands, fields: &NodeFields, focused: b
         }),
     ));
     let _ = (fields.label.clone(), focused);
-    // The initial buffer seed happens once at spawn, in the reconciler, via a
-    // queued `Paste` action on the widget's own `TextInputQueue`.
+    // The initial buffer seed happens once at spawn, in the reconciler, via
+    // `EditableText::editor_mut().set_text` (see `reconcile::apply_node`).
 }
 
 // ===========================================================================

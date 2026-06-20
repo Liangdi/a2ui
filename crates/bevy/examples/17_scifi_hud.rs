@@ -22,7 +22,7 @@
 //! `TextColor`) via queries — no per-frame rebuild, no `EditBuffers` bridge.
 //! This is exactly the identity-preserving pattern the `a2ui-bevy` reconciler
 //! itself uses; here we drive it by hand so the example depends only on `bevy`
-//! + the framework-neutral `a2ui-base` processor. The only "data source" is the
+//! and the framework-neutral `a2ui-base` processor. The only "data source" is the
 //! same as the other versions: a `tick` counter that computes a fresh telemetry
 //! snapshot and ships it with a single `updateDataModel` message.
 //!
@@ -206,7 +206,7 @@ fn main() {
         }),
         ..default()
     }))
-    .insert_non_send_resource(HudState::new())
+    .insert_non_send(HudState::new())
     .insert_resource(TickTimer(Timer::new(
         Duration::from_millis(80),
         TimerMode::Repeating,
@@ -304,14 +304,14 @@ fn spawn_hud(mut commands: Commands) {
             .with_children(|h| {
                 h.spawn((
                     Text::new("A2UI // TACTICAL HUD"),
-                    TextFont { font_size: 18.0, ..default() },
+                    TextFont { font_size: FontSize::Px(18.0), ..default() },
                     TextColor(CYAN),
                 ));
                 // Spacer pushes the status to the right edge.
                 h.spawn(Node { flex_grow: 1.0, ..default() });
                 h.spawn((
                     Text::new(""),
-                    TextFont { font_size: 14.0, ..default() },
+                    TextFont { font_size: FontSize::Px(14.0), ..default() },
                     TextColor(GREEN),
                     StatusLabel,
                 ));
@@ -343,7 +343,7 @@ fn spawn_hud(mut commands: Commands) {
                 .with_children(|p| {
                     p.spawn((
                         Text::new("[ TELEMETRY ]"),
-                        TextFont { font_size: 13.0, ..default() },
+                        TextFont { font_size: FontSize::Px(13.0), ..default() },
                         TextColor(CYAN),
                     ));
                     for (i, (label, _key)) in GAUGE_DEFS.iter().enumerate() {
@@ -358,7 +358,7 @@ fn spawn_hud(mut commands: Commands) {
                         .with_children(|row| {
                             row.spawn((
                                 Text::new(format!("{label:<4}")),
-                                TextFont { font_size: 14.0, ..default() },
+                                TextFont { font_size: FontSize::Px(14.0), ..default() },
                                 TextColor(DIM),
                                 Node { width: Val::Px(46.0), ..default() },
                             ));
@@ -386,7 +386,7 @@ fn spawn_hud(mut commands: Commands) {
                             });
                             row.spawn((
                                 Text::new("   0%"),
-                                TextFont { font_size: 14.0, ..default() },
+                                TextFont { font_size: FontSize::Px(14.0), ..default() },
                                 TextColor(TEXT),
                                 Node { width: Val::Px(52.0), ..default() },
                                 GaugeValue(i),
@@ -412,12 +412,12 @@ fn spawn_hud(mut commands: Commands) {
                 .with_children(|p| {
                     p.spawn((
                         Text::new("[ SCANNER ]"),
-                        TextFont { font_size: 13.0, ..default() },
+                        TextFont { font_size: FontSize::Px(13.0), ..default() },
                         TextColor(CYAN),
                     ));
                     p.spawn((
                         Text::new(""),
-                        TextFont { font_size: 13.0, ..default() },
+                        TextFont { font_size: FontSize::Px(13.0), ..default() },
                         TextColor(CYAN),
                         Node { flex_grow: 1.0, ..default() },
                         RadarGrid,
@@ -432,24 +432,24 @@ fn spawn_hud(mut commands: Commands) {
                     .with_children(|r| {
                         r.spawn((
                             Text::new("BEARING"),
-                            TextFont { font_size: 10.0, ..default() },
+                            TextFont { font_size: FontSize::Px(10.0), ..default() },
                             TextColor(DIM),
                         ));
                         r.spawn((
                             Text::new("  0.0"),
-                            TextFont { font_size: 13.0, ..default() },
+                            TextFont { font_size: FontSize::Px(13.0), ..default() },
                             TextColor(TEXT),
                             ReadoutField(Readout::Bearing),
                         ));
                         r.spawn(Node { width: Val::Px(16.0), ..default() });
                         r.spawn((
                             Text::new("RANGE"),
-                            TextFont { font_size: 10.0, ..default() },
+                            TextFont { font_size: FontSize::Px(10.0), ..default() },
                             TextColor(DIM),
                         ));
                         r.spawn((
                             Text::new("    0m"),
-                            TextFont { font_size: 13.0, ..default() },
+                            TextFont { font_size: FontSize::Px(13.0), ..default() },
                             TextColor(TEXT),
                             ReadoutField(Readout::Range),
                         ));
@@ -472,13 +472,13 @@ fn spawn_hud(mut commands: Commands) {
                 .with_children(|p| {
                     p.spawn((
                         Text::new("[ EVENT LOG ]"),
-                        TextFont { font_size: 13.0, ..default() },
+                        TextFont { font_size: FontSize::Px(13.0), ..default() },
                         TextColor(DIM),
                     ));
                     for i in 0..6 {
                         p.spawn((
                             Text::new(""),
-                            TextFont { font_size: 13.0, ..default() },
+                            TextFont { font_size: FontSize::Px(13.0), ..default() },
                             TextColor(DIM),
                             EventLine(i),
                         ));
@@ -489,7 +489,7 @@ fn spawn_hud(mut commands: Commands) {
             // ── Footer ────────────────────────────────────────────────────
             hud.spawn((
                 Text::new("[ q/Esc · window-close ] exit   ·   a2ui-driven hud   ·   data flows via updateDataModel"),
-                TextFont { font_size: 11.0, ..default() },
+                TextFont { font_size: FontSize::Px(11.0), ..default() },
                 TextColor(DIM),
             ));
         });

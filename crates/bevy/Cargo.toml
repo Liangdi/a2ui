@@ -19,15 +19,13 @@ default = []
 # crate decodes raster `Image` components to Bevy textures; `ureq` fetches
 # remote `http(s)` image URLs (blocking, on the UI thread — matching the Slint
 # backend; the gallery samples carry only a handful of small images).
-backend = ["dep:bevy", "dep:bevy_ui_text_input", "dep:image", "dep:ureq"]
+backend = ["dep:bevy", "dep:image", "dep:ureq"]
 
 [dependencies]
 a2ui-base = { workspace = true }
 serde_json = { workspace = true }
 # Optional: the Bevy runtime (UI stack only — see the workspace dep comment).
 bevy = { workspace = true, optional = true }
-# Optional: external text-input widget (Bevy 0.18 has no first-party one).
-bevy_ui_text_input = { workspace = true, optional = true }
 # Optional: raster image decoding for the `Image` component (PNG / JPEG / … →
 # Bevy `bevy::image::Image`). Same version line Bevy 0.18 uses internally.
 image = { workspace = true, optional = true }

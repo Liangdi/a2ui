@@ -186,7 +186,7 @@ fn main() {
             }),
             ..default()
         }))
-        .insert_non_send_resource(ChatState::new())
+        .insert_non_send(ChatState::new())
         .insert_resource(StreamTimer(Timer::new(
             Duration::from_millis(100),
             TimerMode::Repeating,
@@ -234,7 +234,7 @@ fn spawn_layout(mut commands: Commands) {
             root.spawn((
                 Text::new("🤖 A2UI Agent Chat"),
                 TextFont {
-                    font_size: 18.0,
+                    font_size: FontSize::Px(18.0),
                     ..default()
                 },
                 TextColor(CYAN),
@@ -264,7 +264,7 @@ fn spawn_layout(mut commands: Commands) {
             root.spawn((
                 Text::new(""),
                 TextFont {
-                    font_size: 12.0,
+                    font_size: FontSize::Px(12.0),
                     ..default()
                 },
                 TextColor(DIM),
@@ -286,7 +286,7 @@ fn spawn_layout(mut commands: Commands) {
                 bar.spawn((
                     Text::new("> "),
                     TextFont {
-                        font_size: 16.0,
+                        font_size: FontSize::Px(16.0),
                         ..default()
                     },
                     TextColor(CYAN),
@@ -513,7 +513,7 @@ fn rebuild_ui(
             parent.spawn((
                 Text::new("🤖 AI is thinking …"),
                 TextFont {
-                    font_size: 14.0,
+                    font_size: FontSize::Px(14.0),
                     ..default()
                 },
                 TextColor(DIM),
@@ -537,7 +537,7 @@ fn spawn_user_entry(parent: &mut RelatedSpawnerCommands<ChildOf>, text: &str) {
     parent.spawn((
         Text::new(format!("👤 You:  {text}")),
         TextFont {
-            font_size: 15.0,
+            font_size: FontSize::Px(15.0),
             ..default()
         },
         TextColor(CYAN),
@@ -557,7 +557,7 @@ fn spawn_ai_entry(
         parent.spawn((
             Text::new(format!("🤖 [missing surface: {surface_id}]")),
             TextFont {
-                font_size: 14.0,
+                font_size: FontSize::Px(14.0),
                 ..default()
             },
             TextColor(DIM),
@@ -570,7 +570,7 @@ fn spawn_ai_entry(
         parent.spawn((
             Text::new("🤖 …"),
             TextFont {
-                font_size: 14.0,
+                font_size: FontSize::Px(14.0),
                 ..default()
             },
             TextColor(DIM),
@@ -690,7 +690,7 @@ fn build_subtree(
             parent.spawn((
                 Text::new(text),
                 TextFont {
-                    font_size: size,
+                    font_size: FontSize::Px(size),
                     ..default()
                 },
                 TextColor(color),
@@ -712,7 +712,7 @@ fn build_subtree(
             parent.spawn((
                 Text::new(format!("[{kind}]")),
                 TextFont {
-                    font_size: 13.0,
+                    font_size: FontSize::Px(13.0),
                     ..default()
                 },
                 TextColor(DIM),

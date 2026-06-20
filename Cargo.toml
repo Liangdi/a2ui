@@ -39,7 +39,7 @@ percent-encoding = "2.3"
 # choice). `dirs` resolves the platform config dir; `toml` is the editable
 # format. Both already resolve transitively, so this just promotes them.
 dirs = "6"
-toml = "0.8"
+toml = "1.1"
 # Embed the A2UI specification tree into the binary at compile time so the
 # gallery is self-contained and distributable (no on-disk spec dir needed).
 include_dir = "0.7"
@@ -71,7 +71,7 @@ eframe = "0.34"
 # render path) — skipping the heavy 3D/audio/subset that `bevy/default` would
 # drag in. `ui_bevy_render` is what actually wires the wgpu render backend for
 # UI nodes; the windowing backend comes from `bevy_winit`.
-bevy = { version = "0.18", default-features = false, features = [
+bevy = { version = "0.19", default-features = false, features = [
     "bevy_ui",
     "bevy_text",
     "bevy_winit",
@@ -83,7 +83,7 @@ bevy = { version = "0.18", default-features = false, features = [
     # but we set `default-features = false`).
     "ui_picking",
     "ui_bevy_render",
-    "experimental_bevy_ui_widgets",
+    "bevy_ui_widgets",
     # Bundle the built-in FiraMono-subset.ttf as the default font. `default_font`
     # is on in `bevy/default`, but we set `default-features = false`, so without
     # this `TextFont::default()` resolves to no font and **no text renders** —
@@ -96,11 +96,6 @@ bevy = { version = "0.18", default-features = false, features = [
     "wayland",
     "x11",
 ] }
-# External text-input widget (Bevy 0.18 has no first-party TextInput). Built on
-# cosmic_text; the entity persists across frames so the reconciler keeps cursor
-# + edit state alive — no egui-style EditBuffers map is needed. 0.7 is the
-# latest line compatible with bevy 0.18 as of 2026-06.
-bevy_ui_text_input = "0.7"
 # Iced Elm-architecture GUI runtime for the `a2ui-iced` backend. The fifth
 # renderer. Iced is the cleanest A2UI mapping of the bunch: it is Elm
 # (immutable `view(&state)` + `update(&mut state, msg)`), so — unlike egui's
@@ -125,8 +120,9 @@ iced = { version = "0.14", default-features = false, features = [
 # remote `Image` component URLs (the gallery samples all reference `https://`
 # images). Sync (no async runtime) so a fetch runs as a single blocking call
 # inside an Iced `Task::perform` future on the `thread-pool` executor — no
-# tokio/smol mixed in. Pinned to the 2.x line.
-ureq = { version = "2.12", features = ["tls"] }
+# tokio/smol mixed in. ureq 3.x: TLS via the `rustls` feature; per-request
+# `.timeout()` moved to the `Agent` config (see each backend's fetch helper).
+ureq = { version = "3", features = ["rustls"] }
 # Dioxus reactive RSX GUI runtime for the `a2ui-dioxus` backend. The sixth
 # renderer — and architecturally the most distinct of the bunch. Dioxus is a
 # *reactive-signals* framework whose desktop target renders to a system WebView

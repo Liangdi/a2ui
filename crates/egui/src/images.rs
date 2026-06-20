@@ -18,7 +18,6 @@
 //! - **`data:` URL / decode failure / missing file**: `None` (placeholder stays,
 //!   not retried), matching the Slint/Bevy backends.
 
-use std::io::Read;
 use std::time::Duration;
 
 use egui::ColorImage;
@@ -35,10 +34,15 @@ pub fn decode_url(url: &str) -> Option<ColorImage> {
 /// the Slint/Bevy backends).
 fn fetch_bytes(url: &str) -> Option<Vec<u8>> {
     if url.starts_with("http://") || url.starts_with("https://") {
-        let resp = ureq::get(url).timeout(Duration::from_secs(5)).call().ok()?;
-        let mut buf = Vec::new();
-        resp.into_reader().read_to_end(&mut buf).ok()?;
-        Some(buf)
+        // ureq 3: per-request `.timeout()` is gone — timeouts live on the
+        // `Agent` config. Build a short-lived agent per fetch (these are
+        // low-volume gallery image downloads, not a hot path).
+        let agent: ureq::Agent = ureq::Agent::config_builder()
+            .timeout_global(Some(Duration::from_secs(5)))
+            .build()
+            .into();
+        let mut resp = agent.get(url).call().ok()?;
+        resp.body_mut().read_to_vec().ok()
     } else if url.starts_with("data:") {
         None
     } else {

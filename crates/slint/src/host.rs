@@ -625,14 +625,13 @@ fn decode_image(url: &str) -> Option<slint::Image> {
 
 /// Fetch a remote url's bytes over HTTP (blocking; 10 s timeout).
 fn fetch_bytes(url: &str) -> Option<Vec<u8>> {
-    use std::io::Read;
-    let resp = ureq::get(url)
-        .timeout(std::time::Duration::from_secs(10))
-        .call()
-        .ok()?;
-    let mut bytes = Vec::new();
-    resp.into_reader().read_to_end(&mut bytes).ok()?;
-    Some(bytes)
+    // ureq 3: timeout moved from a per-request method to `Agent` config.
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_secs(10)))
+        .build()
+        .into();
+    let mut resp = agent.get(url).call().ok()?;
+    resp.body_mut().read_to_vec().ok()
 }
 
 /// Decode in-memory image bytes (PNG / JPEG / …) into a `slint::Image`.

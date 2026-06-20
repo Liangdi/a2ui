@@ -11,10 +11,10 @@
 //! [`PendingInteractions`] resource (accessed through `DeferredWorld`, the same
 //! shape `bevy_ui_widgets`' own observers use, e.g. `slider_on_insert`).
 //!
-//! TextField is different: its value lives in a `TextInputBuffer` the widget
-//! owns, and the binding path comes from the A2UI model — neither the widget
-//! event nor the marker carries the path. So a **system**
-//! ([`collect_text_field_changes`]) polls each `TextInputNode`, diffs its text
+//! TextField is different: its value lives in the `EditableText` buffer the
+//! widget owns, and the binding path comes from the A2UI model — neither the
+//! widget event nor the marker carries the path. So a **system**
+//! ([`collect_text_field_changes`]) polls each `EditableText`, diffs its text
 //! against the resolved data-model value, and pushes a `DataUpdate` when they
 //! diverge and the widget is not focused (the seed guard — see
 //! [`crate::render`] for the seed side).
@@ -29,8 +29,8 @@
 
 use bevy::ecs::{observer::On, prelude::*, world::DeferredWorld};
 use bevy::input_focus::InputFocus;
+use bevy::text::EditableText;
 use bevy::ui_widgets::{Activate, ValueChange};
-use bevy_ui_text_input::TextInputBuffer;
 use serde_json::Value;
 
 use a2ui_base::components::dispatch_event;
@@ -100,7 +100,7 @@ pub fn collect_button_activate(trigger: On<Activate>, mut world: DeferredWorld) 
         let interaction = PendingInteraction::ModalClose {
             modal_id: dismiss.modal_id.clone(),
         };
-        if let Some(mut q) = world.get_non_send_resource_mut::<PendingInteractions>() {
+        if let Some(mut q) = world.get_non_send_mut::<PendingInteractions>() {
             q.0.push(interaction);
         }
         return;
@@ -113,7 +113,7 @@ pub fn collect_button_activate(trigger: On<Activate>, mut world: DeferredWorld) 
             index: tab.index,
             active_path: tab.active_path.clone(),
         };
-        if let Some(mut q) = world.get_non_send_resource_mut::<PendingInteractions>() {
+        if let Some(mut q) = world.get_non_send_mut::<PendingInteractions>() {
             q.0.push(interaction);
         }
         return;
@@ -133,7 +133,7 @@ pub fn collect_button_activate(trigger: On<Activate>, mut world: DeferredWorld) 
                 value: choice.value.clone(),
             }
         };
-        if let Some(mut q) = world.get_non_send_resource_mut::<PendingInteractions>() {
+        if let Some(mut q) = world.get_non_send_mut::<PendingInteractions>() {
             q.0.push(interaction);
         }
         return;
@@ -143,7 +143,7 @@ pub fn collect_button_activate(trigger: On<Activate>, mut world: DeferredWorld) 
     let Some(node) = ent.get::<A2uiNode>().map(|n| n.id.clone()) else {
         return;
     };
-    if let Some(mut q) = world.get_non_send_resource_mut::<PendingInteractions>() {
+    if let Some(mut q) = world.get_non_send_mut::<PendingInteractions>() {
         q.0.push(PendingInteraction::ButtonActivate { component_id: node });
     }
 }
@@ -164,7 +164,7 @@ pub fn collect_checkbox_change(trigger: On<ValueChange<bool>>, mut world: Deferr
         None => return,
     };
     let value = trigger.event().value;
-    if let Some(mut q) = world.get_non_send_resource_mut::<PendingInteractions>() {
+    if let Some(mut q) = world.get_non_send_mut::<PendingInteractions>() {
         // Defer path resolution to apply_interactions (it has the A2UI model).
         q.0.push(PendingInteraction::DataUpdate {
             path: format!("@checkbox:{component_id}"),
@@ -181,7 +181,7 @@ pub fn collect_slider_change(trigger: On<ValueChange<f32>>, mut world: DeferredW
         None => return,
     };
     let value = trigger.event().value as f64;
-    if let Some(mut q) = world.get_non_send_resource_mut::<PendingInteractions>() {
+    if let Some(mut q) = world.get_non_send_mut::<PendingInteractions>() {
         q.0.push(PendingInteraction::DataUpdate {
             path: format!("@slider:{component_id}"),
             value: serde_json::json!(value),
@@ -189,7 +189,7 @@ pub fn collect_slider_change(trigger: On<ValueChange<f32>>, mut world: DeferredW
     }
 }
 
-/// TextField write-back: poll each `TextInputNode`, diff its text against the
+/// TextField write-back: poll each `EditableText`, diff its text against the
 /// resolved data-model value, and push a `DataUpdate` when they diverge. The
 /// widget is always mirrored from the data model on the seed side, and this
 /// write-back keeps the model tracking the live buffer. The seed guard (don't
@@ -197,7 +197,7 @@ pub fn collect_slider_change(trigger: On<ValueChange<f32>>, mut world: DeferredW
 /// The binding path comes from the A2UI model, recovered via the `A2uiNode`
 /// marker.
 pub fn collect_text_field_changes(
-    nodes: Query<(Entity, &A2uiNode, &TextInputBuffer)>,
+    nodes: Query<(Entity, &A2uiNode, &EditableText)>,
     focus: Res<InputFocus>,
     state: NonSend<A2uiState>,
     mut pending: NonSendMut<PendingInteractions>,
@@ -207,7 +207,7 @@ pub fn collect_text_field_changes(
     };
     let components = surface.components.borrow();
     let data_model = surface.data_model.borrow();
-    let focused_entity = focus.0;
+    let focused_entity = focus.get();
 
     for (entity, node, buffer) in nodes.iter() {
         let Some(model) = components.get(&node.id) else {
@@ -223,7 +223,7 @@ pub fn collect_text_field_changes(
         };
 
         let path = data_context_resolve_pointer(&data_model, &b.path);
-        let current = buffer.get_text();
+        let current = buffer.value().to_string();
         let resolved = data_model
             .get(&path)
             .and_then(value_to_string)

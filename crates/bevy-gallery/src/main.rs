@@ -129,7 +129,7 @@ fn main() -> ExitCode {
         }),
         ..default()
     }))
-    .insert_non_send_resource(state)
+    .insert_non_send(state)
     .add_plugins(A2uiPlugin);
 
     // Optional self-screenshot mode (compositor-independent, like the sci-fi HUD

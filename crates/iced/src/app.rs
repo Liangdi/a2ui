@@ -22,7 +22,6 @@
 //! [`update`]: IcedApp::update
 
 use std::collections::{HashMap, HashSet};
-use std::io::Read;
 use std::time::Duration;
 
 use a2ui_base::catalog::function_api::FunctionImplementation;
@@ -600,12 +599,13 @@ impl IcedApp {
 /// failure (network or read) returns `None` so the caller can record it as a
 /// failed attempt and keep the placeholder.
 fn fetch_handle(url: &str) -> Option<image::Handle> {
-    let resp = ureq::get(url)
-        .timeout(Duration::from_secs(10))
-        .call()
-        .ok()?;
-    let mut bytes = Vec::new();
-    resp.into_reader().read_to_end(&mut bytes).ok()?;
+    // ureq 3: timeout moved from a per-request method to `Agent` config.
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .timeout_global(Some(Duration::from_secs(10)))
+        .build()
+        .into();
+    let mut resp = agent.get(url).call().ok()?;
+    let bytes = resp.body_mut().read_to_vec().ok()?;
     // `Handle::from_bytes` does no decoding up front — the renderer decodes
     // lazily — so an undecodable payload surfaces later as a blank render,
     // not a panic.

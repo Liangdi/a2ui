@@ -13,7 +13,7 @@
 //! - **egui** is immediate-mode and recurses a fresh tree each frame, carrying
 //!   widget state in an [`egui`-style] `EditBuffers` map keyed by component id.
 //! - **bevy** is ECS retained-mode. Bevy's interactive widgets (`bevy_ui_widgets`
-//!   Button/Checkbox/Slider and the external `bevy_ui_text_input`) only keep
+//!   Button/Checkbox/Slider and the first-party `EditableText`) only keep
 //!   correct drag/hover/focus/cursor state when their **entity identity is
 //!   preserved across frames** — a per-frame rebuild (Slint's approach) would
 //!   fling sliders and drop cursors every frame. So this backend introduces a
@@ -35,7 +35,7 @@
 //!    properties each frame.
 //!
 //! Everything lives behind the `backend` cargo feature, which pulls the Bevy +
-//! `bevy_ui_text_input` runtimes. Without it this crate is an empty shell
+//! `bevy` (incl. its first-party `EditableText`) runtimes. Without it this crate is an empty shell
 //! (compiles with no deps beyond `a2ui-base`), keeping the workspace's default
 //! build light.
 

@@ -19,5 +19,4 @@ a2ui-gallery = { workspace = true }      # sample_loader
 # Without it `A2uiPlugin` has no runtime, so it is required for this binary.
 a2ui-bevy = { workspace = true, features = ["backend"] }
 bevy = { workspace = true }
-bevy_ui_text_input = { workspace = true }
 serde_json = { workspace = true }
