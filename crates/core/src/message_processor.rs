@@ -629,7 +629,7 @@ mod tests {
             ]
         }"#;
 
-        let (name, desc, messages) = MessageProcessor::load_sample(sample).unwrap();
+        let (name, _desc, messages) = MessageProcessor::load_sample(sample).unwrap();
         assert_eq!(name, "Simple Text");
         assert_eq!(messages.len(), 2);
 

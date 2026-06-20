@@ -64,9 +64,10 @@ struct HostState {
     /// flip a Modal's `isOpen`, so trigger activations are recorded here and
     /// surfaced to `build_nodes` as the open state. Cleared on sample switch.
     open_modals: RefCell<HashSet<String>>,
-    /// Decoded raster cache for `Image` nodes (url → `slint::Image`). Local file
-    /// paths are decoded up front on sample load; remote/data URLs stay absent
-    /// (those images render as placeholders). Cleared on sample switch.
+    /// Decoded raster cache for `Image` nodes (url → `slint::Image`). Each URL
+    /// is resolved + decoded up front on sample load (local path / `file://` /
+    /// `data:` / `http(s)` — via `a2ui-image`); URLs that fail to resolve render
+    /// as placeholders. Cleared on sample switch.
     image_cache: RefCell<HashMap<String, slint::Image>>,
 }
 
@@ -601,10 +602,10 @@ fn current_selection(model: &ComponentModel, ctx: &ComponentContext) -> Vec<Stri
 
 /// Decode an image url into a `slint::Image`.
 ///
-/// - local path / `file://` → read the file;
-/// - `http(s)` → fetch the bytes with `ureq` (10 s timeout, mirroring the iced
-///   backend's `fetch_handle`);
-/// - `data:` / unreadable / unsupported → `None` (renders as a placeholder).
+/// Source resolution (`http(s)` / `data:` / `file://` / local path) and raster
+/// decode are delegated to the shared `a2ui-image` crate; this wraps the
+/// resulting RGBA into a `slint::Image`. Unreadable / unsupported payloads →
+/// `None` (renders as a placeholder).
 ///
 /// Fetching runs synchronously on the UI thread (Slint is single-threaded;
 /// `Rc`/`RefCell` state can't cross `invoke_from_event_loop`'s `Send` closure),
@@ -612,35 +613,11 @@ fn current_selection(model: &ComponentModel, ctx: &ComponentContext) -> Vec<Stri
 /// few images per sample, so this is acceptable; a future async path would need
 /// an `Arc`-backed cache.
 fn decode_image(url: &str) -> Option<slint::Image> {
-    let bytes = if url.starts_with("http://") || url.starts_with("https://") {
-        fetch_bytes(url)?
-    } else if url.starts_with("data:") {
-        return None;
-    } else {
-        let path = url.strip_prefix("file://").unwrap_or(url);
-        std::fs::read(path).ok()?
-    };
-    decode_bytes(&bytes)
-}
-
-/// Fetch a remote url's bytes over HTTP (blocking; 10 s timeout).
-fn fetch_bytes(url: &str) -> Option<Vec<u8>> {
-    // ureq 3: timeout moved from a per-request method to `Agent` config.
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(std::time::Duration::from_secs(10)))
-        .build()
-        .into();
-    let mut resp = agent.get(url).call().ok()?;
-    resp.body_mut().read_to_vec().ok()
-}
-
-/// Decode in-memory image bytes (PNG / JPEG / …) into a `slint::Image`.
-fn decode_bytes(bytes: &[u8]) -> Option<slint::Image> {
-    let img = image::load_from_memory(bytes).ok()?;
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
-    let buffer =
-        slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(rgba.as_raw(), w, h);
+    let bytes = a2ui_image::resolve_bytes(url)?;
+    let img = a2ui_image::decode(&bytes)?;
+    let buffer = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(
+        &img.rgba, img.width, img.height,
+    );
     Some(slint::Image::from_rgba8(buffer))
 }
 

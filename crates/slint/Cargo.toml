@@ -20,8 +20,7 @@ default = []
 backend = [
     "dep:slint",
     "dep:slint-build",
-    "dep:image",
-    "dep:ureq",
+    "dep:a2ui-image",
     "slint/backend-winit",
     "slint/renderer-software",
 ]
@@ -33,13 +32,10 @@ serde_json = { workspace = true }
 # surface minimal (core types: SharedString, Model, generated components). A
 # windowing backend/renderer is selected by the consumer (gallery) when launching.
 slint = { workspace = true, optional = true }
-# Optional: PNG/JPEG/… decoding for real `Image` rendering (local file paths),
-# mirroring the tui/iced backends. Gated on `backend`.
-image = { workspace = true, optional = true }
-# Optional: sync HTTP client for fetching remote `Image` URLs (the gallery
-# samples reference `https://` images), mirroring the iced backend. Gated on
-# `backend`.
-ureq = { workspace = true, optional = true }
+# Optional: shared image source resolution + raster decode (http / data: /
+# file:// → RGBA) for real `Image` rendering, mirroring the other backends.
+# The crate-local `decode_image` wraps the result into a `slint::Image`.
+a2ui-image = { workspace = true, optional = true }
 
 [build-dependencies]
 # Compiles the `.slint` UI files (in `ui/`) into a Rust module consumed by
@@ -53,8 +49,11 @@ slint-build = { workspace = true, optional = true }
 # `a2ui-tui` provides `build_basic_catalog`; `slint` is the optional runtime dep
 # made available to examples via the `backend` feature (its windowing + software
 # renderer features ride on the crate's `backend` feature when it is enabled).
+# The standalone `image` crate is used directly by the `17_scifi_hud` in-app
+# screenshot capture (`image::RgbImage::from_raw`), independent of the backend.
 a2ui-tui = { workspace = true }
 slint = { workspace = true }
+image = { workspace = true }
 
 [[example]]
 name = "17_scifi_hud"
@@ -65,3 +64,6 @@ required-features = ["backend"]
 name = "08_agent_chat"
 # Needs the real Slint runtime (winit + software renderer) to open a window.
 required-features = ["backend"]
+
+[lints]
+workspace = true

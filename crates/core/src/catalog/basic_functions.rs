@@ -4,6 +4,7 @@
 //! functions that implement the `FunctionImplementation` trait.
 
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use chrono::{Datelike, NaiveDateTime, Timelike};
 use regex::Regex;
@@ -12,6 +13,11 @@ use serde_json::Value;
 use crate::catalog::function_api::{FunctionImplementation, ReturnType};
 use crate::error::A2uiError;
 use crate::model::data_context::DataContext;
+
+// Compiled once and reused for every `email` call (Regex::new on every
+// invocation was the hot-path cost this static removes).
+static EMAIL_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[^\s@]+@[^\s@]+\.[^\s@]+$").unwrap());
 
 // ---------------------------------------------------------------------------
 // Helper
@@ -215,9 +221,8 @@ impl FunctionImplementation for EmailFunction {
     ) -> Result<Value, A2uiError> {
         let value = require_str(args, "value", "email")?;
 
-        // /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-        let re = Regex::new(r"^[^\s@]+@[^\s@]+\.[^\s@]+$").unwrap();
-        Ok(Value::Bool(re.is_match(value)))
+        // `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` — backed by the module-level `EMAIL_RE`.
+        Ok(Value::Bool(EMAIL_RE.is_match(value)))
     }
 }
 

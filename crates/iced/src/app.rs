@@ -22,7 +22,6 @@
 //! [`update`]: IcedApp::update
 
 use std::collections::{HashMap, HashSet};
-use std::time::Duration;
 
 use a2ui_base::catalog::function_api::FunctionImplementation;
 use a2ui_base::components::dispatch_event;
@@ -589,21 +588,15 @@ impl IcedApp {
 // Free functions
 // ---------------------------------------------------------------------------
 
-/// Download a remote image over HTTP and decode it into an Iced
-/// [`image::Handle`]. Blocking — run off the UI thread (here, inside the
-/// `Task::perform` future in [`fetch_image_task`]).
+/// Resolve an image URL and hand its bytes to an Iced [`image::Handle`].
+/// Blocking — run off the UI thread (here, inside the `Task::perform` future
+/// in [`fetch_image_task`]).
 ///
-/// A 10 s timeout keeps a slow/dead host from pinning the calling thread; any
-/// failure (network or read) returns `None` so the caller can record it as a
-/// failed attempt and keep the placeholder.
+/// Source resolution (`http(s)` / `data:` / `file://` / local path) is shared
+/// with every other backend via `a2ui-image`. Any failure returns `None` so the
+/// caller records a failed attempt and keeps the placeholder.
 fn fetch_handle(url: &str) -> Option<image::Handle> {
-    // ureq 3: timeout moved from a per-request method to `Agent` config.
-    let agent: ureq::Agent = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(10)))
-        .build()
-        .into();
-    let mut resp = agent.get(url).call().ok()?;
-    let bytes = resp.body_mut().read_to_vec().ok()?;
+    let bytes = a2ui_image::resolve_bytes(url)?;
     // `Handle::from_bytes` does no decoding up front — the renderer decodes
     // lazily — so an undecodable payload surfaces later as a blank render,
     // not a panic.

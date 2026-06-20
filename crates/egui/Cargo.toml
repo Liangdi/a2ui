@@ -17,15 +17,12 @@ default = []
 # (glow) renderer. eframe's own `default` feature set (carried via the workspace
 # dep) supplies the winit X11/Wayland backends; we just opt into the glow
 # renderer + default fonts explicitly here. Swap in `eframe/wgpu` later if GPU
-# acceleration is wanted. The `image` crate decodes raster `Image` components to
-# egui textures; `ureq` fetches remote `http(s)` image URLs (blocking, on the UI
-# thread — matching the Slint/Bevy backends; the gallery samples carry only a
-# handful of small images).
+# acceleration is wanted. `a2ui-image` resolves + decodes `Image` component
+# sources (http / data: / file://) shared with the other backends.
 backend = [
     "dep:egui",
     "dep:eframe",
-    "dep:image",
-    "dep:ureq",
+    "dep:a2ui-image",
     "eframe/glow",
     "eframe/default_fonts",
 ]
@@ -37,19 +34,20 @@ serde_json = { workspace = true }
 # minimal. A windowing backend/renderer is selected by the `backend` feature.
 egui = { workspace = true, optional = true }
 eframe = { workspace = true, optional = true }
-# Optional: raster image decoding for the `Image` component (PNG / JPEG / … →
-# egui `ColorImage`/`TextureHandle`), mirroring the Bevy/Iced/Slint backends.
-image = { workspace = true, optional = true }
-# Optional: sync HTTP client for remote `http(s)` `Image` URLs (same version the
-# Iced / Slint backends use).
-ureq = { workspace = true, optional = true }
+# Optional: shared image source resolution + raster decode (http / data: /
+# file:// → RGBA) used by the `Image` component, mirroring the Bevy/Iced/Slint
+# backends. The crate-local `images.rs` wraps the result into a `ColorImage`.
+a2ui-image = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Examples read live values out of the data model and render them with egui
-# widgets directly. `a2ui-tui` provides `build_basic_catalog`; `egui`/`eframe`/
-# `image` are the optional runtime deps made available to examples via the
-# `backend` feature (same pattern as the Iced/Bevy/Slint examples).
+# widgets directly. `a2ui-tui` provides `build_basic_catalog`; `egui`/`eframe`
+# are the optional runtime deps made available to examples via the `backend`
+# feature (same pattern as the Iced/Bevy/Slint examples). The standalone
+# `image` crate is used directly by the `17_scifi_hud` in-app screenshot
+# capture (`image::RgbaImage::from_raw`), independent of the backend's decode.
 a2ui-tui = { workspace = true }
+image = { workspace = true }
 
 [[example]]
 name = "17_scifi_hud"
@@ -60,3 +58,6 @@ required-features = ["backend"]
 name = "08_agent_chat"
 # Needs the real egui runtime (eframe + glow) to open a window.
 required-features = ["backend"]
+
+[lints]
+workspace = true

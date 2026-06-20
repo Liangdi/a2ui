@@ -42,6 +42,8 @@ pub const STRICT_VALIDATION: ValidationConfig = ValidationConfig::STRICT;
 pub const RELAXED_VALIDATION: ValidationConfig = ValidationConfig::RELAXED;
 
 #[cfg(test)]
+#[allow(clippy::assertions_on_constants)] // asserts intentionally spell out the
+                                           // known-const config flags as docs
 mod tests {
     use super::*;
 

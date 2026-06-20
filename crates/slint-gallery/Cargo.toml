@@ -20,3 +20,6 @@ a2ui-gallery = { workspace = true }      # sample_loader
 # required for this binary to actually display anything.
 a2ui-slint = { workspace = true, features = ["backend"] }
 serde_json = { workspace = true }
+
+[lints]
+workspace = true

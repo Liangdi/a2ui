@@ -12,7 +12,9 @@ upgrade:
     cargo +nightly update --breaking -Z unstable-options
 
 # Publish all workspace crates to crates.io in dependency order
-# (core -> tui -> slint -> egui -> bevy -> iced -> dioxus -> umbrella -> gallery -> *-gallery).
+# (core -> image -> tui -> slint -> egui -> bevy -> iced -> dioxus -> umbrella -> gallery -> *-gallery).
+# - `a2ui-image` precedes the backends (tui + every GUI backend consume it for
+#   image source resolution / decode).
 # - `a2ui-slint`, `a2ui-egui`, `a2ui-bevy`, `a2ui-iced`, `a2ui-dioxus` precede
 #   the umbrella because `a2ui` has all five as optional dependencies, and
 #   crates.io requires every (even optional) published dependency to already
@@ -22,6 +24,7 @@ upgrade:
 # hasn't propagated yet — wait ~1 min and re-run from that crate.
 publish:
     cargo publish -p a2ui-base --registry crates-io
+    cargo publish -p a2ui-image --registry crates-io
     cargo publish -p a2ui-tui --registry crates-io
     cargo publish -p a2ui-slint --registry crates-io
     cargo publish -p a2ui-egui --registry crates-io

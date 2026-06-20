@@ -390,7 +390,7 @@ fn test_call_function_with_want_response() {
             "args": {"value": "hello"}
         }
     });
-    proc.process_message(MessageProcessor::parse_message(&msg.to_string().as_str()).unwrap())
+    proc.process_message(MessageProcessor::parse_message(&msg.to_string()).unwrap())
         .unwrap();
 
     let outgoing = proc.drain_outgoing();

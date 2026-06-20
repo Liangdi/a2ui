@@ -20,3 +20,6 @@ a2ui-gallery = { workspace = true }      # sample_loader
 a2ui-dioxus = { workspace = true, features = ["backend"] }
 dioxus = { workspace = true }
 serde_json = { workspace = true }
+
+[lints]
+workspace = true

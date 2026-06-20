@@ -35,11 +35,10 @@ name = "a2ui-bevy"
 version = "0.3.1"
 dependencies = [
  "a2ui-base",
+ "a2ui-image",
  "a2ui-tui",
  "bevy",
- "image",
  "serde_json",
- "ureq",
 ]
 
 [[package]]
@@ -83,12 +82,12 @@ name = "a2ui-egui"
 version = "0.3.1"
 dependencies = [
  "a2ui-base",
+ "a2ui-image",
  "a2ui-tui",
  "eframe",
  "egui",
  "image",
  "serde_json",
- "ureq",
 ]
 
 [[package]]
@@ -126,10 +125,10 @@ name = "a2ui-iced"
 version = "0.3.1"
 dependencies = [
  "a2ui-base",
+ "a2ui-image",
  "a2ui-tui",
  "iced",
  "serde_json",
- "ureq",
 ]
 
 [[package]]
@@ -145,16 +144,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "a2ui-image"
+version = "0.3.1"
+dependencies = [
+ "base64",
+ "image",
+ "percent-encoding",
+ "ureq",
+]
+
+[[package]]
 name = "a2ui-slint"
 version = "0.3.1"
 dependencies = [
  "a2ui-base",
+ "a2ui-image",
  "a2ui-tui",
  "image",
  "serde_json",
  "slint",
  "slint-build",
- "ureq",
 ]
 
 [[package]]
@@ -173,6 +182,7 @@ name = "a2ui-tui"
 version = "0.3.1"
 dependencies = [
  "a2ui-base",
+ "a2ui-image",
  "base64",
  "chrono",
  "crossterm",
@@ -1533,7 +1543,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-time",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3582,7 +3592,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4045,7 +4055,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -7021,7 +7031,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -9214,7 +9224,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -9857,7 +9867,7 @@ version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1c97747dbf44bb1ca44a561ece23508e99cb592e862f22222dcf42f51d1e451"
 dependencies = [
- "heck 0.5.0",
+ "heck 0.4.1",
  "proc-macro2",
  "quote",
  "syn 2.0.118",
@@ -10411,7 +10421,7 @@ dependencies = [
  "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -10444,7 +10454,7 @@ dependencies = [
  "parking_lot",
  "rustix 1.1.4",
  "signal-hook",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -11041,7 +11051,7 @@ checksum = "f2f6fb2847f6742cd76af783a2a2c49e9375d0a111c7bef6f71cd9e738c72d6e"
 dependencies = [
  "memoffset",
  "tempfile",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -12195,7 +12205,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

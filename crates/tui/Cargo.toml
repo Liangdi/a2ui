@@ -15,6 +15,11 @@ audio = ["dep:rodio"]
 
 [dependencies]
 a2ui-base = { workspace = true }
+# Shared image source resolution: the `data:` URI base64 / percent-decoding for
+# the Image component lives here (the TUI keeps only its SVG→resvg branch +
+# the final `image`-crate decode that yields the `DynamicImage` ratatui-image
+# renders).
+a2ui-image = { workspace = true }
 ratatui = { workspace = true }
 crossterm = { workspace = true }
 serde = { workspace = true }
@@ -23,10 +28,18 @@ uuid = { workspace = true }
 unicode-width = { workspace = true }
 ratatui-image = { workspace = true }
 image = { workspace = true }
-# SVG rasterization + `data:` URI decoding, used by the Image component to
-# render `data:image/svg+xml` avatars/icons and local `.svg` files.
+# SVG rasterizer (resvg bundles usvg + tiny-skia), used by the Image component
+# to render `data:image/svg+xml` avatars/icons and local `.svg` files.
 resvg = { workspace = true }
-base64 = { workspace = true }
-percent-encoding = { workspace = true }
 serde_json = { workspace = true }
 rodio = { workspace = true, optional = true }
+
+[dev-dependencies]
+# The Image component unit tests construct `data:` URI fixtures (percent-encoded
+# and `;base64` SVGs) to feed `load_data_uri`, so they need the encoders
+# directly. Production code delegates the decoding to `a2ui-image`.
+base64 = { workspace = true }
+percent-encoding = { workspace = true }
+
+[lints]
+workspace = true

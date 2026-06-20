@@ -21,3 +21,6 @@ a2ui-egui = { workspace = true, features = ["backend"] }
 eframe = { workspace = true }
 egui = { workspace = true }
 serde_json = { workspace = true }
+
+[lints]
+workspace = true

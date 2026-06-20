@@ -1,23 +1,16 @@
-//! Image loading for the `Image` component — decode raster bytes into Bevy
-//! `Image` assets and cache the `Handle`s on [`crate::state::A2uiState`].
+//! Image loading for the `Image` component — resolve an image URL, decode the
+//! raster bytes into a Bevy `Image` asset, and cache the `Handle`s on
+//! [`crate::state::A2uiState`].
 //!
-//! This is the Bevy counterpart of the Iced backend's `fetch_sample_images` /
-//! `fetch_handle` and the Slint backend's inline image decode. Unlike Iced
-//! (which fetches asynchronously on its thread-pool executor) Bevy's gallery
-//! has no convenient async hook into the reconciler's per-frame `Handle`
-//! lookup, so decoding runs **synchronously on the UI thread** in
-//! [`load_images`] — matching the documented Slint behavior. The gallery
-//! samples carry only a handful of small images, so the one-time per-URL cost
-//! (a few ms for local files; one blocking HTTP round-trip per remote URL with
-//! a 5 s cap) is acceptable. Results are cached by resolved URL and cleared on
-//! sample switch.
-//!
-//! - **local file** (`path`, `file://path`): read + decode via the `image` crate.
-//! - **`http(s)` URL**: blocking `ureq` GET → decode.
-//! - **`data:` URL / decode failure / missing file**: `None` (placeholder stays,
-//!   not retried).
-
-use std::time::Duration;
+//! Source resolution (`http(s)` / `data:` / `file://` / local path) and raster
+//! decode are shared with every other backend via the `a2ui-image` crate; this
+//! module only wraps the resulting RGBA into a Bevy `Image`. Unlike Iced (which
+//! fetches asynchronously on its thread-pool executor) Bevy's gallery has no
+//! convenient async hook into the reconciler's per-frame `Handle` lookup, so
+//! decoding runs **synchronously on the UI thread** in [`load_images`] —
+//! matching the documented Slint behavior. The gallery samples carry only a
+//! handful of small images, so the one-time per-URL cost is acceptable. Results
+//! are cached by resolved URL and cleared on sample switch.
 
 use bevy::asset::RenderAssetUsages;
 use bevy::prelude::*;
@@ -81,43 +74,21 @@ pub fn load_images(mut state: NonSendMut<A2uiState>, mut assets: ResMut<Assets<I
     }
 }
 
-/// Fetch + decode one image URL to a Bevy `Handle<Image>` (or `None` on any
-/// failure / unsupported scheme). Blocking — see the module docs.
+/// Resolve + decode one image URL to a Bevy `Handle<Image>` (or `None` on any
+/// failure). Source resolution and raster decode are delegated to `a2ui-image`;
+/// this just maps the resulting RGBA into a Bevy `Image` asset. Blocking — see
+/// the module docs.
 fn load_image_sync(url: &str, assets: &mut Assets<Image>) -> Option<Handle<Image>> {
-    let bytes: Vec<u8> = if url.starts_with("http://") || url.starts_with("https://") {
-        // ureq 3: timeout moved from a per-request method to `Agent` config.
-        let agent: ureq::Agent = ureq::Agent::config_builder()
-            .timeout_global(Some(Duration::from_secs(5)))
-            .build()
-            .into();
-        let mut resp = agent.get(url).call().ok()?;
-        resp.body_mut().read_to_vec().ok()?
-    } else if url.starts_with("data:") {
-        // `data:` URLs are not decoded (placeholder), matching the Slint backend.
-        return None;
-    } else {
-        let path = url.strip_prefix("file://").unwrap_or(url);
-        std::fs::read(path).ok()?
-    };
-    decode_bytes(&bytes, assets)
-}
-
-/// Decode encoded image bytes (PNG / JPEG / …) into a Bevy `Image` asset. Uses
-/// the standalone `image` crate (same 0.25 line Bevy uses internally) to get a
-/// `DynamicImage`, then hands its RGBA8 buffer to `Image::new`. Returns `None`
-/// for an undecodable payload (the placeholder stays).
-fn decode_bytes(bytes: &[u8], assets: &mut Assets<Image>) -> Option<Handle<Image>> {
-    let dyn_img = image::load_from_memory(bytes).ok()?;
-    let rgba = dyn_img.to_rgba8();
-    let (width, height) = rgba.dimensions();
+    let bytes = a2ui_image::resolve_bytes(url)?;
+    let img = a2ui_image::decode(&bytes)?;
     let bevy_img = Image::new(
         Extent3d {
-            width,
-            height,
+            width: img.width,
+            height: img.height,
             depth_or_array_layers: 1,
         },
         TextureDimension::D2,
-        rgba.into_raw(),
+        img.rgba,
         // `image`'s `to_rgba8()` yields sRGB-encoded RGBA; interpret it as such.
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::default(),

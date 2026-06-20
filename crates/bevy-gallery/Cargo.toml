@@ -20,3 +20,6 @@ a2ui-gallery = { workspace = true }      # sample_loader
 a2ui-bevy = { workspace = true, features = ["backend"] }
 bevy = { workspace = true }
 serde_json = { workspace = true }
+
+[lints]
+workspace = true

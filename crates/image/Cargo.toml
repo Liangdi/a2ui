@@ -1,0 +1,27 @@
+[package]
+name = "a2ui-image"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A2UI image source resolution (http / data: / file://) and raster decode, shared by every UI backend."
+
+[dependencies]
+# Sync HTTP client (rustls TLS) for fetching remote `http(s)` image URLs. Sync
+# so a fetch is a single blocking call — the GUI backends run it off the render
+# thread (egui/slint/bevy on the UI thread for a handful of small gallery
+# images; iced inside a `Task::perform` future on the thread-pool executor).
+ureq = { workspace = true }
+# Raster decode (PNG / JPEG / …) of the resolved bytes. The backend-agnostic
+# `decode` returns a plain `{width, height, rgba}` struct so no `image`-crate
+# type leaks into the backends (they no longer need to depend on `image` just
+# to name a return type).
+image = { workspace = true }
+# `data:` URI body decoding: the `;base64` form and the URL-percent-encoded
+# form (the common SVG / inline-raster case).
+base64 = { workspace = true }
+percent-encoding = { workspace = true }
+
+[lints]
+workspace = true

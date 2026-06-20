@@ -409,32 +409,16 @@ mod real {
 
     /// Decode the body of a `data:` URI (the text after `data:`).
     ///
-    /// Accepts both the `;base64` form (binary payloads, e.g. PNG/JPEG) and the
-    /// URL-percent-encoded form (the common SVG case — e.g. `1.json`'s avatar).
+    /// The base64 / percent-decoding (shared with every other backend) lives in
+    /// `a2ui_image::parse_data_uri`; this keeps the SVG→`resvg` branch (SVG needs
+    /// a rasterizer only the TUI backend pulls in) and the final `image`-crate
+    /// decode (TUI hands a `DynamicImage` to `ratatui-image`).
     fn load_data_uri(rest: &str) -> Result<image::DynamicImage, ()> {
-        let (metadata, data) = rest.split_once(',').ok_or(())?;
-        let is_base64 = metadata.contains("base64");
-        // MIME type is the first `;`-delimited segment, e.g. "image/svg+xml".
-        let mime = metadata
-            .split(';')
-            .next()
-            .unwrap_or("")
-            .to_ascii_lowercase();
-
-        let bytes: Vec<u8> = if is_base64 {
-            use base64::Engine;
-            base64::engine::general_purpose::STANDARD
-                .decode(data.trim())
-                .map_err(|_| ())?
-        } else {
-            // Percent-decode into raw bytes (binary-safe; SVG bytes are UTF-8).
-            percent_encoding::percent_decode_str(data).collect()
-        };
-
-        if mime == "image/svg+xml" {
-            return rasterize_svg(&bytes);
+        let du = a2ui_image::parse_data_uri(rest).ok_or(())?;
+        if du.mime == "image/svg+xml" {
+            return rasterize_svg(&du.bytes);
         }
-        image::load_from_memory(&bytes).map_err(|_| ())
+        image::load_from_memory(&du.bytes).map_err(|_| ())
     }
 
     /// Rasterize an SVG byte slice to a [`image::DynamicImage`] via `resvg`.
