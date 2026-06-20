@@ -186,10 +186,7 @@ fn test_e2e_contact_form_sample() {
         dm.get("/contact/firstName"),
         Some(&serde_json::json!("John"))
     );
-    assert_eq!(
-        dm.get("/contact/lastName"),
-        Some(&serde_json::json!("Doe"))
-    );
+    assert_eq!(dm.get("/contact/lastName"), Some(&serde_json::json!("Doe")));
     assert_eq!(
         dm.get("/contact/email"),
         Some(&serde_json::json!("john.doe@example.com"))
@@ -198,10 +195,7 @@ fn test_e2e_contact_form_sample() {
         dm.get("/contact/phone"),
         Some(&serde_json::json!("1234567890"))
     );
-    assert_eq!(
-        dm.get("/contact/subscribe"),
-        Some(&serde_json::json!(true))
-    );
+    assert_eq!(dm.get("/contact/subscribe"), Some(&serde_json::json!(true)));
 }
 
 #[test]
@@ -488,7 +482,8 @@ fn test_action_response_updates_data_model() {
         .unwrap();
 
     // Register a pending action with a responsePath
-    proc.register_action("s1", "action_1", Some("/serverResult".to_string())).unwrap();
+    proc.register_action("s1", "action_1", Some("/serverResult".to_string()))
+        .unwrap();
 
     // Process actionResponse
     let response = serde_json::json!({
@@ -523,7 +518,8 @@ fn test_action_response_error_no_data_change() {
     proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
         .unwrap();
 
-    proc.register_action("s1", "action_2", Some("/result".to_string())).unwrap();
+    proc.register_action("s1", "action_2", Some("/result".to_string()))
+        .unwrap();
 
     // Send error response — should NOT update data model
     let response = serde_json::json!({
@@ -604,7 +600,10 @@ fn test_call_function_with_format_string() {
 
     match &outgoing[0].payload {
         ClientPayload::FunctionResponse(fr) => {
-            assert_eq!(fr.function_response.value, serde_json::json!("Hello, Alice!"));
+            assert_eq!(
+                fr.function_response.value,
+                serde_json::json!("Hello, Alice!")
+            );
         }
         other => panic!("expected FunctionResponse, got {:?}", other),
     }
@@ -652,8 +651,16 @@ fn test_accessibility_parsing() {
     let root = components.get("root").unwrap();
 
     let a11y = root.accessibility().expect("should have accessibility");
-    assert_eq!(a11y.label, Some(DynamicString::Literal("Submit form".to_string())));
-    assert_eq!(a11y.description, Some(DynamicString::Literal("Click to submit the login form".to_string())));
+    assert_eq!(
+        a11y.label,
+        Some(DynamicString::Literal("Submit form".to_string()))
+    );
+    assert_eq!(
+        a11y.description,
+        Some(DynamicString::Literal(
+            "Click to submit the login form".to_string()
+        ))
+    );
 }
 
 // ===================================================================
@@ -685,7 +692,8 @@ fn test_register_inline_catalog_adds_schema_only_functions() {
             }
         }
     });
-    proc.register_inline_catalog(inline).expect("should register inline catalog");
+    proc.register_inline_catalog(inline)
+        .expect("should register inline catalog");
 
     let ids = proc.registered_catalog_ids();
     assert_eq!(ids.len(), before + 1);
@@ -810,7 +818,15 @@ fn test_e2e_login_form_render_pipeline() {
     let children = root.children().unwrap();
     match children {
         a2ui_base::protocol::common_types::ChildList::Static(ids) => {
-            assert_eq!(ids, vec!["form_title", "username_field", "password_field", "submit_button"]);
+            assert_eq!(
+                ids,
+                vec![
+                    "form_title",
+                    "username_field",
+                    "password_field",
+                    "submit_button"
+                ]
+            );
         }
         _ => panic!("expected static children"),
     }
@@ -839,11 +855,19 @@ fn test_e2e_all_minimal_samples_load_and_parse() {
 
     let samples = sample_loader::load_samples("v1_0/catalogs/minimal/examples");
 
-    assert!(samples.len() >= 7, "should load at least 7 minimal samples, got {}", samples.len());
+    assert!(
+        samples.len() >= 7,
+        "should load at least 7 minimal samples, got {}",
+        samples.len()
+    );
 
     // Each sample should have at least one message
     for sample in &samples {
-        assert!(!sample.messages.is_empty(), "sample '{}' has no messages", sample.name);
+        assert!(
+            !sample.messages.is_empty(),
+            "sample '{}' has no messages",
+            sample.name
+        );
     }
 
     // All should process without errors
@@ -882,12 +906,7 @@ fn test_e2e_all_basic_samples_load_and_parse() {
         let mut proc = make_basic_processor();
         let results = proc.process_messages(sample.messages.clone());
         for r in &results {
-            assert!(
-                r.is_ok(),
-                "sample '{}' failed: {:?}",
-                sample.name,
-                r
-            );
+            assert!(r.is_ok(), "sample '{}' failed: {:?}", sample.name, r);
         }
     }
 }
@@ -970,8 +989,7 @@ fn test_e2e_capitalized_text_reacts_live_in_gallery() {
         .expect("6_capitalized_text.json sample should exist");
 
     // Processor owns both catalogs (as the gallery does) so the sample parses.
-    let mut processor =
-        MessageProcessor::new(vec![build_basic_catalog(), build_minimal_catalog()]);
+    let mut processor = MessageProcessor::new(vec![build_basic_catalog(), build_minimal_catalog()]);
     for msg in sample.messages.clone() {
         processor.process_message(msg).unwrap();
     }
@@ -991,7 +1009,10 @@ fn test_e2e_capitalized_text_reacts_live_in_gallery() {
 
     // Initially capitalize("") == "" — no capitalized output rendered yet.
     let text = render_gallery_surface(&processor, &registry, &catalog, &focus, 80, 20);
-    assert!(!text.contains("Hello"), "should be empty before typing:\n{text}");
+    assert!(
+        !text.contains("Hello"),
+        "should be empty before typing:\n{text}"
+    );
 
     // Type "hello" through the same interaction pipeline the gallery uses.
     for ch in "hello".chars() {
@@ -1042,9 +1063,8 @@ fn test_e2e_incremental_dashboard_progressive_rendering() {
     let focus = FocusManager::new();
     let mut processor = make_basic_processor();
 
-    let render = |proc: &MessageProcessor| {
-        render_gallery_surface(proc, &registry, &catalog, &focus, 80, 16)
-    };
+    let render =
+        |proc: &MessageProcessor| render_gallery_surface(proc, &registry, &catalog, &focus, 80, 16);
 
     // Step 1 — createSurface only: no root component yet.
     processor.process_message(msgs[0].clone()).unwrap();
@@ -1061,13 +1081,19 @@ fn test_e2e_incremental_dashboard_progressive_rendering() {
     processor.process_message(msgs[2].clone()).unwrap();
     let s = render(&processor);
     assert!(s.contains("Analytics are ready."), "step 3:\n{s}");
-    assert!(!s.contains("System boot complete."), "step 3 — no logs yet:\n{s}");
+    assert!(
+        !s.contains("System boot complete."),
+        "step 3 — no logs yet:\n{s}"
+    );
 
     // Step 4 — logs List template added, but data model still empty.
     processor.process_message(msgs[3].clone()).unwrap();
     let s = render(&processor);
     assert!(s.contains("Analytics are ready."), "step 4:\n{s}");
-    assert!(!s.contains("System boot complete."), "step 4 — no log data yet:\n{s}");
+    assert!(
+        !s.contains("System boot complete."),
+        "step 4 — no log data yet:\n{s}"
+    );
 
     // Step 5 — logs data populated: all three log lines render via the template.
     processor.process_message(msgs[4].clone()).unwrap();

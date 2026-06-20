@@ -8,7 +8,7 @@
 use std::fs;
 use std::path::Path;
 
-use include_dir::{include_dir, Dir};
+use include_dir::{Dir, include_dir};
 
 use a2ui_base::message_processor::MessageProcessor;
 use a2ui_base::protocol::server_to_client::A2uiMessage;
@@ -18,8 +18,7 @@ use a2ui_base::protocol::server_to_client::A2uiMessage;
 /// Makes the binary self-contained: no on-disk spec directory is required at
 /// runtime. Paths inside are relative to the spec root, e.g.
 /// `v1_0/catalogs/minimal/examples`.
-pub static SPEC_DIR: Dir<'static> =
-    include_dir!("$CARGO_MANIFEST_DIR/a2ui/specification");
+pub static SPEC_DIR: Dir<'static> = include_dir!("$CARGO_MANIFEST_DIR/a2ui/specification");
 
 /// A loaded sample with metadata and parsed messages.
 pub struct Sample {
@@ -88,10 +87,7 @@ pub fn load_samples_from_dir(dir: &str) -> Vec<Sample> {
                 });
             }
             Err(e) => {
-                eprintln!(
-                    "Warning: failed to parse sample {:?}: {}",
-                    full_path, e
-                );
+                eprintln!("Warning: failed to parse sample {:?}: {}", full_path, e);
             }
         }
     }

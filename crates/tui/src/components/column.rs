@@ -1,11 +1,14 @@
 //! Column component — vertical layout container.
 
-use ratatui::{Frame, layout::{Direction, Rect}};
+use ratatui::{
+    Frame,
+    layout::{Direction, Rect},
+};
 
-use a2ui_base::model::component_context::ComponentContext;
-use a2ui_base::protocol::common_types::{Align, ChildList, Justify};
 use crate::component_impl::TuiComponent;
 use crate::components::row::{render_static_children, render_template_children};
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::common_types::{Align, ChildList, Justify};
 
 /// Column component implementation.
 ///
@@ -37,20 +40,39 @@ impl TuiComponent for ColumnComponent {
             None => return,
         };
 
-        let justify = comp_model.get_property::<Justify>("justify").unwrap_or(Justify::Start);
-        let align = comp_model.get_property::<Align>("align").unwrap_or(Align::Stretch);
+        let justify = comp_model
+            .get_property::<Justify>("justify")
+            .unwrap_or(Justify::Start);
+        let align = comp_model
+            .get_property::<Align>("align")
+            .unwrap_or(Align::Stretch);
 
         match children {
             ChildList::Static(ids) => {
                 render_static_children(
-                    ctx, area, frame, render_child, measure_child,
-                    &ids, justify, align, Direction::Vertical,
+                    ctx,
+                    area,
+                    frame,
+                    render_child,
+                    measure_child,
+                    &ids,
+                    justify,
+                    align,
+                    Direction::Vertical,
                 );
             }
             ChildList::Template { component_id, path } => {
                 render_template_children(
-                    ctx, area, frame, render_child, measure_child,
-                    &component_id, &path, justify, align, Direction::Vertical,
+                    ctx,
+                    area,
+                    frame,
+                    render_child,
+                    measure_child,
+                    &component_id,
+                    &path,
+                    justify,
+                    align,
+                    Direction::Vertical,
                 );
             }
         }

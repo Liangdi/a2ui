@@ -5,7 +5,7 @@ use std::io;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
     Terminal,
@@ -17,14 +17,14 @@ use ratatui::{
 };
 use ratatui_sci_fi::{Divider, Level, Panel, ScanList, ScanListState, Theme, Value};
 
+use crate::config::{self, GalleryConfig};
+use crate::sample_loader::{self, Sample};
 use a2ui_base::catalog::Catalog;
 use a2ui_base::event::{EventResult, InputEvent, InputKey};
 use a2ui_base::message_processor::MessageProcessor;
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::protocol::common_types::DynamicBoolean;
 use a2ui_base::protocol::server_to_client::A2uiMessage;
-use crate::config::{self, GalleryConfig};
-use crate::sample_loader::{self, Sample};
 use a2ui_tui::catalogs::basic::{build_basic_catalog, build_basic_registry};
 use a2ui_tui::catalogs::minimal::build_minimal_catalog;
 use a2ui_tui::component_impl::ComponentRegistry;
@@ -360,9 +360,7 @@ impl GalleryApp {
                 }
             }
             KeyCode::Down | KeyCode::Char('j') => {
-                if !self.samples.is_empty()
-                    && self.selected_sample < self.samples.len() - 1
-                {
+                if !self.samples.is_empty() && self.selected_sample < self.samples.len() - 1 {
                     self.load_sample_full(self.selected_sample + 1);
                 }
             }
@@ -551,15 +549,12 @@ impl GalleryApp {
 
                 if want_response {
                     // Get the surface ID first, then register the action separately.
-                    let surface_id = self
-                        .processor
-                        .model
-                        .surfaces()
-                        .next()
-                        .map(|s| s.id.clone());
+                    let surface_id = self.processor.model.surfaces().next().map(|s| s.id.clone());
                     if let Some(sid) = surface_id {
                         let action_id = uuid::Uuid::new_v4().to_string();
-                        let _ = self.processor.register_action(&sid, &action_id, response_path);
+                        let _ = self
+                            .processor
+                            .register_action(&sid, &action_id, response_path);
                     }
                 }
             }
@@ -796,13 +791,12 @@ fn render_split_view(
 }
 
 /// Render the sample list in a side panel (compact rows, no description).
-fn render_sample_list_panel(
-    frame: &mut ratatui::Frame,
-    fd: &FrameData,
-    area: Rect,
-    focused: bool,
-) {
-    let title = if focused { " ◄ SAMPLES " } else { " SAMPLES " };
+fn render_sample_list_panel(frame: &mut ratatui::Frame, fd: &FrameData, area: Rect, focused: bool) {
+    let title = if focused {
+        " ◄ SAMPLES "
+    } else {
+        " SAMPLES "
+    };
     let panel = Panel::new().title(title).theme(fd.theme);
     let inner = panel.inner(area);
     frame.render_widget(panel, area);
@@ -849,6 +843,7 @@ fn sample_rows(
 /// `►` title marker when focused); the surface itself is rendered into the
 /// inner area via [`SurfaceRenderer`] so it — the A2UI sample being previewed —
 /// is never restyled by the gallery chrome.
+#[allow(clippy::too_many_arguments)] // gallery panel: frame + area + surface + shared render deps + theme
 fn render_surface_panel(
     frame: &mut ratatui::Frame,
     area: Rect,
@@ -859,7 +854,11 @@ fn render_surface_panel(
     focused: bool,
     theme: Theme,
 ) {
-    let title = if focused { " SURFACE ► " } else { " SURFACE " };
+    let title = if focused {
+        " SURFACE ► "
+    } else {
+        " SURFACE "
+    };
     let panel = Panel::new().title(title).theme(theme);
     let inner = panel.inner(area);
     frame.render_widget(panel, area);
@@ -904,16 +903,25 @@ fn help_line(fd: &FrameData, accent: Style, muted: Style) -> Line<'static> {
     match fd.mode {
         AppMode::SampleList => Line::from(vec![
             Span::styled(" A2UI GALLERY ", accent),
-            Span::styled(" ↑/k up · ↓/j down · Enter select · t theme · P img · q/Esc quit", muted),
+            Span::styled(
+                " ↑/k up · ↓/j down · Enter select · t theme · P img · q/Esc quit",
+                muted,
+            ),
         ]),
         AppMode::Rendered => match fd.panel_focus {
             PanelFocus::List => Line::from(vec![
                 Span::styled(" [List ◄] ", accent),
-                Span::styled(" ↑/↓ sample · Tab/Enter surface · Esc browser · t theme · P img · q quit", muted),
+                Span::styled(
+                    " ↑/↓ sample · Tab/Enter surface · Esc browser · t theme · P img · q quit",
+                    muted,
+                ),
             ]),
             PanelFocus::Render => Line::from(vec![
                 Span::styled(" [Surface ►] ", accent),
-                Span::styled(" n step · a all · r restart · Tab focus · Esc list · q quit", muted),
+                Span::styled(
+                    " n step · a all · r restart · Tab focus · Esc list · q quit",
+                    muted,
+                ),
             ]),
         },
     }
@@ -924,12 +932,16 @@ fn help_line(fd: &FrameData, accent: Style, muted: Style) -> Line<'static> {
 /// The active image protocol (cycled with `P`) is always appended.
 fn help_readout(fd: &FrameData) -> Value {
     match fd.mode {
-        AppMode::SampleList => Value::new(format!("{} · {}", theme_name(fd.theme), fd.image_protocol))
-            .label("THEME/IMG")
-            .theme(fd.theme),
+        AppMode::SampleList => {
+            Value::new(format!("{} · {}", theme_name(fd.theme), fd.image_protocol))
+                .label("THEME/IMG")
+                .theme(fd.theme)
+        }
         AppMode::Rendered => {
             if fd.total_messages == 0 {
-                Value::new(fd.image_protocol.to_string()).label("IMG").theme(fd.theme)
+                Value::new(fd.image_protocol.to_string())
+                    .label("IMG")
+                    .theme(fd.theme)
             } else {
                 let done = fd.messages_processed >= fd.total_messages;
                 Value::new(format!(
@@ -961,7 +973,8 @@ fn next_image_protocol(p: tui_image::ImageProtocol) -> tui_image::ImageProtocol 
 /// Pure scroll-offset rule: keep `selected` inside `[offset, offset+cap)`,
 /// moving `offset` only when the selection escapes. Shared by
 /// [`GalleryApp::ensure_list_visible`] (runtime) and the unit tests.
-fn compute_list_scroll(selected: usize, len: usize, cap: usize, prev_offset: usize) -> usize {    let cap = cap.max(1);
+fn compute_list_scroll(selected: usize, len: usize, cap: usize, prev_offset: usize) -> usize {
+    let cap = cap.max(1);
     if len == 0 {
         return 0;
     }
@@ -998,8 +1011,9 @@ mod tests {
 
     /// A throwaway [`FrameData`] for render tests: 6 samples, SampleList mode.
     fn fd(selected: usize, scroll: usize, tick: u64) -> FrameData {
-        let samples: Vec<(String, String)> =
-            (0..6).map(|i| (format!("sample{i}"), format!("desc{i}"))).collect();
+        let samples: Vec<(String, String)> = (0..6)
+            .map(|i| (format!("sample{i}"), format!("desc{i}")))
+            .collect();
         FrameData {
             mode: AppMode::SampleList,
             samples,
@@ -1036,11 +1050,21 @@ mod tests {
     #[test]
     fn scanlist_cursor_blinks() {
         // The cursor sits at the Panel inner origin (border + 1-cell padding).
-        let inner = Panel::new().theme(Theme::Cyberpunk).inner(Rect::new(0, 0, 40, 20));
+        let inner = Panel::new()
+            .theme(Theme::Cyberpunk)
+            .inner(Rect::new(0, 0, 40, 20));
         let on = draw_sample_list(40, 20, &fd(0, 0, 0));
-        assert_eq!(on[(inner.x, inner.y)].symbol(), "█", "cursor visible at tick 0");
+        assert_eq!(
+            on[(inner.x, inner.y)].symbol(),
+            "█",
+            "cursor visible at tick 0"
+        );
         let off = draw_sample_list(40, 20, &fd(0, 0, 15));
-        assert_eq!(off[(inner.x, inner.y)].symbol(), " ", "cursor hidden at tick 15");
+        assert_eq!(
+            off[(inner.x, inner.y)].symbol(),
+            " ",
+            "cursor hidden at tick 15"
+        );
     }
 
     #[test]
@@ -1059,7 +1083,9 @@ mod tests {
     #[test]
     fn scanlist_renders_scrolled_selection() {
         // 6 samples in a 20x12 frame → Panel inner height 8 → 4 visible items.
-        let inner = Panel::new().theme(Theme::Cyberpunk).inner(Rect::new(0, 0, 20, 12));
+        let inner = Panel::new()
+            .theme(Theme::Cyberpunk)
+            .inner(Rect::new(0, 0, 20, 12));
         let cap = (inner.height as usize) / SCANLIST_ROW_STRIDE;
         let selected = 5;
         let scroll = compute_list_scroll(selected, 6, cap, 0);
@@ -1080,7 +1106,9 @@ mod tests {
         let backend = TestBackend::new(24, 2);
         let mut terminal = Terminal::new(backend).unwrap();
         let data = fd(0, 0, 0);
-        terminal.draw(|f| render_help_bar(f, f.area(), &data)).unwrap();
+        terminal
+            .draw(|f| render_help_bar(f, f.area(), &data))
+            .unwrap();
         let buf = terminal.backend().buffer();
         for x in 0..24 {
             assert_eq!(

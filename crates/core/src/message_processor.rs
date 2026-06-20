@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use crate::catalog::Catalog;
 use crate::error::{A2uiError, Result};
 use crate::model::data_model::DataModel;
-use crate::model::surface_model::SurfaceModel;
 use crate::model::surface_group_model::SurfaceGroupModel;
+use crate::model::surface_model::SurfaceModel;
 use crate::protocol::client_to_server::{
     ClientMessage, ClientPayload, ErrorData, ErrorPayload, FunctionResponseData,
     FunctionResponsePayload,
@@ -37,10 +37,8 @@ pub struct MessageProcessor {
 impl MessageProcessor {
     /// Create a new processor with the given catalogs.
     pub fn new(catalogs: Vec<Catalog>) -> Self {
-        let catalog_map: HashMap<String, Catalog> = catalogs
-            .into_iter()
-            .map(|c| (c.id.clone(), c))
-            .collect();
+        let catalog_map: HashMap<String, Catalog> =
+            catalogs.into_iter().map(|c| (c.id.clone(), c)).collect();
         Self {
             model: SurfaceGroupModel::new(),
             catalogs: catalog_map,
@@ -71,9 +69,10 @@ impl MessageProcessor {
 
     /// Parse a JSONL stream (newline-delimited JSON objects).
     pub fn parse_jsonl(jsonl: &str) -> Vec<Result<A2uiMessage>> {
-        jsonl.lines()
+        jsonl
+            .lines()
             .filter(|line| !line.trim().is_empty())
-            .map(|line| Self::parse_message(line))
+            .map(Self::parse_message)
             .collect()
     }
 
@@ -92,18 +91,17 @@ impl MessageProcessor {
             A2uiPayload::DeleteSurface(payload) => {
                 self.handle_delete_surface(&payload.delete_surface)
             }
-            A2uiPayload::CallFunction(payload) => {
-                self.handle_call_function(payload)
-            }
-            A2uiPayload::ActionResponse(payload) => {
-                self.handle_action_response(payload)
-            }
+            A2uiPayload::CallFunction(payload) => self.handle_call_function(payload),
+            A2uiPayload::ActionResponse(payload) => self.handle_action_response(payload),
         }
     }
 
     /// Process multiple messages sequentially.
     pub fn process_messages(&mut self, messages: Vec<A2uiMessage>) -> Vec<Result<()>> {
-        messages.into_iter().map(|m| self.process_message(m)).collect()
+        messages
+            .into_iter()
+            .map(|m| self.process_message(m))
+            .collect()
     }
 
     /// Drain outgoing client-to-server messages produced during processing.
@@ -134,7 +132,8 @@ impl MessageProcessor {
 
     /// Check if a component type exists in any registered catalog.
     pub fn catalog_type_exists(&self, component_type: &str) -> bool {
-        self.catalogs.values()
+        self.catalogs
+            .values()
             .any(|cat| cat.components.contains_key(component_type))
     }
 
@@ -145,8 +144,8 @@ impl MessageProcessor {
 
     /// Register an inline catalog from a raw JSON value.
     ///
-    /// The catalog is parsed via [`capabilities::parse_inline_catalog`]. Each
-    /// declared function becomes a [`SchemaOnlyFunction`] in a fresh
+    /// The catalog is parsed via [`parse_inline_catalog`](crate::capabilities::parse_inline_catalog). Each
+    /// declared function becomes a [`SchemaOnlyFunction`](crate::catalog::SchemaOnlyFunction) in a fresh
     /// [`Catalog`] (so `handle_call_function` can discover and reject
     /// execution attempts). Declared components have no native renderer and
     /// are *not* added to `catalog.components` — at render time they fall
@@ -183,16 +182,13 @@ impl MessageProcessor {
             .model
             .get_surface_mut(surface_id)
             .ok_or_else(|| A2uiError::SurfaceNotFound(surface_id.to_string()))?;
-        surface
-            .pending_actions
-            .borrow_mut()
-            .insert(
-                action_id.to_string(),
-                crate::model::surface_model::PendingAction {
-                    action_id: action_id.to_string(),
-                    response_path,
-                },
-            );
+        surface.pending_actions.borrow_mut().insert(
+            action_id.to_string(),
+            crate::model::surface_model::PendingAction {
+                action_id: action_id.to_string(),
+                response_path,
+            },
+        );
         Ok(())
     }
 
@@ -203,9 +199,9 @@ impl MessageProcessor {
         let name = sample["name"].as_str().unwrap_or("unnamed").to_string();
         let description = sample["description"].as_str().unwrap_or("").to_string();
 
-        let messages_val = sample["messages"].as_array().ok_or_else(|| {
-            A2uiError::Validation("sample missing 'messages' array".into())
-        })?;
+        let messages_val = sample["messages"]
+            .as_array()
+            .ok_or_else(|| A2uiError::Validation("sample missing 'messages' array".into()))?;
 
         let messages: Vec<A2uiMessage> = messages_val
             .iter()
@@ -245,10 +241,10 @@ impl MessageProcessor {
         // Opt-in validation: run integrity + topology against the incoming raw
         // payload (NOT the internal model), accumulating diagnostics. This does
         // NOT change whether components were loaded above.
-        if let Some(cfg) = self.validation {
-            if let Some(components) = &data.components {
-                self.run_payload_validation(components, cfg);
-            }
+        if let Some(cfg) = self.validation
+            && let Some(components) = &data.components
+        {
+            self.run_payload_validation(components, cfg);
         }
 
         self.model.add_surface(surface)
@@ -259,10 +255,15 @@ impl MessageProcessor {
         // via add_from_json. We intentionally do NOT eprintln diagnostics here
         // — this is a library, and writing to stderr corrupts TUI consumers
         // (e.g. the gallery app renders into stderr).
-        let surface = self.model.get_surface_mut(&data.surface_id)
+        let surface = self
+            .model
+            .get_surface_mut(&data.surface_id)
             .ok_or_else(|| A2uiError::SurfaceNotFound(data.surface_id.clone()))?;
 
-        surface.components.borrow_mut().add_from_json(&data.components);
+        surface
+            .components
+            .borrow_mut()
+            .add_from_json(&data.components);
 
         // Opt-in validation against the incoming raw payload.
         if let Some(cfg) = self.validation {
@@ -273,7 +274,9 @@ impl MessageProcessor {
     }
 
     fn handle_update_data_model(&mut self, data: &UpdateDataModelData) -> Result<()> {
-        let surface = self.model.get_surface_mut(&data.surface_id)
+        let surface = self
+            .model
+            .get_surface_mut(&data.surface_id)
             .ok_or_else(|| A2uiError::SurfaceNotFound(data.surface_id.clone()))?;
 
         let path = data.path.as_deref().unwrap_or("/");
@@ -281,7 +284,10 @@ impl MessageProcessor {
 
         if path == "/" || path.is_empty() {
             if value.is_null() {
-                surface.data_model.borrow_mut().replace_all(serde_json::json!({}));
+                surface
+                    .data_model
+                    .borrow_mut()
+                    .replace_all(serde_json::json!({}));
             } else {
                 surface.data_model.borrow_mut().replace_all(value);
             }
@@ -300,8 +306,14 @@ impl MessageProcessor {
         let call_id = &payload.function_call_id;
 
         // 1. Find the function across all catalogs
-        let mut found_func: Option<&dyn crate::catalog::function_api::FunctionImplementation> = None;
-        let mut found_functions_map: Option<&std::collections::HashMap<String, Box<dyn crate::catalog::function_api::FunctionImplementation>>> = None;
+        let mut found_func: Option<&dyn crate::catalog::function_api::FunctionImplementation> =
+            None;
+        let mut found_functions_map: Option<
+            &std::collections::HashMap<
+                String,
+                Box<dyn crate::catalog::function_api::FunctionImplementation>,
+            >,
+        > = None;
 
         for catalog in self.catalogs.values() {
             if let Some(f) = catalog.get_function(&fc.call) {
@@ -346,8 +358,12 @@ impl MessageProcessor {
             let mut resolved_args = HashMap::new();
             for (key, val) in &fc.args {
                 let resolved = ctx.resolve_dynamic_value(
-                    &serde_json::from_value::<crate::protocol::common_types::DynamicValue>(val.clone())
-                        .unwrap_or(crate::protocol::common_types::DynamicValue::String(val.to_string())),
+                    &serde_json::from_value::<crate::protocol::common_types::DynamicValue>(
+                        val.clone(),
+                    )
+                    .unwrap_or(
+                        crate::protocol::common_types::DynamicValue::String(val.to_string()),
+                    ),
                 );
                 resolved_args.insert(key.clone(), resolved);
             }
@@ -401,10 +417,10 @@ impl MessageProcessor {
         for surface in self.model.surfaces_mut() {
             let pending = surface.pending_actions.borrow_mut().remove(action_id);
             if let Some(pa) = pending {
-                if let Some(ref path) = pa.response_path {
-                    if let Some(ref value) = payload.action_response.value {
-                        surface.data_model.borrow_mut().set(path, value.clone());
-                    }
+                if let Some(ref path) = pa.response_path
+                    && let Some(ref value) = payload.action_response.value
+                {
+                    surface.data_model.borrow_mut().set(path, value.clone());
                 }
                 return Ok(());
             }
@@ -429,7 +445,7 @@ impl MessageProcessor {
         components: &[serde_json::Value],
         cfg: crate::validate::ValidationConfig,
     ) {
-        use crate::validate::{RefFieldSpec, ROOT_ID};
+        use crate::validate::{ROOT_ID, RefFieldSpec};
 
         let spec = RefFieldSpec::DEFAULT;
         let mut report = crate::validate::validate_component_integrity(
@@ -499,7 +515,8 @@ mod tests {
                 "catalogId": "test"
             }
         });
-        proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap()).unwrap();
+        proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
 
         // Update components
         let update = serde_json::json!({
@@ -512,7 +529,8 @@ mod tests {
                 ]
             }
         });
-        proc.process_message(MessageProcessor::parse_message(&update.to_string()).unwrap()).unwrap();
+        proc.process_message(MessageProcessor::parse_message(&update.to_string()).unwrap())
+            .unwrap();
 
         let surface = proc.model.get_surface("s1").unwrap();
         let components = surface.components.borrow();
@@ -533,7 +551,8 @@ mod tests {
                 "dataModel": {"name": "Alice"}
             }
         });
-        proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap()).unwrap();
+        proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
 
         // Update a field
         let update = serde_json::json!({
@@ -544,7 +563,8 @@ mod tests {
                 "value": "Bob"
             }
         });
-        proc.process_message(MessageProcessor::parse_message(&update.to_string()).unwrap()).unwrap();
+        proc.process_message(MessageProcessor::parse_message(&update.to_string()).unwrap())
+            .unwrap();
 
         let surface = proc.model.get_surface("s1").unwrap();
         assert_eq!(
@@ -564,9 +584,11 @@ mod tests {
                 "catalogId": "test"
             }
         });
-        proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap()).unwrap();
+        proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
+            .unwrap();
 
-        let result = proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap());
+        let result =
+            proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap());
         assert!(result.is_err());
     }
 
@@ -750,16 +772,16 @@ mod tests {
 
         // Component still loaded (graceful degradation).
         assert!(proc.model.get_surface("s1").is_some());
-        assert!(proc
-            .model
-            .get_surface("s1")
-            .unwrap()
-            .components
-            .borrow()
-            .contains("root"));
+        assert!(
+            proc.model
+                .get_surface("s1")
+                .unwrap()
+                .components
+                .borrow()
+                .contains("root")
+        );
 
         // No validation report produced.
         assert!(proc.drain_validation().is_empty());
     }
-
 }

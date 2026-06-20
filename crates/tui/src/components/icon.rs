@@ -1,14 +1,10 @@
 //! Icon component — maps icon names to Unicode symbols and renders them.
 
-use ratatui::{
-    Frame,
-    layout::Rect,
-    widgets::Paragraph,
-};
+use ratatui::{Frame, layout::Rect, widgets::Paragraph};
 
+use crate::component_impl::TuiComponent;
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::protocol::common_types::DynamicString;
-use crate::component_impl::TuiComponent;
 
 /// Icon component implementation.
 ///

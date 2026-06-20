@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use super::event_stream::{EventSubscription, EventStream};
+use super::event_stream::{EventStream, EventSubscription};
 
 /// A reactive container that holds a value and notifies subscribers on change.
 pub struct Signal<T: 'static> {

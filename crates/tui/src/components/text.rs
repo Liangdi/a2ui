@@ -8,9 +8,9 @@ use ratatui::{
 };
 use unicode_width::UnicodeWidthStr;
 
+use crate::component_impl::TuiComponent;
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::protocol::common_types::DynamicString;
-use crate::component_impl::TuiComponent;
 
 /// Text component implementation.
 ///
@@ -216,11 +216,11 @@ fn wrapped_row_count(line: &str, content_width: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use a2ui_base::catalog::Catalog;
-    use a2ui_base::message_processor::MessageProcessor;
     use crate::catalogs::basic::{build_basic_catalog, build_basic_registry};
     use crate::component_impl::TuiComponent;
     use crate::surface::SurfaceRenderer;
+    use a2ui_base::catalog::Catalog;
+    use a2ui_base::message_processor::MessageProcessor;
     use ratatui::backend::TestBackend;
     use std::collections::HashMap;
 
@@ -309,8 +309,10 @@ mod tests {
         let surface = processor.model.get_surface("test").expect("surface exists");
         let components = surface.components.borrow();
         let data_model = surface.data_model.borrow();
-        let functions: HashMap<String, Box<dyn a2ui_base::catalog::function_api::FunctionImplementation>> =
-            HashMap::new();
+        let functions: HashMap<
+            String,
+            Box<dyn a2ui_base::catalog::function_api::FunctionImplementation>,
+        > = HashMap::new();
         let ctx = ComponentContext::new(
             "root".to_string(),
             "test".to_string(),

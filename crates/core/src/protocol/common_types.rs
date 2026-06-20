@@ -256,7 +256,10 @@ mod tests {
     fn childlist_static_array_deserializes() {
         let json = serde_json::json!(["a", "b", "c"]);
         let cl: ChildList = serde_json::from_value(json).unwrap();
-        assert_eq!(cl, ChildList::Static(vec!["a".to_string(), "b".to_string(), "c".to_string()]));
+        assert_eq!(
+            cl,
+            ChildList::Static(vec!["a".to_string(), "b".to_string(), "c".to_string()])
+        );
     }
 
     #[test]

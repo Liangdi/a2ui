@@ -65,4 +65,10 @@ impl SurfaceGroupModel {
     pub fn len(&self) -> usize {
         self.surfaces.len()
     }
+
+    /// `true` if there are no active surfaces.
+    #[allow(dead_code)]
+    pub fn is_empty(&self) -> bool {
+        self.surfaces.is_empty()
+    }
 }

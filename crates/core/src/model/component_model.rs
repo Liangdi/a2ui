@@ -17,9 +17,9 @@ impl ComponentModel {
     /// Parse from a raw JSON value.
     /// Extracts `id` and `component` fields, puts the rest into `properties`.
     pub fn from_json(value: &Value) -> Result<Self, crate::error::A2uiError> {
-        let obj = value
-            .as_object()
-            .ok_or_else(|| crate::error::A2uiError::Validation("component must be an object".into()))?;
+        let obj = value.as_object().ok_or_else(|| {
+            crate::error::A2uiError::Validation("component must be an object".into())
+        })?;
 
         let id = obj
             .get("id")
@@ -30,7 +30,12 @@ impl ComponentModel {
         let component_type = obj
             .get("component")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| crate::error::A2uiError::Validation(format!("component '{}' missing 'component' type", id)))?
+            .ok_or_else(|| {
+                crate::error::A2uiError::Validation(format!(
+                    "component '{}' missing 'component' type",
+                    id
+                ))
+            })?
             .to_string();
 
         // Collect remaining fields as properties (excluding id, component)
@@ -49,7 +54,9 @@ impl ComponentModel {
 
     /// Get a typed property value.
     pub fn get_property<T: serde::de::DeserializeOwned>(&self, key: &str) -> Option<T> {
-        self.properties.get(key).and_then(|v| serde_json::from_value(v.clone()).ok())
+        self.properties
+            .get(key)
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
     }
 
     /// Get a raw property value.
@@ -66,7 +73,10 @@ impl ComponentModel {
 
     /// Get the `child` property as a single ComponentId.
     pub fn child(&self) -> Option<String> {
-        self.properties.get("child").and_then(|v| v.as_str()).map(|s| s.to_string())
+        self.properties
+            .get("child")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
     }
 
     /// Get the `action` property.

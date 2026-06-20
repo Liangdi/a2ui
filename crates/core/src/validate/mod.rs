@@ -15,11 +15,11 @@ pub mod payload_fixer;
 pub mod ref_fields;
 pub mod topology;
 
-pub use config::{ValidationConfig, RELAXED_VALIDATION, STRICT_VALIDATION};
+pub use config::{RELAXED_VALIDATION, STRICT_VALIDATION, ValidationConfig};
 pub use error::{ValidationError, ValidationErrorCode, ValidationReport};
 pub use integrity::{
-    get_component_references, validate_component_integrity, validate_recursion_and_paths,
-    MAX_FUNC_CALL_DEPTH, MAX_GLOBAL_DEPTH,
+    MAX_FUNC_CALL_DEPTH, MAX_GLOBAL_DEPTH, get_component_references, validate_component_integrity,
+    validate_recursion_and_paths,
 };
 pub use payload_fixer::parse_and_fix;
 pub use ref_fields::RefFieldSpec;

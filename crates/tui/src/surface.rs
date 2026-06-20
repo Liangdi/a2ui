@@ -10,15 +10,15 @@ use ratatui::{
     widgets::{Block, Clear, Paragraph},
 };
 
-use a2ui_base::catalog::function_api::FunctionImplementation;
+use super::component_impl::ComponentRegistry;
+use super::component_impl::TuiComponent;
 use a2ui_base::catalog::Catalog;
+use a2ui_base::catalog::function_api::FunctionImplementation;
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::model::components_model::SurfaceComponentsModel;
 use a2ui_base::model::data_model::DataModel;
 use a2ui_base::model::surface_model::SurfaceModel;
 use a2ui_base::protocol::common_types::DynamicBoolean;
-use super::component_impl::ComponentRegistry;
-use super::component_impl::TuiComponent;
 
 /// Renders a [`SurfaceModel`] into a ratatui frame by walking the component tree.
 pub struct SurfaceRenderer<'a> {
@@ -43,7 +43,7 @@ impl<'a> SurfaceRenderer<'a> {
 
     /// Main entry point: render the component tree into the frame.
     ///
-    /// Renders the tree (see [`Self::render_tree`]) and then paints any open
+    /// Renders the tree (see `render_tree`) and then paints any open
     /// [`Modal`](a2ui_base::model::component_model::ComponentModel) as a centered
     /// overlay on top.
     pub fn render(&self, frame: &mut Frame, area: Rect, focused_id: Option<&str>) {
@@ -54,7 +54,14 @@ impl<'a> SurfaceRenderer<'a> {
         let data_model = self.surface.data_model.borrow();
         let components = self.surface.components.borrow();
         let surface_id = &self.surface.id;
-        self.render_modal_overlays(frame, area, surface_id, &data_model, &components, focused_id);
+        self.render_modal_overlays(
+            frame,
+            area,
+            surface_id,
+            &data_model,
+            &components,
+            focused_id,
+        );
     }
 
     /// Render the tree with viewport scrolling, **without squishing the content**.
@@ -76,7 +83,7 @@ impl<'a> SurfaceRenderer<'a> {
     /// full-surface floating dialog, which is meaningless inside a clipped slice.
     /// Use [`Self::render`] when you want modals.
     ///
-    /// If the root's natural height cannot be measured, falls back to [`render`].
+    /// If the root's natural height cannot be measured, falls back to [`Self::render`].
     ///
     /// [`Modal`]: a2ui_base::model::component_model::ComponentModel
     pub fn render_scrolled(
@@ -136,7 +143,7 @@ impl<'a> SurfaceRenderer<'a> {
     }
 
     /// Render the component tree (root sizing + recursive [`render_node`]), **without**
-    /// modal overlays. Shared by [`render`] (which paints modals on top) and
+    /// modal overlays. Shared by [`Self::render`] (which paints modals on top) and
     /// [`render_scrolled`] (which renders into an off-screen buffer where a modal
     /// overlay would be meaningless).
     fn render_tree(&self, frame: &mut Frame, area: Rect, focused_id: Option<&str>) {
@@ -239,6 +246,7 @@ impl<'a> SurfaceRenderer<'a> {
     /// Useful for template-based rendering where a container iterates over a
     /// data array and renders the same component for each item with a nested
     /// data path.
+    #[allow(clippy::too_many_arguments)] // recursive node renderer: ids + area + frame + shared model views
     pub fn render_child_by_id(
         &self,
         child_id: &str,
@@ -276,7 +284,7 @@ impl<'a> SurfaceRenderer<'a> {
         components: &SurfaceComponentsModel,
         focused_id: Option<&str>,
     ) {
-        for (_, m) in components.all() {
+        for m in components.all().values() {
             if m.component_type != "Modal" || !is_modal_open(m) {
                 continue;
             }
@@ -288,16 +296,24 @@ impl<'a> SurfaceRenderer<'a> {
             // underlying symbols (e.g. the trigger) first, then Block paints a
             // dark background (Block sets bg but doesn't erase symbols alone).
             frame.render_widget(Clear, area);
-            frame.render_widget(Block::default().style(Style::default().bg(Color::Black)), area);
+            frame.render_widget(
+                Block::default().style(Style::default().bg(Color::Black)),
+                area,
+            );
 
             // Centered dialog box.
             let dialog = centered_rect(area, 60, 40);
             frame.render_widget(Clear, dialog);
             frame.render_widget(
-                Block::bordered().title(" Modal ").style(Style::default().bg(Color::Gray)),
+                Block::bordered()
+                    .title(" Modal ")
+                    .style(Style::default().bg(Color::Gray)),
                 dialog,
             );
-            let inner = dialog.inner(Margin { horizontal: 1, vertical: 1 });
+            let inner = dialog.inner(Margin {
+                horizontal: 1,
+                vertical: 1,
+            });
             if inner.width > 0 && inner.height > 0 {
                 self.render_child_by_id(
                     &content_id,
@@ -351,6 +367,7 @@ fn centered_rect(area: Rect, width_pct: u16, height_pct: u16) -> Rect {
 /// 2. Builds a [`ComponentContext`] for it.
 /// 3. Finds the matching [`TuiComponent`](super::component_impl::TuiComponent) in the registry.
 /// 4. Passes a `render_child` closure that re-enters this same function for any children.
+#[allow(clippy::too_many_arguments)] // recursive walk: ids + area + frame + shared model views + focus
 fn render_node(
     component_id: &str,
     surface_id: &str,
@@ -388,36 +405,38 @@ fn render_node(
     //
     // Defined before the registry lookup so the generic fallback renderer can
     // also recurse into any child/children of an unknown component type.
-    let mut render_child = |child_id: &str, child_area: Rect, child_frame: &mut Frame, child_base_path: &str| {
-        render_node(
-            child_id,
-            surface_id,
-            child_base_path,
-            child_area,
-            child_frame,
-            data_model,
-            components,
-            registry,
-            functions,
-            focused_id,
-        );
-    };
+    let mut render_child =
+        |child_id: &str, child_area: Rect, child_frame: &mut Frame, child_base_path: &str| {
+            render_node(
+                child_id,
+                surface_id,
+                child_base_path,
+                child_area,
+                child_frame,
+                data_model,
+                components,
+                registry,
+                functions,
+                focused_id,
+            );
+        };
 
     // The measure_child closure re-enters measure_node so containers can query a
     // child's natural height while laying out (render) and while measuring self.
-    let mut measure_child = |child_id: &str, child_base_path: &str, available_width: u16| -> Option<u16> {
-        measure_node(
-            child_id,
-            surface_id,
-            child_base_path,
-            available_width,
-            data_model,
-            components,
-            registry,
-            functions,
-            focused_id,
-        )
-    };
+    let mut measure_child =
+        |child_id: &str, child_base_path: &str, available_width: u16| -> Option<u16> {
+            measure_node(
+                child_id,
+                surface_id,
+                child_base_path,
+                available_width,
+                data_model,
+                components,
+                registry,
+                functions,
+                focused_id,
+            )
+        };
 
     let tui_comp = match registry.get(&comp_model.component_type) {
         Some(c) => c,
@@ -444,6 +463,7 @@ fn render_node(
 /// [`TuiComponent`](super::component_impl::TuiComponent)'s `natural_height`, and
 /// applies the component's optional `minHeight` floor centrally. Returns `None`
 /// for unknown component types (treated as legacy fill by callers).
+#[allow(clippy::too_many_arguments)] // recursive measure: mirrors render_node's signature
 fn measure_node(
     component_id: &str,
     surface_id: &str,
@@ -466,10 +486,7 @@ fn measure_node(
         focused_id.map(|s| s.to_string()),
     );
 
-    let tui_comp = match registry.get(&comp_model.component_type) {
-        Some(c) => c,
-        None => return None,
-    };
+    let tui_comp = registry.get(&comp_model.component_type)?;
 
     let mut measure_child = |child_id: &str, child_base_path: &str, width: u16| -> Option<u16> {
         measure_node(
@@ -497,14 +514,18 @@ fn measure_node(
 #[cfg(test)]
 mod render_tests {
     use super::*;
-    use a2ui_base::message_processor::MessageProcessor;
     use crate::catalogs::basic::{build_basic_catalog, build_basic_registry};
+    use a2ui_base::message_processor::MessageProcessor;
     use ratatui::backend::TestBackend;
 
     /// Build a surface whose `root` is described by `components_json` (an array of
     /// component objects), then render it into a fresh `cols x rows` TestBackend
     /// buffer and return the buffer.
-    fn render_to_buffer(components_json: serde_json::Value, cols: u16, rows: u16) -> ratatui::buffer::Buffer {
+    fn render_to_buffer(
+        components_json: serde_json::Value,
+        cols: u16,
+        rows: u16,
+    ) -> ratatui::buffer::Buffer {
         let registry = build_basic_registry();
         let mut processor = MessageProcessor::new(vec![build_basic_catalog()]);
 
@@ -708,11 +729,20 @@ mod render_tests {
 
         // Before the measure pass the Card filled all 24 rows; now the top and bottom
         // edge rows must be blank (card is centered & content-sized).
-        assert!(row_is_blank(&buf, 0, 40), "top edge should be blank — card shrink-wrapped");
-        assert!(row_is_blank(&buf, 23, 40), "bottom edge should be blank — card shrink-wrapped");
+        assert!(
+            row_is_blank(&buf, 0, 40),
+            "top edge should be blank — card shrink-wrapped"
+        );
+        assert!(
+            row_is_blank(&buf, 23, 40),
+            "bottom edge should be blank — card shrink-wrapped"
+        );
         // And the content occupies only a fraction of the screen.
         let used = non_blank_row_count(&buf, 40, 24);
-        assert!(used <= 12, "card content should occupy <=12 rows, used {used}");
+        assert!(
+            used <= 12,
+            "card content should occupy <=12 rows, used {used}"
+        );
     }
 
     #[test]
@@ -776,10 +806,16 @@ mod render_tests {
             (0..24u16).any(|y| (0..40u16).any(|x| buf[(x, y)].fg == Color::Yellow))
         };
         let focused = render_to_buffer_focused(components.clone(), 40, 24, Some("user"));
-        assert!(any_yellow(&focused), "focused TextField should paint a yellow border");
+        assert!(
+            any_yellow(&focused),
+            "focused TextField should paint a yellow border"
+        );
 
         let plain = render_to_buffer_focused(components, 40, 24, None);
-        assert!(!any_yellow(&plain), "no focus passed → no yellow highlight anywhere");
+        assert!(
+            !any_yellow(&plain),
+            "no focus passed → no yellow highlight anywhere"
+        );
     }
 
     #[test]
@@ -823,8 +859,14 @@ mod render_tests {
 
         let top_filled = (0..6u16).any(|y| !row_is_blank(&buf, y, 40));
         let bottom_filled = (12..24u16).any(|y| !row_is_blank(&buf, y, 40));
-        assert!(top_filled, "first child should render near the top of a filling column");
-        assert!(bottom_filled, "second child should render near the bottom of a filling column");
+        assert!(
+            top_filled,
+            "first child should render near the top of a filling column"
+        );
+        assert!(
+            bottom_filled,
+            "second child should render near the bottom of a filling column"
+        );
     }
 
     #[test]
@@ -852,7 +894,10 @@ mod render_tests {
                 screen.push(buf[(x, y)].symbol().chars().next().unwrap_or(' '));
             }
         }
-        assert!(screen.contains("Sign In"), "Button label 'Sign In' should render");
+        assert!(
+            screen.contains("Sign In"),
+            "Button label 'Sign In' should render"
+        );
 
         let border_rows = (0..24u16)
             .filter(|&y| (0..80u16).any(|x| buf[(x, y)].symbol() == "─"))
@@ -922,12 +967,18 @@ mod render_tests {
             .unwrap();
 
         // Confirm the children parsed as a Template, not None.
-        let surface = processor.model.get_surface("example_7").expect("surface exists");
+        let surface = processor
+            .model
+            .get_surface("example_7")
+            .expect("surface exists");
         {
             let components = surface.components.borrow();
             let root = components.get("root").expect("root exists");
             match root.children() {
-                Some(a2ui_base::protocol::common_types::ChildList::Template { component_id, path }) => {
+                Some(a2ui_base::protocol::common_types::ChildList::Template {
+                    component_id,
+                    path,
+                }) => {
                     assert_eq!(component_id, "restaurant_card");
                     assert_eq!(path, "/restaurants");
                 }
@@ -954,10 +1005,22 @@ mod render_tests {
             screen.push('\n');
         }
 
-        assert!(screen.contains("The Golden Fork"), "first restaurant title should render:\n{screen}");
-        assert!(screen.contains("Ocean's Bounty"), "second restaurant title should render:\n{screen}");
-        assert!(screen.contains("Fine Dining & Spirits"), "first restaurant subtitle should render:\n{screen}");
-        assert!(screen.contains("456 Shoreline Dr"), "second restaurant address should render:\n{screen}");
+        assert!(
+            screen.contains("The Golden Fork"),
+            "first restaurant title should render:\n{screen}"
+        );
+        assert!(
+            screen.contains("Ocean's Bounty"),
+            "second restaurant title should render:\n{screen}"
+        );
+        assert!(
+            screen.contains("Fine Dining & Spirits"),
+            "first restaurant subtitle should render:\n{screen}"
+        );
+        assert!(
+            screen.contains("456 Shoreline Dr"),
+            "second restaurant address should render:\n{screen}"
+        );
     }
 
     #[test]
@@ -1015,7 +1078,10 @@ mod render_tests {
             .process_message(MessageProcessor::parse_message(&update.to_string()).unwrap())
             .unwrap();
 
-        let surface = processor.model.get_surface("idx_surf").expect("surface exists");
+        let surface = processor
+            .model
+            .get_surface("idx_surf")
+            .expect("surface exists");
         let backend = TestBackend::new(60, 24);
         let mut terminal = ratatui::Terminal::new(backend).unwrap();
         let render_catalog = Catalog::new("placeholder");
@@ -1038,8 +1104,14 @@ mod render_tests {
         // Template expansion + @index: the three labels render, and the index
         // text yields 1, 2, 3 (offset 1 over a 0-based 0,1,2).
         assert!(screen.contains("Apple"), "item 0 label rendered:\n{screen}");
-        assert!(screen.contains("Banana"), "item 1 label rendered:\n{screen}");
-        assert!(screen.contains("Cherry"), "item 2 label rendered:\n{screen}");
+        assert!(
+            screen.contains("Banana"),
+            "item 1 label rendered:\n{screen}"
+        );
+        assert!(
+            screen.contains("Cherry"),
+            "item 2 label rendered:\n{screen}"
+        );
         assert!(
             screen.contains('1') && screen.contains('2') && screen.contains('3'),
             "@index must render 1,2,3 across the three template items:\n{screen}"
@@ -1078,8 +1150,14 @@ mod render_tests {
             "top viewport must equal the reference's top 6 rows (no squish)"
         );
         let screen = screen_string(&top, 40, 6);
-        assert!(screen.contains("ROW 0"), "top slice shows the first row:\n{screen}");
-        assert!(!screen.contains("ROW 5"), "top slice must not show the last row:\n{screen}");
+        assert!(
+            screen.contains("ROW 0"),
+            "top slice shows the first row:\n{screen}"
+        );
+        assert!(
+            !screen.contains("ROW 5"),
+            "top slice must not show the last row:\n{screen}"
+        );
     }
 
     #[test]
@@ -1094,8 +1172,14 @@ mod render_tests {
             "bottom viewport must equal the reference's rows 12..18"
         );
         let screen = screen_string(&bottom, 40, 6);
-        assert!(screen.contains("ROW 5"), "bottom slice shows the last row:\n{screen}");
-        assert!(!screen.contains("ROW 0"), "bottom slice must not show the first row:\n{screen}");
+        assert!(
+            screen.contains("ROW 5"),
+            "bottom slice shows the last row:\n{screen}"
+        );
+        assert!(
+            !screen.contains("ROW 0"),
+            "bottom slice must not show the first row:\n{screen}"
+        );
     }
 
     #[test]
@@ -1111,9 +1195,14 @@ mod render_tests {
             "middle viewport must equal the reference's rows 6..10"
         );
         let screen = screen_string(&mid, 40, 4);
-        assert!(screen.contains("ROW 2"), "middle slice shows ROW 2:\n{screen}");
-        assert!(!screen.contains("ROW 0") && !screen.contains("ROW 5"),
-            "middle slice shows neither end:\n{screen}");
+        assert!(
+            screen.contains("ROW 2"),
+            "middle slice shows ROW 2:\n{screen}"
+        );
+        assert!(
+            !screen.contains("ROW 0") && !screen.contains("ROW 5"),
+            "middle slice shows neither end:\n{screen}"
+        );
     }
 
     #[test]
@@ -1129,7 +1218,10 @@ mod render_tests {
             "2-row viewport must be the reference's top 2 rows — sliced, not compressed"
         );
         let screen = screen_string(&tiny, 40, 2);
-        assert!(screen.contains("ROW 0"), "tiny viewport still shows ROW 0:\n{screen}");
+        assert!(
+            screen.contains("ROW 0"),
+            "tiny viewport still shows ROW 0:\n{screen}"
+        );
         assert!(
             !screen.contains("ROW 5"),
             "last row must not be compressed into the 2-row viewport:\n{screen}"
@@ -1142,7 +1234,10 @@ mod render_tests {
         let comps = scrolled_column_components();
         let past = render_scrolled_to_buffer(comps, 40, 6, 100);
         for y in 0..6u16 {
-            assert!(row_is_blank(&past, y, 40), "row {y} should be blank past end");
+            assert!(
+                row_is_blank(&past, y, 40),
+                "row {y} should be blank past end"
+            );
         }
     }
 }

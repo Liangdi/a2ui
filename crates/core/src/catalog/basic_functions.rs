@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use chrono::{NaiveDateTime, Timelike, Datelike};
+use chrono::{Datelike, NaiveDateTime, Timelike};
 use regex::Regex;
 use serde_json::Value;
 
@@ -23,13 +23,11 @@ fn require_str<'a>(
     key: &str,
     func_name: &str,
 ) -> std::result::Result<&'a str, A2uiError> {
-    args.get(key)
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            A2uiError::InvalidFunctionCall(format!(
-                "{func_name}: missing or non-string argument '{key}'"
-            ))
-        })
+    args.get(key).and_then(|v| v.as_str()).ok_or_else(|| {
+        A2uiError::InvalidFunctionCall(format!(
+            "{func_name}: missing or non-string argument '{key}'"
+        ))
+    })
 }
 
 /// Extract an optional f64 argument.
@@ -131,15 +129,15 @@ impl FunctionImplementation for LengthFunction {
         let value = require_str(args, "value", "length")?;
         let len = value.chars().count() as f64;
 
-        if let Some(min) = opt_f64(args, "min") {
-            if len < min {
-                return Ok(Value::Bool(false));
-            }
+        if let Some(min) = opt_f64(args, "min")
+            && len < min
+        {
+            return Ok(Value::Bool(false));
         }
-        if let Some(max) = opt_f64(args, "max") {
-            if len > max {
-                return Ok(Value::Bool(false));
-            }
+        if let Some(max) = opt_f64(args, "max")
+            && len > max
+        {
+            return Ok(Value::Bool(false));
         }
         Ok(Value::Bool(true))
     }
@@ -180,15 +178,15 @@ impl FunctionImplementation for NumericFunction {
             return Ok(Value::Bool(false));
         };
 
-        if let Some(min) = opt_f64(args, "min") {
-            if n < min {
-                return Ok(Value::Bool(false));
-            }
+        if let Some(min) = opt_f64(args, "min")
+            && n < min
+        {
+            return Ok(Value::Bool(false));
         }
-        if let Some(max) = opt_f64(args, "max") {
-            if n > max {
-                return Ok(Value::Bool(false));
-            }
+        if let Some(max) = opt_f64(args, "max")
+            && n > max
+        {
+            return Ok(Value::Bool(false));
         }
         Ok(Value::Bool(true))
     }
@@ -310,14 +308,9 @@ impl FunctionImplementation for NotFunction {
         args: &HashMap<String, Value>,
         _context: &DataContext,
     ) -> Result<Value, A2uiError> {
-        let val = args
-            .get("value")
-            .and_then(|v| v.as_bool())
-            .ok_or_else(|| {
-                A2uiError::InvalidFunctionCall(
-                    "not: missing or non-boolean argument 'value'".into(),
-                )
-            })?;
+        let val = args.get("value").and_then(|v| v.as_bool()).ok_or_else(|| {
+            A2uiError::InvalidFunctionCall("not: missing or non-boolean argument 'value'".into())
+        })?;
 
         Ok(Value::Bool(!val))
     }
@@ -344,14 +337,11 @@ impl FunctionImplementation for FormatNumberFunction {
         args: &HashMap<String, Value>,
         _context: &DataContext,
     ) -> Result<Value, A2uiError> {
-        let val = args
-            .get("value")
-            .and_then(|v| v.as_f64())
-            .ok_or_else(|| {
-                A2uiError::InvalidFunctionCall(
-                    "formatNumber: missing or non-numeric argument 'value'".into(),
-                )
-            })?;
+        let val = args.get("value").and_then(|v| v.as_f64()).ok_or_else(|| {
+            A2uiError::InvalidFunctionCall(
+                "formatNumber: missing or non-numeric argument 'value'".into(),
+            )
+        })?;
 
         let grouping = opt_bool(args, "grouping").unwrap_or(true);
         let decimals = opt_f64(args, "decimals").map(|d| d as usize);
@@ -451,14 +441,11 @@ impl FunctionImplementation for FormatCurrencyFunction {
         args: &HashMap<String, Value>,
         _context: &DataContext,
     ) -> Result<Value, A2uiError> {
-        let val = args
-            .get("value")
-            .and_then(|v| v.as_f64())
-            .ok_or_else(|| {
-                A2uiError::InvalidFunctionCall(
-                    "formatCurrency: missing or non-numeric argument 'value'".into(),
-                )
-            })?;
+        let val = args.get("value").and_then(|v| v.as_f64()).ok_or_else(|| {
+            A2uiError::InvalidFunctionCall(
+                "formatCurrency: missing or non-numeric argument 'value'".into(),
+            )
+        })?;
 
         let currency = require_str(args, "currency", "formatCurrency")?;
 
@@ -522,18 +509,7 @@ fn apply_date_format(dt: &NaiveDateTime, fmt: &str) -> String {
 
     let weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
     let months = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     ];
 
     while i < chars.len() {
@@ -725,7 +701,10 @@ fn resolve_expression(expr: &str, context: &DataContext) -> String {
         // Validate that func_name looks like an identifier (letters, digits, underscore).
         if is_identifier(func_name)
             && trimmed.ends_with(')')
-            && func_name.chars().next().map_or(false, |c| c.is_alphabetic() || c == '_')
+            && func_name
+                .chars()
+                .next()
+                .is_some_and(|c| c.is_alphabetic() || c == '_')
         {
             let args_str = &trimmed[paren_pos + 1..trimmed.len() - 1];
             let args = match parse_function_args(args_str, context) {
@@ -907,14 +886,11 @@ impl FunctionImplementation for PluralizeFunction {
         args: &HashMap<String, Value>,
         _context: &DataContext,
     ) -> Result<Value, A2uiError> {
-        let val = args
-            .get("value")
-            .and_then(|v| v.as_f64())
-            .ok_or_else(|| {
-                A2uiError::InvalidFunctionCall(
-                    "pluralize: missing or non-numeric argument 'value'".into(),
-                )
-            })?;
+        let val = args.get("value").and_then(|v| v.as_f64()).ok_or_else(|| {
+            A2uiError::InvalidFunctionCall(
+                "pluralize: missing or non-numeric argument 'value'".into(),
+            )
+        })?;
 
         // Determine the plural category using simple English rules.
         let category = if val == 0.0 {
@@ -1298,7 +1274,10 @@ mod tests {
         let mut args = HashMap::new();
         args.insert("value".into(), json!("2024-03-15T14:30:00"));
         args.insert("format".into(), json!("yyyy-MM-dd HH:mm:ss"));
-        assert_eq!(f.execute(&args, &ctx).unwrap(), json!("2024-03-15 14:30:00"));
+        assert_eq!(
+            f.execute(&args, &ctx).unwrap(),
+            json!("2024-03-15 14:30:00")
+        );
     }
 
     #[test]
@@ -1443,7 +1422,10 @@ mod tests {
 
         let mut args = HashMap::new();
         args.insert("value".into(), json!("escaped: \\${literal}"));
-        assert_eq!(f.execute(&args, &ctx).unwrap(), json!("escaped: ${literal}"));
+        assert_eq!(
+            f.execute(&args, &ctx).unwrap(),
+            json!("escaped: ${literal}")
+        );
     }
 
     #[test]
@@ -1486,10 +1468,7 @@ mod tests {
             "value".into(),
             json!("Price: ${formatNumber(value:${/price}, grouping:false)}"),
         );
-        assert_eq!(
-            f.execute(&args, &ctx).unwrap(),
-            json!("Price: 1234.5")
-        );
+        assert_eq!(f.execute(&args, &ctx).unwrap(), json!("Price: 1234.5"));
     }
 
     #[test]

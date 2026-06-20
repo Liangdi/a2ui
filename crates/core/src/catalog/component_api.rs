@@ -8,7 +8,10 @@ pub trait ComponentApi: Send + Sync + 'static {
     /// Validate component properties against catalog constraints.
     ///
     /// Returns `Ok(())` if valid, or a `Vec<String>` of validation error messages.
-    fn validate_properties(&self, _properties: &serde_json::Map<String, serde_json::Value>) -> std::result::Result<(), Vec<String>> {
+    fn validate_properties(
+        &self,
+        _properties: &serde_json::Map<String, serde_json::Value>,
+    ) -> std::result::Result<(), Vec<String>> {
         Ok(()) // default: no validation
     }
 }

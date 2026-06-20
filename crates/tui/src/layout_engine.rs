@@ -14,11 +14,24 @@ use a2ui_base::protocol::common_types::{Align, Justify};
 /// - `area` height/width ≥ 3 → shrink by 1 cell on every side (normal margin).
 /// - `area` height/width ≤ 2 → use the full axis (no margin; content fills it).
 pub fn padded_content(area: Rect) -> Rect {
-    let h = if area.height > 2 { area.height - 2 } else { area.height };
-    let w = if area.width > 2 { area.width - 2 } else { area.width };
+    let h = if area.height > 2 {
+        area.height - 2
+    } else {
+        area.height
+    };
+    let w = if area.width > 2 {
+        area.width - 2
+    } else {
+        area.width
+    };
     let y = if area.height > 2 { area.y + 1 } else { area.y };
     let x = if area.width > 2 { area.x + 1 } else { area.x };
-    Rect { x, y, width: w, height: h }
+    Rect {
+        x,
+        y,
+        width: w,
+        height: h,
+    }
 }
 
 /// Split a [`Rect`] into `n` segments based on optional weights.
@@ -30,19 +43,15 @@ pub fn padded_content(area: Rect) -> Rect {
 /// * If **all** items have weights, the full area is distributed proportionally.
 ///
 /// Returns a `Vec<Rect>` with `weights.len()` entries.
-pub fn weighted_split(
-    direction: Direction,
-    area: Rect,
-    weights: &[Option<f64>],
-) -> Vec<Rect> {
+pub fn weighted_split(direction: Direction, area: Rect, weights: &[Option<f64>]) -> Vec<Rect> {
     let n = weights.len();
     if n == 0 {
         return vec![];
     }
 
     let total_size = match direction {
-        Direction::Horizontal => area.width as u16,
-        Direction::Vertical => area.height as u16,
+        Direction::Horizontal => area.width,
+        Direction::Vertical => area.height,
     } as f64;
 
     // Treat None weights as 1.0 (baseline unit).
@@ -130,7 +139,11 @@ pub fn apply_justify(
             let mut result = Vec::with_capacity(count);
             let mut offset: u16 = 0;
             for (rect, size) in items {
-                offset += if result.is_empty() { start_offset } else { spacing };
+                offset += if result.is_empty() {
+                    start_offset
+                } else {
+                    spacing
+                };
                 result.push(set_offset(*rect, total_area, direction, offset));
                 offset += size;
             }
@@ -246,7 +259,10 @@ pub fn flex_layout(
     let total = size_from_direction(area, direction) as i64;
 
     // Resolve base and effective weight per item.
-    let bases: Vec<i64> = items.iter().map(|(nat, _)| nat.unwrap_or(0) as i64).collect();
+    let bases: Vec<i64> = items
+        .iter()
+        .map(|(nat, _)| nat.unwrap_or(0) as i64)
+        .collect();
     let weights: Vec<f64> = items
         .iter()
         .map(|(nat, w)| w.unwrap_or(if nat.is_none() { 1.0 } else { 0.0 }))
@@ -277,12 +293,17 @@ pub fn flex_layout(
             let each = free / n as i64;
             let mut rem = free - each * n as i64;
             for i in 0..n {
-                finals[i] = bases[i] + each + (if rem > 0 { rem -= 1; 1 } else { 0 });
+                finals[i] = bases[i]
+                    + each
+                    + (if rem > 0 {
+                        rem -= 1;
+                        1
+                    } else {
+                        0
+                    });
             }
         } else {
-            for i in 0..n {
-                finals[i] = bases[i];
-            }
+            finals[..n].copy_from_slice(&bases[..n]);
         }
     } else if free < 0 {
         // Overflow: shrink. Pure-weight when weights exist (legacy); else proportional
@@ -305,15 +326,19 @@ pub fn flex_layout(
         } else {
             let each = total / n as i64;
             let mut rem = total - each * n as i64;
-            for i in 0..n {
-                finals[i] = each + (if rem > 0 { rem -= 1; 1 } else { 0 });
+            for f in finals.iter_mut().take(n) {
+                *f = each
+                    + (if rem > 0 {
+                        rem -= 1;
+                        1
+                    } else {
+                        0
+                    });
             }
         }
     } else {
         // free == 0: bases exactly fill the axis.
-        for i in 0..n {
-            finals[i] = bases[i];
-        }
+        finals[..n].copy_from_slice(&bases[..n]);
     }
 
     // Clamp to a valid u16 range (defensive against sub-pixel drift).
@@ -570,7 +595,12 @@ mod tests {
             (Rect::new(20, 0, 20, 30), 20),
             (Rect::new(40, 0, 20, 30), 20),
         ];
-        let result = apply_justify(Justify::SpaceBetween, &items, container, Direction::Horizontal);
+        let result = apply_justify(
+            Justify::SpaceBetween,
+            &items,
+            container,
+            Direction::Horizontal,
+        );
         assert_eq!(result.len(), 3);
         // 100 - 60 = 40 gap, 40 / 2 = 20 spacing
         assert_eq!(result[0].x, 0);
@@ -581,9 +611,7 @@ mod tests {
     #[test]
     fn apply_justify_center() {
         let container = Rect::new(0, 0, 100, 30);
-        let items: Vec<(Rect, u16)> = vec![
-            (Rect::new(0, 0, 20, 30), 20),
-        ];
+        let items: Vec<(Rect, u16)> = vec![(Rect::new(0, 0, 20, 30), 20)];
         let result = apply_justify(Justify::Center, &items, container, Direction::Horizontal);
         assert_eq!(result[0].x, 40); // (100 - 20) / 2
     }
@@ -591,9 +619,7 @@ mod tests {
     #[test]
     fn apply_justify_end_vertical() {
         let container = Rect::new(0, 0, 100, 30);
-        let items: Vec<(Rect, u16)> = vec![
-            (Rect::new(0, 0, 100, 10), 10),
-        ];
+        let items: Vec<(Rect, u16)> = vec![(Rect::new(0, 0, 100, 10), 10)];
         let result = apply_justify(Justify::End, &items, container, Direction::Vertical);
         assert_eq!(result[0].y, 20); // 30 - 10
     }
@@ -608,7 +634,12 @@ mod tests {
             (Rect::new(20, 0, 20, 30), 20),
             (Rect::new(40, 0, 20, 30), 20),
         ];
-        let result = apply_justify(Justify::SpaceAround, &items, container, Direction::Horizontal);
+        let result = apply_justify(
+            Justify::SpaceAround,
+            &items,
+            container,
+            Direction::Horizontal,
+        );
         assert_eq!(result.len(), 3);
         // 100 - 60 = 40 gap, spacing = 40 / 3 = 13, start_offset = 13 / 2 = 6
         // item0: offset = 6
@@ -622,10 +653,13 @@ mod tests {
     #[test]
     fn apply_justify_space_around_single_item() {
         let container = Rect::new(0, 0, 100, 30);
-        let items: Vec<(Rect, u16)> = vec![
-            (Rect::new(0, 0, 20, 30), 20),
-        ];
-        let result = apply_justify(Justify::SpaceAround, &items, container, Direction::Horizontal);
+        let items: Vec<(Rect, u16)> = vec![(Rect::new(0, 0, 20, 30), 20)];
+        let result = apply_justify(
+            Justify::SpaceAround,
+            &items,
+            container,
+            Direction::Horizontal,
+        );
         assert_eq!(result.len(), 1);
         // 100 - 20 = 80 gap, spacing = 80 / 1 = 80, start_offset = 40
         assert_eq!(result[0].x, 40);
@@ -635,7 +669,12 @@ mod tests {
     fn apply_justify_space_around_empty() {
         let container = Rect::new(0, 0, 100, 30);
         let items: Vec<(Rect, u16)> = vec![];
-        let result = apply_justify(Justify::SpaceAround, &items, container, Direction::Horizontal);
+        let result = apply_justify(
+            Justify::SpaceAround,
+            &items,
+            container,
+            Direction::Horizontal,
+        );
         assert!(result.is_empty());
     }
 
@@ -649,7 +688,12 @@ mod tests {
             (Rect::new(20, 0, 20, 30), 20),
             (Rect::new(40, 0, 20, 30), 20),
         ];
-        let result = apply_justify(Justify::SpaceEvenly, &items, container, Direction::Horizontal);
+        let result = apply_justify(
+            Justify::SpaceEvenly,
+            &items,
+            container,
+            Direction::Horizontal,
+        );
         assert_eq!(result.len(), 3);
         // 100 - 60 = 40 gap, spacing = 40 / 4 = 10
         // item0: offset = 10
@@ -663,10 +707,13 @@ mod tests {
     #[test]
     fn apply_justify_space_evenly_single_item() {
         let container = Rect::new(0, 0, 100, 30);
-        let items: Vec<(Rect, u16)> = vec![
-            (Rect::new(0, 0, 20, 30), 20),
-        ];
-        let result = apply_justify(Justify::SpaceEvenly, &items, container, Direction::Horizontal);
+        let items: Vec<(Rect, u16)> = vec![(Rect::new(0, 0, 20, 30), 20)];
+        let result = apply_justify(
+            Justify::SpaceEvenly,
+            &items,
+            container,
+            Direction::Horizontal,
+        );
         assert_eq!(result.len(), 1);
         // 100 - 20 = 80 gap, spacing = 80 / 2 = 40
         assert_eq!(result[0].x, 40);
@@ -676,7 +723,12 @@ mod tests {
     fn apply_justify_space_evenly_empty() {
         let container = Rect::new(0, 0, 100, 30);
         let items: Vec<(Rect, u16)> = vec![];
-        let result = apply_justify(Justify::SpaceEvenly, &items, container, Direction::Horizontal);
+        let result = apply_justify(
+            Justify::SpaceEvenly,
+            &items,
+            container,
+            Direction::Horizontal,
+        );
         assert!(result.is_empty());
     }
 
@@ -725,10 +777,8 @@ mod tests {
     #[test]
     fn apply_justify_stretch_vertical() {
         let container = Rect::new(0, 0, 100, 30);
-        let items: Vec<(Rect, u16)> = vec![
-            (Rect::new(0, 0, 100, 5), 5),
-            (Rect::new(0, 5, 100, 5), 5),
-        ];
+        let items: Vec<(Rect, u16)> =
+            vec![(Rect::new(0, 0, 100, 5), 5), (Rect::new(0, 5, 100, 5), 5)];
         let result = apply_justify(Justify::Stretch, &items, container, Direction::Vertical);
         assert_eq!(result.len(), 2);
         // each = 30 / 2 = 15

@@ -1,11 +1,14 @@
 //! List component — renders children in a vertical or horizontal layout.
 
-use ratatui::{Frame, layout::{Direction, Rect}};
+use ratatui::{
+    Frame,
+    layout::{Direction, Rect},
+};
 
-use a2ui_base::model::component_context::ComponentContext;
-use a2ui_base::protocol::common_types::{Align, ChildList, Justify};
 use crate::component_impl::TuiComponent;
 use crate::components::row::{render_static_children, render_template_children};
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::common_types::{Align, ChildList, Justify};
 
 /// List component implementation.
 ///
@@ -49,14 +52,29 @@ impl TuiComponent for ListComponent {
         match children {
             ChildList::Static(ids) => {
                 render_static_children(
-                    ctx, area, frame, render_child, measure_child,
-                    &ids, justify, align, dir,
+                    ctx,
+                    area,
+                    frame,
+                    render_child,
+                    measure_child,
+                    &ids,
+                    justify,
+                    align,
+                    dir,
                 );
             }
             ChildList::Template { component_id, path } => {
                 render_template_children(
-                    ctx, area, frame, render_child, measure_child,
-                    &component_id, &path, justify, align, dir,
+                    ctx,
+                    area,
+                    frame,
+                    render_child,
+                    measure_child,
+                    &component_id,
+                    &path,
+                    justify,
+                    align,
+                    dir,
                 );
             }
         }
@@ -115,9 +133,7 @@ impl TuiComponent for ListComponent {
 }
 
 /// Resolve a List's direction property (default vertical).
-fn list_direction(
-    comp_model: &a2ui_base::model::component_model::ComponentModel,
-) -> Direction {
+fn list_direction(comp_model: &a2ui_base::model::component_model::ComponentModel) -> Direction {
     let direction: Option<String> = comp_model.get_property("direction");
     match direction.as_deref() {
         Some("horizontal") => Direction::Horizontal,

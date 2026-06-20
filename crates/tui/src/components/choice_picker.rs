@@ -8,10 +8,10 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 
+use crate::component_impl::TuiComponent;
 use a2ui_base::event::{EventResult, InputEvent, InputKey};
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::protocol::common_types::{DynamicString, DynamicStringList};
-use crate::component_impl::TuiComponent;
 
 /// An option entry in the choice picker.
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -67,36 +67,36 @@ impl TuiComponent for ChoicePickerComponent {
         };
 
         // Resolve current value as a list of selected strings.
-        let selected_values: Vec<String> = match comp_model.get_property::<DynamicStringList>("value")
-        {
-            Some(dsl) => match dsl {
-                DynamicStringList::Literal(v) => v,
-                DynamicStringList::Binding(b) => {
-                    // Try to resolve as an array of strings from data model.
-                    match ctx.data_context.get(&b.path) {
-                        Some(serde_json::Value::Array(arr)) => arr
-                            .iter()
-                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                            .collect(),
-                        _ => Vec::new(),
+        let selected_values: Vec<String> =
+            match comp_model.get_property::<DynamicStringList>("value") {
+                Some(dsl) => match dsl {
+                    DynamicStringList::Literal(v) => v,
+                    DynamicStringList::Binding(b) => {
+                        // Try to resolve as an array of strings from data model.
+                        match ctx.data_context.get(&b.path) {
+                            Some(serde_json::Value::Array(arr)) => arr
+                                .iter()
+                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                .collect(),
+                            _ => Vec::new(),
+                        }
                     }
-                }
-                DynamicStringList::Function(fc) => {
-                    // Execute function and try to get array of strings.
-                    let result = ctx.data_context.resolve_dynamic_value(
-                        &a2ui_base::protocol::common_types::DynamicValue::Function(fc),
-                    );
-                    match result {
-                        serde_json::Value::Array(arr) => arr
-                            .iter()
-                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                            .collect(),
-                        _ => Vec::new(),
+                    DynamicStringList::Function(fc) => {
+                        // Execute function and try to get array of strings.
+                        let result = ctx.data_context.resolve_dynamic_value(
+                            &a2ui_base::protocol::common_types::DynamicValue::Function(fc),
+                        );
+                        match result {
+                            serde_json::Value::Array(arr) => arr
+                                .iter()
+                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                .collect(),
+                            _ => Vec::new(),
+                        }
                     }
-                }
-            },
-            None => Vec::new(),
-        };
+                },
+                None => Vec::new(),
+            };
 
         // Determine variant.
         let variant: Option<String> = comp_model.get_property("variant");
@@ -116,7 +116,9 @@ impl TuiComponent for ChoicePickerComponent {
         // Add label line if present.
         if !label.is_empty() {
             let label_style = if is_focused {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
             };
@@ -142,7 +144,10 @@ impl TuiComponent for ChoicePickerComponent {
                 if i > 0 {
                     spans.push(Span::raw(" "));
                 }
-                spans.push(Span::styled(format!("{}{}", indicator, option.label), style));
+                spans.push(Span::styled(
+                    format!("{}{}", indicator, option.label),
+                    style,
+                ));
             }
             lines.push(Line::from(spans));
         } else {
@@ -213,12 +218,16 @@ impl TuiComponent for ChoicePickerComponent {
         let display_style: Option<String> = comp_model.get_property("displayStyle");
         let is_chips = display_style.as_deref() == Some("chips");
 
-        let lines = (if !label.is_empty() { 1 } else { 0 })
-            + (if is_chips { 1 } else { options.len() });
+        let lines =
+            (if !label.is_empty() { 1 } else { 0 }) + (if is_chips { 1 } else { options.len() });
 
         let is_focused = ctx.focused_id.as_deref() == Some(ctx.component_id.as_str());
 
-        Some((lines as u16).saturating_add(2).saturating_add(if is_focused { 2 } else { 0 }))
+        Some(
+            (lines as u16)
+                .saturating_add(2)
+                .saturating_add(if is_focused { 2 } else { 0 }),
+        )
     }
 
     fn handle_event(
@@ -253,7 +262,10 @@ impl TuiComponent for ChoicePickerComponent {
         };
 
         match event {
-            InputEvent::KeyPress { key: InputKey::Down } | InputEvent::KeyPress { key: InputKey::Up } => {
+            InputEvent::KeyPress {
+                key: InputKey::Down,
+            }
+            | InputEvent::KeyPress { key: InputKey::Up } => {
                 if !is_exclusive {
                     return None;
                 }
@@ -263,9 +275,9 @@ impl TuiComponent for ChoicePickerComponent {
                     .and_then(|v| options.iter().position(|o| &o.value == v))
                     .unwrap_or(0);
                 let new_idx = match event {
-                    InputEvent::KeyPress { key: InputKey::Down } => {
-                        (current_idx + 1) % options.len()
-                    }
+                    InputEvent::KeyPress {
+                        key: InputKey::Down,
+                    } => (current_idx + 1) % options.len(),
                     InputEvent::KeyPress { key: InputKey::Up } => {
                         if current_idx == 0 {
                             options.len() - 1
@@ -280,12 +292,17 @@ impl TuiComponent for ChoicePickerComponent {
                     value: serde_json::json!([options[new_idx].value]),
                 })
             }
-            InputEvent::KeyPress { key: InputKey::Enter } | InputEvent::KeyPress { key: InputKey::Space } => {
+            InputEvent::KeyPress {
+                key: InputKey::Enter,
+            }
+            | InputEvent::KeyPress {
+                key: InputKey::Space,
+            } => {
                 if is_exclusive {
                     return None;
                 } // handled by Up/Down for exclusive
-                  // For multiple selection: not enough state to know which option to toggle.
-                  // Skip for now.
+                // For multiple selection: not enough state to know which option to toggle.
+                // Skip for now.
                 None
             }
             _ => None,

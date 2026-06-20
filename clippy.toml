@@ -1,0 +1,5 @@
+# Minimum Supported Rust Version. Edition 2024 (set in rustfmt.toml and each
+# crate's Cargo.toml) requires Rust 1.85+, so that is the floor clippy should
+# assume. Clippy uses `msrv` to avoid suggesting standard-library APIs that were
+# stabilized only in a newer Rust release than the project supports.
+msrv = "1.85"

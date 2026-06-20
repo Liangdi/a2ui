@@ -7,9 +7,9 @@ use ratatui::{
     widgets::Paragraph,
 };
 
+use crate::component_impl::TuiComponent;
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::protocol::common_types::{DynamicBoolean, DynamicString};
-use crate::component_impl::TuiComponent;
 
 /// CheckBox component implementation.
 ///
@@ -62,7 +62,9 @@ impl TuiComponent for CheckBoxComponent {
         // Determine if this checkbox has keyboard focus.
         let is_focused = ctx.focused_id.as_deref() == Some(ctx.component_id.as_str());
         let style = if is_focused {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
         } else {
             Style::default()
         };

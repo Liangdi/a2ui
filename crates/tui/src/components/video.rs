@@ -8,9 +8,9 @@ use ratatui::{
     widgets::Paragraph,
 };
 
+use crate::component_impl::TuiComponent;
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::protocol::common_types::DynamicString;
-use crate::component_impl::TuiComponent;
 
 /// Video component implementation.
 ///
@@ -56,10 +56,15 @@ impl TuiComponent for VideoComponent {
         };
 
         // Resolve posterUrl.
-        let poster = comp_model.get_property::<DynamicString>("posterUrl")
+        let poster = comp_model
+            .get_property::<DynamicString>("posterUrl")
             .map(|ds| ctx.data_context.resolve_dynamic_string(&ds));
 
-        let display_text = if !url.is_empty() { url } else { "video".to_string() };
+        let display_text = if !url.is_empty() {
+            url
+        } else {
+            "video".to_string()
+        };
         let placeholder = if let Some(ref poster_url) = poster {
             if !poster_url.is_empty() {
                 format!("[\u{25B6} {} | poster: {}]", display_text, poster_url)

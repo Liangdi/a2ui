@@ -4,8 +4,8 @@
 
 use ratatui::{Frame, layout::Rect};
 
-use a2ui_base::model::component_context::ComponentContext;
 use crate::component_impl::TuiComponent;
+use a2ui_base::model::component_context::ComponentContext;
 
 /// Modal component implementation.
 ///
@@ -36,10 +36,11 @@ impl TuiComponent for ModalComponent {
 
         // The trigger always renders in-place; the open content is overlaid by
         // the surface renderer, not here.
-        if let Some(trigger_id) = comp_model.get_property::<String>("trigger") {
-            if area.width > 0 && area.height > 0 {
-                render_child(&trigger_id, area, frame, "");
-            }
+        if let Some(trigger_id) = comp_model.get_property::<String>("trigger")
+            && area.width > 0
+            && area.height > 0
+        {
+            render_child(&trigger_id, area, frame, "");
         }
     }
 

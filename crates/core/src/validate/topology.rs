@@ -14,7 +14,7 @@ use std::collections::{HashMap, HashSet};
 use serde_json::Value;
 
 use super::error::{ValidationError, ValidationReport};
-use super::integrity::{get_component_references, MAX_GLOBAL_DEPTH};
+use super::integrity::{MAX_GLOBAL_DEPTH, get_component_references};
 use super::ref_fields::RefFieldSpec;
 
 /// Analyze the component reference graph.
@@ -187,7 +187,10 @@ mod tests {
             json!({ "id": "orphan", "component": "Node" }),
         ];
         let (_visited, report) = analyze_topology(&components, &spec(), "root", true, false);
-        assert!(report.is_empty(), "orphan should be allowed under RELAXED, got: {report}");
+        assert!(
+            report.is_empty(),
+            "orphan should be allowed under RELAXED, got: {report}"
+        );
     }
 
     #[test]

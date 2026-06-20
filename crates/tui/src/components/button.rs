@@ -7,8 +7,8 @@ use ratatui::{
     widgets::{Block, Borders},
 };
 
-use a2ui_base::model::component_context::ComponentContext;
 use crate::component_impl::TuiComponent;
+use a2ui_base::model::component_context::ComponentContext;
 
 /// Button component implementation.
 ///
@@ -99,7 +99,8 @@ impl TuiComponent for ButtonComponent {
             }
         } else if let Some(a11y) = comp_model.accessibility() {
             // When no child is present, use the accessibility label as visible text.
-            let a11y_text = a11y.label
+            let a11y_text = a11y
+                .label
                 .as_ref()
                 .map(|ds| ctx.data_context.resolve_dynamic_string(ds))
                 .unwrap_or_default();
@@ -142,10 +143,14 @@ impl TuiComponent for ButtonComponent {
 }
 
 /// Evaluate all `checks` on the component. Returns `true` if all pass (or none exist).
-fn evaluate_checks(ctx: &ComponentContext, comp_model: &a2ui_base::model::component_model::ComponentModel) -> bool {
+fn evaluate_checks(
+    ctx: &ComponentContext,
+    comp_model: &a2ui_base::model::component_model::ComponentModel,
+) -> bool {
     match comp_model.checks() {
         Some(checks) => checks.iter().all(|rule| {
-            ctx.data_context.resolve_dynamic_boolean_condition(&rule.condition)
+            ctx.data_context
+                .resolve_dynamic_boolean_condition(&rule.condition)
         }),
         None => true,
     }

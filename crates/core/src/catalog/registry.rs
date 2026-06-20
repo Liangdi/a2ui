@@ -27,7 +27,8 @@ impl Catalog {
 
     /// Add a component implementation.
     pub fn with_component(mut self, component: Box<dyn ComponentApi>) -> Self {
-        self.components.insert(component.name().to_string(), component);
+        self.components
+            .insert(component.name().to_string(), component);
         self
     }
 

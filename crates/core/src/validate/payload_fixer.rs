@@ -55,10 +55,8 @@ fn parse_inner(payload: &str) -> Result<Vec<serde_json::Value>, crate::error::A2
 
 /// Replace smart (curly) quotes with straight ASCII quotes.
 fn normalize_smart_quotes(s: &str) -> String {
-    s.replace('\u{201C}', "\"")
-        .replace('\u{201D}', "\"")
-        .replace('\u{2018}', "'")
-        .replace('\u{2019}', "'")
+    s.replace(['\u{201C}', '\u{201D}'], "\"")
+        .replace(['\u{2018}', '\u{2019}'], "'")
 }
 
 #[cfg(test)]

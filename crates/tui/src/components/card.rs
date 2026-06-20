@@ -7,8 +7,8 @@ use ratatui::{
     widgets::{Block, BorderType, Borders},
 };
 
-use a2ui_base::model::component_context::ComponentContext;
 use crate::component_impl::TuiComponent;
+use a2ui_base::model::component_context::ComponentContext;
 
 /// Card component implementation.
 ///
@@ -56,10 +56,11 @@ impl TuiComponent for CardComponent {
         frame.render_widget(block, inner);
 
         // Render the single child inside the card, if present.
-        if let Some(child_id) = comp_model.child() {
-            if child_area.width > 0 && child_area.height > 0 {
-                render_child(&child_id, child_area, frame, "");
-            }
+        if let Some(child_id) = comp_model.child()
+            && child_area.width > 0
+            && child_area.height > 0
+        {
+            render_child(&child_id, child_area, frame, "");
         }
     }
 

@@ -8,10 +8,10 @@ use ratatui::{
     widgets::Paragraph,
 };
 
+use crate::component_impl::TuiComponent;
 use a2ui_base::event::{EventResult, InputEvent, InputKey};
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::protocol::common_types::{DynamicNumber, DynamicString};
-use crate::component_impl::TuiComponent;
 
 /// Tab entry deserialized from the `tabs` property.
 #[derive(Debug, Clone, serde::Deserialize)]
@@ -64,11 +64,7 @@ impl TuiComponent for TabsComponent {
             .min(tabs.len() - 1);
 
         // Split area: 3 rows for tab bar, rest for content.
-        let chunks = Layout::vertical([
-            Constraint::Length(3),
-            Constraint::Min(0),
-        ])
-        .split(area);
+        let chunks = Layout::vertical([Constraint::Length(3), Constraint::Min(0)]).split(area);
 
         let tab_bar_area = chunks[0];
         let content_area = chunks[1];
@@ -145,9 +141,7 @@ impl TuiComponent for TabsComponent {
             _ => return None,
         };
 
-        let current = ctx
-            .data_context
-            .resolve_dynamic_number(&active_tab_dn) as usize;
+        let current = ctx.data_context.resolve_dynamic_number(&active_tab_dn) as usize;
         let current = current.min(tabs.len() - 1);
 
         let new_idx = match event {

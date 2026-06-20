@@ -13,12 +13,12 @@
 
 use crossterm::event::KeyCode;
 
+use crate::component_impl::ComponentRegistry;
+use crate::focus_manager::FocusManager;
 use a2ui_base::catalog::Catalog;
 use a2ui_base::event::{EventResult, InputEvent, InputKey};
 use a2ui_base::message_processor::MessageProcessor;
 use a2ui_base::model::component_context::ComponentContext;
-use crate::component_impl::ComponentRegistry;
-use crate::focus_manager::FocusManager;
 
 /// Map a crossterm [`KeyCode`] to the framework-agnostic [`InputKey`].
 ///

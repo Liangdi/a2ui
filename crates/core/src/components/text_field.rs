@@ -15,12 +15,14 @@ pub fn handle_event(ctx: &ComponentContext, event: &InputEvent) -> Option<EventR
         _ => return None,
     };
 
-    let current =
-        ctx.data_context
-            .resolve_dynamic_string(&DynamicString::Binding(binding.clone()));
+    let current = ctx
+        .data_context
+        .resolve_dynamic_string(&DynamicString::Binding(binding.clone()));
 
     match event {
-        InputEvent::KeyPress { key: InputKey::Char(c) } => {
+        InputEvent::KeyPress {
+            key: InputKey::Char(c),
+        } => {
             let new_value = format!("{}{}", current, c);
             Some(EventResult::DataUpdate {
                 path: binding.path.clone(),

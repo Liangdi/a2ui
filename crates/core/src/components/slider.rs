@@ -14,9 +14,9 @@ pub fn handle_event(ctx: &ComponentContext, event: &InputEvent) -> Option<EventR
         _ => return None,
     };
 
-    let current =
-        ctx.data_context
-            .resolve_dynamic_number(&DynamicNumber::Binding(binding.clone()));
+    let current = ctx
+        .data_context
+        .resolve_dynamic_number(&DynamicNumber::Binding(binding.clone()));
     let min = comp_model
         .get_property::<DynamicNumber>("min")
         .map(|dn| ctx.data_context.resolve_dynamic_number(&dn))
@@ -40,7 +40,9 @@ pub fn handle_event(ctx: &ComponentContext, event: &InputEvent) -> Option<EventR
         InputEvent::KeyPress {
             key: InputKey::Right,
         } => step,
-        InputEvent::KeyPress { key: InputKey::Left } => -step,
+        InputEvent::KeyPress {
+            key: InputKey::Left,
+        } => -step,
         _ => return None,
     };
 

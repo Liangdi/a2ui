@@ -29,11 +29,7 @@ pub fn apply_event_result(processor: &mut MessageProcessor, result: EventResult)
             ..
         } => {
             if want_response {
-                let surface_id = processor
-                    .model
-                    .surfaces()
-                    .next()
-                    .map(|s| s.id.clone());
+                let surface_id = processor.model.surfaces().next().map(|s| s.id.clone());
                 if let Some(sid) = surface_id {
                     let action_id = uuid::Uuid::new_v4().to_string();
                     let _ = processor.register_action(&sid, &action_id, response_path.clone());

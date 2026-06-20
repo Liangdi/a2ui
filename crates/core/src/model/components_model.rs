@@ -55,7 +55,10 @@ impl SurfaceComponentsModel {
     }
 
     /// Parse and add multiple components from raw JSON.
-    pub fn add_from_json(&mut self, raw_components: &[serde_json::Value]) -> Vec<Result<(), A2uiError>> {
+    pub fn add_from_json(
+        &mut self,
+        raw_components: &[serde_json::Value],
+    ) -> Vec<Result<(), A2uiError>> {
         raw_components
             .iter()
             .map(|raw| {

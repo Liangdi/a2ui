@@ -54,7 +54,11 @@ pub struct ClientCapabilities {
     /// Inline catalog definitions. Only meaningful if the server declared
     /// `acceptsInlineCatalogs: true`. Stored as raw JSON values so the parser
     /// can extract schema metadata without losing the original definition.
-    #[serde(default, rename = "inlineCatalogs", skip_serializing_if = "Vec::is_empty")]
+    #[serde(
+        default,
+        rename = "inlineCatalogs",
+        skip_serializing_if = "Vec::is_empty"
+    )]
     pub inline_catalogs: Vec<serde_json::Value>,
 }
 
@@ -71,7 +75,7 @@ pub struct ClientCapabilitiesEnvelope {
 // ---------------------------------------------------------------------------
 
 /// The schema (argument shape + return type) of one inline-catalog function,
-/// extracted for registration as a [`SchemaOnlyFunction`].
+/// extracted for registration as a [`SchemaOnlyFunction`](crate::catalog::SchemaOnlyFunction).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FunctionSchema {
     /// The function name as it appears in the catalog's `functions` map key.
@@ -161,9 +165,7 @@ pub fn parse_inline_catalog(json: &serde_json::Value) -> Result<InlineCatalog> {
         for (key, fval) in funcs {
             validate_name(key, "function")?;
             let fobj = fval.as_object().ok_or_else(|| {
-                A2uiError::Validation(format!(
-                    "inline catalog function '{key}' must be an object"
-                ))
+                A2uiError::Validation(format!("inline catalog function '{key}' must be an object"))
             })?;
             let return_type = fobj
                 .get("returnType")
@@ -185,12 +187,12 @@ pub fn parse_inline_catalog(json: &serde_json::Value) -> Result<InlineCatalog> {
                 .and_then(|p| p.get("args"))
                 .or_else(|| fobj.get("args"))
                 .and_then(|v| v.as_object());
-            if let Some(args) = args_obj {
-                if let Some(props) = args.get("properties").and_then(|v| v.as_object()) {
-                    for arg_key in props.keys() {
-                        validate_name(arg_key, "function argument")?;
-                        arg_names.push(arg_key.clone());
-                    }
+            if let Some(args) = args_obj
+                && let Some(props) = args.get("properties").and_then(|v| v.as_object())
+            {
+                for arg_key in props.keys() {
+                    validate_name(arg_key, "function argument")?;
+                    arg_names.push(arg_key.clone());
                 }
             }
 
@@ -496,7 +498,8 @@ mod tests {
         });
         let err = parse_inline_catalog(&bad).unwrap_err();
         assert!(
-            err.to_string().contains("invalid inline catalog component name"),
+            err.to_string()
+                .contains("invalid inline catalog component name"),
             "unexpected error: {err}"
         );
 
@@ -509,7 +512,8 @@ mod tests {
         });
         let err = parse_inline_catalog(&bad_fn).unwrap_err();
         assert!(
-            err.to_string().contains("invalid inline catalog function name"),
+            err.to_string()
+                .contains("invalid inline catalog function name"),
             "unexpected error: {err}"
         );
     }
@@ -568,8 +572,7 @@ mod tests {
     #[test]
     fn builder_rejects_invalid_inline_catalog() {
         let bad = json!({"components": {"Bad Name": {}}});
-        let res = ClientCapabilitiesBuilder::from_catalog_ids(vec![])
-            .with_inline_catalog(bad);
+        let res = ClientCapabilitiesBuilder::from_catalog_ids(vec![]).with_inline_catalog(bad);
         assert!(res.is_err());
     }
 

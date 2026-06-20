@@ -2,16 +2,16 @@
 
 use std::collections::HashMap;
 
-use a2ui_base::catalog::function_api::{FunctionImplementation, ReturnType};
-use a2ui_base::catalog::Catalog;
-use a2ui_base::error::A2uiError;
-use a2ui_base::model::data_context::DataContext;
 use crate::component_impl::{ComponentRegistry, build_registry};
 use crate::components::button::ButtonComponent;
 use crate::components::column::ColumnComponent;
 use crate::components::row::RowComponent;
 use crate::components::text::TextComponent;
 use crate::components::text_field::TextFieldComponent;
+use a2ui_base::catalog::Catalog;
+use a2ui_base::catalog::function_api::{FunctionImplementation, ReturnType};
+use a2ui_base::error::A2uiError;
+use a2ui_base::model::data_context::DataContext;
 
 /// The `capitalize` function from the minimal catalog.
 ///
@@ -33,10 +33,7 @@ impl FunctionImplementation for CapitalizeFunction {
         args: &HashMap<String, serde_json::Value>,
         _context: &DataContext,
     ) -> Result<serde_json::Value, A2uiError> {
-        let value = args
-            .get("value")
-            .and_then(|v| v.as_str())
-            .unwrap_or("");
+        let value = args.get("value").and_then(|v| v.as_str()).unwrap_or("");
         let capitalized = capitalize_string(value);
         Ok(serde_json::Value::String(capitalized))
     }

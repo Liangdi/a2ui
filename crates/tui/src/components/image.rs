@@ -41,9 +41,9 @@ use ratatui::{
     widgets::Paragraph,
 };
 
+use crate::component_impl::TuiComponent;
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::protocol::common_types::DynamicString;
-use crate::component_impl::TuiComponent;
 
 /// Selectable image rendering protocol.
 ///
@@ -69,7 +69,7 @@ pub enum ImageProtocol {
 
 impl ImageProtocol {
     /// Canonical lowercase name — used for the `A2UI_IMAGE_PROTOCOL` env var and
-    /// the gallery's persisted config file. Round-trips with [`from_name`].
+    /// the gallery's persisted config file. Round-trips with [`ImageProtocol::from_name`].
     pub fn as_str(self) -> &'static str {
         match self {
             ImageProtocol::Auto => "auto",
@@ -114,12 +114,7 @@ pub fn detected_protocol() -> &'static str {
 }
 
 /// Render the standard text placeholder into `inner`.
-fn render_placeholder(
-    variant_str: &str,
-    content: &str,
-    inner: Rect,
-    frame: &mut Frame,
-) {
+fn render_placeholder(variant_str: &str, content: &str, inner: Rect, frame: &mut Frame) {
     let placeholder = format!("[\u{1F5BC}{} {}]", variant_str, content);
     let paragraph = Paragraph::new(Line::from(Span::styled(
         placeholder,
@@ -173,7 +168,10 @@ impl TuiComponent for ImageComponent {
         // Resolve fit and variant properties.
         let _fit: Option<String> = comp_model.get_property("fit");
         let variant: Option<String> = comp_model.get_property("variant");
-        let variant_str = variant.as_deref().map(|v| format!(" ({})", v)).unwrap_or_default();
+        let variant_str = variant
+            .as_deref()
+            .map(|v| format!(" ({})", v))
+            .unwrap_or_default();
 
         // Use description if available, otherwise fall back to URL.
         // (Borrow `url` rather than moving it so it remains available for the
@@ -215,7 +213,10 @@ impl TuiComponent for ImageComponent {
 mod real {
     use std::sync::{OnceLock, RwLock};
 
-    use ratatui::{Frame, layout::{Rect, Size}};
+    use ratatui::{
+        Frame,
+        layout::{Rect, Size},
+    };
     use ratatui_image::{
         Image, Resize,
         picker::{Picker, ProtocolType},
@@ -338,7 +339,9 @@ mod real {
     /// Parse an `A2UI_IMAGE_PROTOCOL` value into an [`ImageProtocol`] (delegates
     /// to [`ImageProtocol::from_name`]; `None` ⇒ [`ImageProtocol::Auto`]).
     fn parse_override(value: Option<&str>) -> ImageProtocol {
-        value.map(ImageProtocol::from_name).unwrap_or(ImageProtocol::Auto)
+        value
+            .map(ImageProtocol::from_name)
+            .unwrap_or(ImageProtocol::Auto)
     }
 
     /// Whether the given multiplexer env-var values indicate we're inside one.
@@ -478,7 +481,8 @@ mod real {
             // 100×80 SVG fully filled red (#ff0000).
             let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80"><rect width="100" height="80" fill="#ff0000"/></svg>"##;
             // Percent-encode exactly like `1.json`'s avatar (non-alphanumeric → %XX).
-            let encoded = percent_encoding::utf8_percent_encode(svg, percent_encoding::NON_ALPHANUMERIC);
+            let encoded =
+                percent_encoding::utf8_percent_encode(svg, percent_encoding::NON_ALPHANUMERIC);
             let uri = format!("data:image/svg+xml,{encoded}");
             let img = load_data_uri(&uri["data:".len()..]).expect("svg data uri should rasterize");
             assert_eq!(img.width(), 100);
@@ -521,7 +525,10 @@ mod real {
             assert_eq!(parse_override(Some("kitty")), ImageProtocol::Kitty);
             assert_eq!(parse_override(Some("iTerm2")), ImageProtocol::Iterm2);
             assert_eq!(parse_override(Some("sixel")), ImageProtocol::Sixel);
-            assert_eq!(parse_override(Some("halfblocks")), ImageProtocol::Halfblocks);
+            assert_eq!(
+                parse_override(Some("halfblocks")),
+                ImageProtocol::Halfblocks
+            );
             assert_eq!(parse_override(Some("half")), ImageProtocol::Halfblocks);
 
             // The three "disable image rendering" aliases.

@@ -1,11 +1,14 @@
 //! Row component — horizontal layout container.
 
-use ratatui::{Frame, layout::{Direction, Rect}};
+use ratatui::{
+    Frame,
+    layout::{Direction, Rect},
+};
 
-use a2ui_base::model::component_context::ComponentContext;
-use a2ui_base::protocol::common_types::{Align, ChildList, Justify};
 use crate::component_impl::TuiComponent;
 use crate::layout_engine::{apply_align, flex_layout};
+use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::common_types::{Align, ChildList, Justify};
 
 /// Row component implementation.
 ///
@@ -36,20 +39,39 @@ impl TuiComponent for RowComponent {
             None => return,
         };
 
-        let justify = comp_model.get_property::<Justify>("justify").unwrap_or(Justify::Start);
-        let align = comp_model.get_property::<Align>("align").unwrap_or(Align::Start);
+        let justify = comp_model
+            .get_property::<Justify>("justify")
+            .unwrap_or(Justify::Start);
+        let align = comp_model
+            .get_property::<Align>("align")
+            .unwrap_or(Align::Start);
 
         match children {
             ChildList::Static(ids) => {
                 render_static_children(
-                    ctx, area, frame, render_child, measure_child,
-                    &ids, justify, align, Direction::Horizontal,
+                    ctx,
+                    area,
+                    frame,
+                    render_child,
+                    measure_child,
+                    &ids,
+                    justify,
+                    align,
+                    Direction::Horizontal,
                 );
             }
             ChildList::Template { component_id, path } => {
                 render_template_children(
-                    ctx, area, frame, render_child, measure_child,
-                    &component_id, &path, justify, align, Direction::Horizontal,
+                    ctx,
+                    area,
+                    frame,
+                    render_child,
+                    measure_child,
+                    &component_id,
+                    &path,
+                    justify,
+                    align,
+                    Direction::Horizontal,
                 );
             }
         }
@@ -98,6 +120,7 @@ impl TuiComponent for RowComponent {
 /// per `justify`. On the **horizontal** main axis, natural width is not measured, so
 /// children are distributed by weight (legacy behavior); their cross-axis (height) is
 /// then handled by `align`.
+#[allow(clippy::too_many_arguments)] // flex renderer: (ctx, area, frame, 2 closures, ids, justify, align, direction)
 pub(crate) fn render_static_children(
     ctx: &ComponentContext,
     area: Rect,
@@ -142,6 +165,7 @@ pub(crate) fn render_static_children(
 }
 
 /// Render template children by iterating over a data-bound array (shared with Column/Row/List).
+#[allow(clippy::too_many_arguments)] // flex renderer: same shape as render_static_children + component_id + path
 pub(crate) fn render_template_children(
     ctx: &ComponentContext,
     area: Rect,
@@ -181,8 +205,8 @@ pub(crate) fn render_template_children(
 
     let rects = flex_layout(direction, area, &items, justify);
 
-    for i in 0..count {
-        let child_area = apply_align(align, rects[i], area, direction);
+    for (i, &rect) in rects.iter().enumerate().take(count) {
+        let child_area = apply_align(align, rect, area, direction);
         // Per-item nested path so each template instance resolves its own array element.
         let item_path = format!("{}/{}", path, i);
         render_child(component_id, child_area, frame, &item_path);

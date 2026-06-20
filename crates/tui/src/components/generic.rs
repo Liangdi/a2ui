@@ -1,7 +1,7 @@
 //! Generic fallback component.
 //!
 //! When the renderer encounters a component type that has no registered native
-//! [`TuiComponent`](crate::component_impl::TuiComponent) (for example, a
+//! [`TuiComponent`] (for example, a
 //! component declared in an *inline catalog* that the client received but did
 //! not implement natively), it falls back to [`GenericComponent`].
 //!
@@ -18,9 +18,9 @@ use ratatui::{
     widgets::{Block, Paragraph},
 };
 
+use crate::component_impl::TuiComponent;
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::protocol::common_types::{ChildList, DynamicString};
-use crate::component_impl::TuiComponent;
 
 /// A stateless, zero-sized fallback renderer for unknown component types.
 pub struct GenericComponent;
@@ -94,7 +94,7 @@ impl TuiComponent for GenericComponent {
                 x: inner.x,
                 y: inner.y + prop_area.height,
                 width: inner.width,
-                height: child_row_count as u16,
+                height: child_row_count,
             };
             // Give each child an equal horizontal slice.
             let count = child_ids.len() as u16;
@@ -134,15 +134,12 @@ impl TuiComponent for GenericComponent {
 /// Render a property value as a human-readable string. String-typed dynamic
 /// values are resolved through the data context; everything else is shown as
 /// its raw JSON so the developer can see exactly what the server sent.
-fn resolve_value_for_display(
-    val: &serde_json::Value,
-    ctx: &ComponentContext,
-) -> String {
+fn resolve_value_for_display(val: &serde_json::Value, ctx: &ComponentContext) -> String {
     // If it's a string, it might be a DynamicString (literal/binding/function).
-    if let serde_json::Value::String(_) = val {
-        if let Ok(ds) = serde_json::from_value::<DynamicString>(val.clone()) {
-            return ctx.data_context.resolve_dynamic_string(&ds);
-        }
+    if let serde_json::Value::String(_) = val
+        && let Ok(ds) = serde_json::from_value::<DynamicString>(val.clone())
+    {
+        return ctx.data_context.resolve_dynamic_string(&ds);
     }
     // Fall back to the raw JSON representation.
     val.to_string()
@@ -192,7 +189,10 @@ mod tests {
             "children": ["a", "b"]
         }))
         .unwrap();
-        assert_eq!(collect_child_ids(&cm), vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(
+            collect_child_ids(&cm),
+            vec!["a".to_string(), "b".to_string()]
+        );
     }
 
     #[test]

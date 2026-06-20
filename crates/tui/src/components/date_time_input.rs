@@ -9,10 +9,10 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 
+use crate::component_impl::TuiComponent;
 use a2ui_base::event::{EventResult, InputEvent, InputKey};
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::protocol::common_types::DynamicString;
-use crate::component_impl::TuiComponent;
 
 /// DateTimeInput component implementation.
 ///
@@ -61,17 +61,19 @@ impl TuiComponent for DateTimeInputComponent {
         // Resolve enableDate and enableTime flags.
         let enable_date: bool = comp_model.get_property("enableDate").unwrap_or(true);
         let enable_time: bool = comp_model.get_property("enableTime").unwrap_or(true);
-        let _min = comp_model.get_property::<DynamicString>("min")
+        let _min = comp_model
+            .get_property::<DynamicString>("min")
             .map(|ds| ctx.data_context.resolve_dynamic_string(&ds));
-        let _max = comp_model.get_property::<DynamicString>("max")
+        let _max = comp_model
+            .get_property::<DynamicString>("max")
             .map(|ds| ctx.data_context.resolve_dynamic_string(&ds));
 
         // Choose icon based on enabled modes.
         let icon = match (enable_date, enable_time) {
             (true, true) => "\u{1F4C5}",   // calendar
-            (true, false) => "\u{1F4C5}",   // calendar only
-            (false, true) => "\u{23F0}",    // clock only
-            (false, false) => "\u{1F4C5}",  // default
+            (true, false) => "\u{1F4C5}",  // calendar only
+            (false, true) => "\u{23F0}",   // clock only
+            (false, false) => "\u{1F4C5}", // default
         };
 
         // Build display text with appropriate icon.
@@ -139,21 +141,36 @@ impl TuiComponent for DateTimeInputComponent {
         let enable_time: bool = comp_model.get_property("enableTime").unwrap_or(true);
 
         // Read + parse the current value. On empty/unparseable input, seed with now.
-        let current_str =
-            ctx.data_context.resolve_dynamic_string(&DynamicString::Binding(binding.clone()));
+        let current_str = ctx
+            .data_context
+            .resolve_dynamic_string(&DynamicString::Binding(binding.clone()));
         let dt = parse_value(&current_str).unwrap_or_else(|| chrono::Local::now().naive_local());
 
         // Only the four arrow keys are handled; everything else bubbles up.
         let direction = match event {
             InputEvent::KeyPress { key: InputKey::Up } => Direction::Forward,
-            InputEvent::KeyPress { key: InputKey::Right } => Direction::Forward,
-            InputEvent::KeyPress { key: InputKey::Down } => Direction::Backward,
-            InputEvent::KeyPress { key: InputKey::Left } => Direction::Backward,
+            InputEvent::KeyPress {
+                key: InputKey::Right,
+            } => Direction::Forward,
+            InputEvent::KeyPress {
+                key: InputKey::Down,
+            } => Direction::Backward,
+            InputEvent::KeyPress {
+                key: InputKey::Left,
+            } => Direction::Backward,
             _ => return None,
         };
         let axis = match event {
-            InputEvent::KeyPress { key: InputKey::Up } | InputEvent::KeyPress { key: InputKey::Down } => Axis::Primary,
-            InputEvent::KeyPress { key: InputKey::Left } | InputEvent::KeyPress { key: InputKey::Right } => Axis::Secondary,
+            InputEvent::KeyPress { key: InputKey::Up }
+            | InputEvent::KeyPress {
+                key: InputKey::Down,
+            } => Axis::Primary,
+            InputEvent::KeyPress {
+                key: InputKey::Left,
+            }
+            | InputEvent::KeyPress {
+                key: InputKey::Right,
+            } => Axis::Secondary,
             _ => return None,
         };
 
@@ -225,7 +242,11 @@ fn apply_delta(
     axis: Axis,
     direction: Direction,
 ) -> NaiveDateTime {
-    let sign: i64 = if direction == Direction::Forward { 1 } else { -1 };
+    let sign: i64 = if direction == Direction::Forward {
+        1
+    } else {
+        -1
+    };
 
     let duration_step = |days: i64, secs: i64| -> NaiveDateTime {
         dt + Duration::days(days) + Duration::seconds(secs)
@@ -233,16 +254,16 @@ fn apply_delta(
 
     match (enable_date, enable_time) {
         (true, true) => match axis {
-            Axis::Primary => duration_step(sign, 0),            // ±1 day
-            Axis::Secondary => duration_step(0, sign * 3600),   // ±1 hour
+            Axis::Primary => duration_step(sign, 0),          // ±1 day
+            Axis::Secondary => duration_step(0, sign * 3600), // ±1 hour
         },
         (true, false) => match axis {
-            Axis::Primary => duration_step(sign, 0),            // ±1 day
-            Axis::Secondary => add_months(dt, sign),            // ±1 month
+            Axis::Primary => duration_step(sign, 0), // ±1 day
+            Axis::Secondary => add_months(dt, sign), // ±1 month
         },
         (false, true) => match axis {
-            Axis::Primary => duration_step(0, sign * 60),       // ±1 minute
-            Axis::Secondary => duration_step(0, sign * 3600),   // ±1 hour
+            Axis::Primary => duration_step(0, sign * 60), // ±1 minute
+            Axis::Secondary => duration_step(0, sign * 3600), // ±1 hour
         },
         // Neither enabled is a degenerate config; fall back to day stepping so the
         // key still does *something* rather than silently swallowing the event.
@@ -266,7 +287,8 @@ fn add_months(dt: NaiveDateTime, n: i64) -> NaiveDateTime {
     let clamped_day = day.min(last_day);
 
     match chrono::NaiveDate::from_ymd_opt(new_year, new_month, clamped_day) {
-        Some(d) => d.and_hms_opt(dt.hour(), dt.minute(), dt.second())
+        Some(d) => d
+            .and_hms_opt(dt.hour(), dt.minute(), dt.second())
             .unwrap_or(dt),
         None => dt,
     }

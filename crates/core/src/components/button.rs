@@ -17,10 +17,12 @@ pub fn handle_event(ctx: &ComponentContext, event: &InputEvent) -> Option<EventR
     let action = comp_model.action()?;
 
     match action {
-        Action::Event { event: action_event } => {
+        Action::Event {
+            event: action_event,
+        } => {
             let mut context = HashMap::new();
             for (k, dv) in &action_event.context {
-                context.insert(k.clone(), ctx.data_context.resolve_dynamic_value(&dv));
+                context.insert(k.clone(), ctx.data_context.resolve_dynamic_value(dv));
             }
             Some(EventResult::Action {
                 event_name: action_event.name.clone(),

@@ -6,8 +6,8 @@ use serde_json::Value;
 
 use super::data_model::DataModel;
 use crate::protocol::common_types::{
-    DynamicBoolean, DynamicBooleanCondition, DynamicNumber, DynamicString,
-    DynamicValue, FunctionCall,
+    DynamicBoolean, DynamicBooleanCondition, DynamicNumber, DynamicString, DynamicValue,
+    FunctionCall,
 };
 
 /// A scoped window into the DataModel used during rendering.
@@ -35,7 +35,10 @@ impl<'a> DataContext<'a> {
     /// Create a new DataContext at the root scope.
     pub fn new(
         data_model: &'a DataModel,
-        functions: &'a HashMap<String, Box<dyn crate::catalog::function_api::FunctionImplementation>>,
+        functions: &'a HashMap<
+            String,
+            Box<dyn crate::catalog::function_api::FunctionImplementation>,
+        >,
     ) -> Self {
         Self {
             data_model,

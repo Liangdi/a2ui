@@ -80,9 +80,7 @@ impl ValidationError {
     pub fn circular(component_id: &str) -> Self {
         Self {
             code: ValidationErrorCode::CircularReference,
-            message: format!(
-                "Circular reference detected involving component '{component_id}'"
-            ),
+            message: format!("Circular reference detected involving component '{component_id}'"),
             component_id: Some(component_id.to_string()),
             path: None,
         }
@@ -91,9 +89,7 @@ impl ValidationError {
     pub fn orphan(component_id: &str, root_id: &str) -> Self {
         Self {
             code: ValidationErrorCode::OrphanComponent,
-            message: format!(
-                "Component '{component_id}' is not reachable from '{root_id}'"
-            ),
+            message: format!("Component '{component_id}' is not reachable from '{root_id}'"),
             component_id: Some(component_id.to_string()),
             path: None,
         }
@@ -102,7 +98,10 @@ impl ValidationError {
     pub fn global_depth(component_id: &str) -> Self {
         Self {
             code: ValidationErrorCode::GlobalDepthExceeded,
-            message: format!("Global recursion limit exceeded: Depth > {}", super::integrity::MAX_GLOBAL_DEPTH),
+            message: format!(
+                "Global recursion limit exceeded: Depth > {}",
+                super::integrity::MAX_GLOBAL_DEPTH
+            ),
             component_id: Some(component_id.to_string()),
             path: None,
         }
@@ -155,11 +154,7 @@ impl ValidationReport {
 
     /// Convert into `Ok(())` if there were no errors, otherwise `Err(self)`.
     pub fn into_result(self) -> std::result::Result<(), Self> {
-        if self.is_empty() {
-            Ok(())
-        } else {
-            Err(self)
-        }
+        if self.is_empty() { Ok(()) } else { Err(self) }
     }
 
     /// Returns the first error matching a code, for test assertions.

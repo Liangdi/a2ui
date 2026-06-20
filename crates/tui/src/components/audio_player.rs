@@ -9,7 +9,7 @@
 //! binding) and is controlled live — play/pause, volume, and replay after the
 //! track ends — via keyboard when the component has focus. It also fixes the
 //! earlier "re-trigger playback every frame" bug: each instance's `rodio`
-//! handles live in a per-instance cache ([`player::HANDLES`]), created once on
+//! handles live in a per-instance cache (`player::HANDLES`), created once on
 //! first render and reused.
 //!
 //! # Interaction (requires `audio` feature + focus)
@@ -35,9 +35,9 @@ use ratatui::{
     widgets::Paragraph,
 };
 
+use crate::component_impl::TuiComponent;
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::protocol::common_types::DynamicString;
-use crate::component_impl::TuiComponent;
 
 // Event types are only needed by the feature-gated `handle_event`.
 #[cfg(feature = "audio")]
@@ -146,11 +146,7 @@ impl TuiComponent for AudioPlayerComponent {
     /// Keyboard control of the live player (feature-gated). Without the
     /// `audio` feature the trait's default (`None`) is used.
     #[cfg(feature = "audio")]
-    fn handle_event(
-        &self,
-        ctx: &ComponentContext,
-        event: &InputEvent,
-    ) -> Option<EventResult> {
+    fn handle_event(&self, ctx: &ComponentContext, event: &InputEvent) -> Option<EventResult> {
         // `InputEvent` has a single variant, so this destructure is
         // irrefutable; `key` binds by reference via match ergonomics.
         let InputEvent::KeyPress { key } = event;

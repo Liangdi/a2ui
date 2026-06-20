@@ -16,8 +16,7 @@ use serde_json::{Value, json};
 
 /// The basic catalog id, the same string every `08_agent_chat` example feeds to
 /// `createSurface`. Centralized so the scenarios and the host always agree.
-pub const CATALOG_ID: &str =
-    "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json";
+pub const CATALOG_ID: &str = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json";
 
 /// The welcome surface shown when the chat first opens (before the user types
 /// anything). Shared so every backend renders the identical greeting.
@@ -46,10 +45,7 @@ pub fn generate_response(sid: &str, user_msg: &str) -> Vec<Value> {
         scenario_tasks(sid)
     } else if lower.contains("story") || lower.contains("tell me") {
         scenario_streaming(sid)
-    } else if lower.contains("stat")
-        || lower.contains("dashboard")
-        || lower.contains("number")
-    {
+    } else if lower.contains("stat") || lower.contains("dashboard") || lower.contains("number") {
         scenario_stats(sid)
     } else if lower.contains("quote") {
         scenario_quote(sid)
@@ -117,7 +113,7 @@ fn scenario_tasks(sid: &str) -> Vec<Value> {
         ]}}),
     ];
 
-    let tasks = vec![
+    let tasks = [
         ("🔴 P0", "✅", "Fix layout engine justify bug"),
         ("🔴 P0", "✅", "Implement focus management"),
         ("🟡 P1", "✅", "Add Card component shadow"),
@@ -134,7 +130,9 @@ fn scenario_tasks(sid: &str) -> Vec<Value> {
     messages.push(json!({"version":"v1.0","updateDataModel":{"surfaceId":sid,"path":"/status","value":"⏳ Scanning 24 files..."}}));
 
     for (i, (_priority, status, _name)) in tasks.iter().enumerate() {
-        if *status == "✅" { completed += 1; }
+        if *status == "✅" {
+            completed += 1;
+        }
 
         let pct = (i + 1) * 100 / total;
         let filled = pct / 5;
@@ -157,7 +155,9 @@ fn scenario_tasks(sid: &str) -> Vec<Value> {
 
         let summary = format!(
             "{} done · {} remaining · {}% complete",
-            completed, total - completed, completed * 100 / total
+            completed,
+            total - completed,
+            completed * 100 / total
         );
 
         messages.push(json!({

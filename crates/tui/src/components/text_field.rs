@@ -8,9 +8,9 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph},
 };
 
+use crate::component_impl::TuiComponent;
 use a2ui_base::model::component_context::ComponentContext;
 use a2ui_base::protocol::common_types::DynamicString;
-use crate::component_impl::TuiComponent;
 
 /// TextField component implementation.
 ///

@@ -105,7 +105,11 @@ pub fn validate_component_integrity(
 
     // 1. Collect IDs, flag duplicates.
     for comp in components {
-        let Some(comp_id) = comp.as_object().and_then(|o| o.get("id")).and_then(|v| v.as_str()) else {
+        let Some(comp_id) = comp
+            .as_object()
+            .and_then(|o| o.get("id"))
+            .and_then(|v| v.as_str())
+        else {
             continue;
         };
         if !ids.insert(comp_id.to_string()) {
@@ -171,10 +175,10 @@ fn traverse(item: &Value, global_depth: u32, func_depth: u32, report: &mut Valid
         }
         Value::Object(obj) => {
             // path syntax check
-            if let Some(p) = obj.get("path").and_then(|v| v.as_str()) {
-                if !RELAXED_PATH_PATTERN.is_match(p) {
-                    report.push(ValidationError::invalid_path(p));
-                }
+            if let Some(p) = obj.get("path").and_then(|v| v.as_str())
+                && !RELAXED_PATH_PATTERN.is_match(p)
+            {
+                report.push(ValidationError::invalid_path(p));
             }
 
             // v0.9 function-call shape: has both "call" and "args".
@@ -251,7 +255,10 @@ mod tests {
             "children": { "componentId": "card", "path": "/items" }
         });
         let refs = get_component_references(&comp, &spec());
-        assert!(refs.iter().any(|(r, f)| r == "card" && f == "children.componentId"));
+        assert!(
+            refs.iter()
+                .any(|(r, f)| r == "card" && f == "children.componentId")
+        );
     }
 
     #[test]
@@ -292,8 +299,7 @@ mod tests {
 
     #[test]
     fn integrity_dangling_ref() {
-        let components =
-            vec![json!({ "id": "root", "component": "Box", "child": "nonexistent" })];
+        let components = vec![json!({ "id": "root", "component": "Box", "child": "nonexistent" })];
         let r = validate_component_integrity(&components, &spec(), "root", false, false);
         assert!(r.has_code(&ValidationErrorCode::DanglingReference));
     }
@@ -338,8 +344,7 @@ mod tests {
 
     #[test]
     fn relaxed_allows_dangling_and_missing_root() {
-        let components =
-            vec![json!({ "id": "root", "component": "Box", "child": "ghost" })];
+        let components = vec![json!({ "id": "root", "component": "Box", "child": "ghost" })];
         // allow_dangling_references=true short-circuits before the root/dangling
         // checks, so neither MissingRoot nor DanglingReference is reported.
         let r = validate_component_integrity(&components, &spec(), "root", true, true);

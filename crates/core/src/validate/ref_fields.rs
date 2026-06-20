@@ -51,7 +51,13 @@ mod tests {
 
     #[test]
     fn default_impl_matches_const() {
-        assert_eq!(RefFieldSpec::default().single_refs, RefFieldSpec::DEFAULT.single_refs);
-        assert_eq!(RefFieldSpec::default().list_refs, RefFieldSpec::DEFAULT.list_refs);
+        assert_eq!(
+            RefFieldSpec::default().single_refs,
+            RefFieldSpec::DEFAULT.single_refs
+        );
+        assert_eq!(
+            RefFieldSpec::default().list_refs,
+            RefFieldSpec::DEFAULT.list_refs
+        );
     }
 }

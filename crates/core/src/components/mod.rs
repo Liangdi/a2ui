@@ -33,7 +33,7 @@ pub mod checkbox;
 pub mod slider;
 pub mod text_field;
 
-/// Route a key-press event to the named component type's [`handle_event`].
+/// Route a key-press event to the named component type's `handle_event`.
 ///
 /// Returns `None` for types without a shared handler (unknown types,
 /// non-interactive types like Text/Column, or the backend-specific interactive

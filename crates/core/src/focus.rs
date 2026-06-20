@@ -76,10 +76,10 @@ impl FocusManager {
         }
 
         // Restore focus if the previously-focused ID still exists.
-        if let Some(ref prev_id) = previously_focused {
-            if let Some(idx) = self.focusable_ids.iter().position(|id| id == prev_id) {
-                self.current_index = idx;
-            }
+        if let Some(ref prev_id) = previously_focused
+            && let Some(idx) = self.focusable_ids.iter().position(|id| id == prev_id)
+        {
+            self.current_index = idx;
         }
     }
 
@@ -112,7 +112,9 @@ impl FocusManager {
 
     /// Returns the ID of the currently focused component, if any.
     pub fn focused_id(&self) -> Option<&str> {
-        self.focusable_ids.get(self.current_index).map(|s| s.as_str())
+        self.focusable_ids
+            .get(self.current_index)
+            .map(|s| s.as_str())
     }
 
     /// Clear all focus state.
@@ -154,10 +156,10 @@ impl FocusManager {
         }
 
         // Single child (used by wrapper components like ScrollView).
-        if let Some(single_id) = component.child() {
-            if let Some(child) = components.get(&single_id) {
-                self.collect_focusable_depth_first(child, components);
-            }
+        if let Some(single_id) = component.child()
+            && let Some(child) = components.get(&single_id)
+        {
+            self.collect_focusable_depth_first(child, components);
         }
     }
 }

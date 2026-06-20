@@ -40,7 +40,10 @@ pub fn load() -> GalleryConfig {
         Ok(text) => match toml::from_str::<GalleryConfig>(&text) {
             Ok(cfg) => cfg,
             Err(e) => {
-                eprintln!("Warning: ignoring unreadable config {}: {e}", path.display());
+                eprintln!(
+                    "Warning: ignoring unreadable config {}: {e}",
+                    path.display()
+                );
                 GalleryConfig::default()
             }
         },
@@ -57,13 +60,16 @@ pub fn load() -> GalleryConfig {
 /// stderr and continues).
 pub fn save(cfg: &GalleryConfig) -> io::Result<()> {
     let path = config_path().ok_or_else(|| {
-        io::Error::new(io::ErrorKind::NotFound, "no config/home directory available")
+        io::Error::new(
+            io::ErrorKind::NotFound,
+            "no config/home directory available",
+        )
     })?;
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let text = toml::to_string_pretty(cfg)
-        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let text =
+        toml::to_string_pretty(cfg).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     fs::write(&path, text)?;
     Ok(())
 }
@@ -88,7 +94,10 @@ mod tests {
     #[test]
     fn default_config_omits_unset_keys() {
         let text = toml::to_string(&GalleryConfig::default()).unwrap();
-        assert!(text.trim().is_empty(), "default config should be empty TOML");
+        assert!(
+            text.trim().is_empty(),
+            "default config should be empty TOML"
+        );
     }
 
     /// An unknown / partial file still parses (extra keys ignored, missing

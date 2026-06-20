@@ -8,7 +8,7 @@
 
 use serde_json::Value;
 
-use crate::observable::event_stream::{EventSubscription, EventStream};
+use crate::observable::event_stream::{EventStream, EventSubscription};
 
 /// A reactive JSON document store with JSON Pointer support.
 ///
@@ -47,7 +47,11 @@ impl DataModel {
     /// If the value is not an object, wraps it.
     pub fn from_value(value: Value) -> Self {
         Self {
-            data: if value.is_object() { value } else { Value::Object(serde_json::Map::new()) },
+            data: if value.is_object() {
+                value
+            } else {
+                Value::Object(serde_json::Map::new())
+            },
             subscribers: EventStream::new(),
         }
     }
@@ -91,7 +95,11 @@ impl DataModel {
 
     /// Replace the entire data model.
     pub fn replace_all(&mut self, value: Value) {
-        let new_data = if value.is_object() { value } else { Value::Object(serde_json::Map::new()) };
+        let new_data = if value.is_object() {
+            value
+        } else {
+            Value::Object(serde_json::Map::new())
+        };
         self.data = new_data.clone();
         self.notify("/", &new_data);
     }
@@ -108,7 +116,11 @@ impl DataModel {
     fn notify(&self, changed_path: &str, new_value: &Value) {
         let event = DataModelEvent {
             path: changed_path.to_string(),
-            new_value: if new_value.is_null() { None } else { Some(new_value.clone()) },
+            new_value: if new_value.is_null() {
+                None
+            } else {
+                Some(new_value.clone())
+            },
         };
         self.subscribers.emit(&event);
 
@@ -233,10 +245,10 @@ fn remove_value(root: &mut Value, tokens: &[String]) {
                 map.remove(&tokens[0]);
             }
             Value::Array(arr) => {
-                if let Ok(idx) = tokens[0].parse::<usize>() {
-                    if idx < arr.len() {
-                        arr[idx] = Value::Null; // sparse: preserve length
-                    }
+                if let Ok(idx) = tokens[0].parse::<usize>()
+                    && idx < arr.len()
+                {
+                    arr[idx] = Value::Null; // sparse: preserve length
                 }
             }
             _ => {}
