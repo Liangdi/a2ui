@@ -59,11 +59,11 @@ rodio = "0.22"
 # give the core types (SharedString, Model, the `slint!` macro) without committing
 # to a windowing backend — consumers pick a renderer (e.g. `renderer-femtovg`,
 # `renderer-software`) when launching.
-slint = { version = "1.16", default-features = false, features = ["std", "compat-1-2"] }
+slint = { version = "1.17", default-features = false, features = ["std", "compat-1-2"] }
 # Build-time compiler: turns `.slint` files into Rust modules via `slint_build`
 # in `build.rs`. (The inline `slint::slint!` macro rejects recursive components,
 # so the backend compiles real `.slint` files instead.)
-slint-build = { version = "1.16" }
+slint-build = { version = "1.17" }
 # egui immediate-mode GUI runtime for the `a2ui-egui` backend. Unlike Slint,
 # egui is native-recursive and pure-Rust (winit + glow, no system GUI libs), so
 # the backend needs no `build.rs`. `egui` is kept default-less (core types only);
@@ -71,8 +71,8 @@ slint-build = { version = "1.16" }
 # + default fonts) so it links a working windowing backend on Linux. The
 # windowing deps are pulled in by the `backend` feature in `a2ui-egui`.
 # Pinned to 0.33 (latest stable line on crates.io as of 2026-06).
-egui = { version = "0.34", default-features = false }
-eframe = "0.34"
+egui = { version = "0.35", default-features = false }
+eframe = "0.35"
 # Bevy ECS + UI runtime for the `a2ui-bevy` backend. The fourth renderer,
 # targeting game/embedded runtimes. Bevy UI is ECS retained-mode, so (unlike
 # egui's per-frame rebuild) the backend keeps a stable entity tree and

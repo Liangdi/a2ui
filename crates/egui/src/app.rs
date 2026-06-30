@@ -144,7 +144,7 @@ impl eframe::App for EguiApp {
         egui::Panel::left("sample_browser")
             .default_size(240.0)
             .resizable(true)
-            .show_inside(ui, |ui| {
+            .show(ui, |ui| {
                 ui.heading("Samples");
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     for (i, (name, _)) in self.samples.iter().enumerate() {
@@ -164,7 +164,7 @@ impl eframe::App for EguiApp {
         //    distinct field borrow (the immutable Walk fields and the mutable
         //    edit_buffers/pending coexist without conflict).
         let mut pending: Vec<PendingInteraction> = Vec::new();
-        egui::CentralPanel::default().show_inside(ui, |ui| {
+        egui::CentralPanel::default().show(ui, |ui| {
             self.edit_buffers.begin_frame();
 
             let Some(surface) = self.processor.model.surfaces().next() else {
