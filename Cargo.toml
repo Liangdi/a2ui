@@ -1,10 +1,22 @@
 [workspace]
 resolver = "3"
 members = ["crates/core", "crates/image", "crates/tui", "crates/gallery", "crates/a2ui", "crates/slint", "crates/slint-gallery", "crates/egui", "crates/egui-gallery", "crates/bevy", "crates/bevy-gallery", "crates/iced", "crates/iced-gallery", "crates/dioxus", "crates/dioxus-gallery"]
+# The GPUI backend (`crates/gpui` + `crates/gpui-gallery`) is intentionally
+# **excluded** from this workspace: `gpui 0.2.2` pins `cocoa = "=0.26.0"` (an
+# exact, macOS-only transitive dep), while `dioxus-desktop` (pulled into this
+# workspace's lockfile via the aggregator crate's optional `a2ui-dioxus` dep)
+# needs `cocoa ^0.26.1`. No single `cocoa` version satisfies both, so the two
+# cannot share a Cargo.lock. The gpui crates therefore live in their own
+# self-contained workspace (each with its own `[workspace]` table) and build
+# independently — see `crates/gpui/Cargo.toml` / `crates/gpui-gallery/Cargo.toml`
+# and the build recipe in the comment block below.
+exclude = ["crates/gpui", "crates/gpui-gallery"]
 # `cargo build` / `cargo run` with no `-p` compile only the ratatui stack. Every
 # GUI backend (slint / egui / bevy / iced / dioxus) is opt-in — each pulls a
 # sizeable GUI toolchain, so build one explicitly, e.g.
 # `cargo build -p a2ui-bevy --features backend`.
+# The GPUI backend is built separately (it lives in its own workspace; see the
+# `exclude` note above): `cargo build --manifest-path crates/gpui-gallery/Cargo.toml`.
 #
 # KNOWN LIMITATION — never build/lint/test the GUI backends together with a bare
 # `--workspace` / `--all-features`: `iced 0.14` (→ wgpu 27 → naga 27) and
@@ -158,6 +170,11 @@ dioxus = { version = "0.7", default-features = false, features = [
     "signals",
     "hooks",
 ] }
+# NOTE: `gpui` / `gpui-component` / `gpui-component-assets` are NOT declared
+# here. The GPUI backend lives in its own workspace (`crates/gpui`,
+# `crates/gpui-gallery`, excluded above) and inlines those versions directly —
+# see those manifests. (gpui-component 0.5.1 depends on `gpui = ^0.2.2`; all
+# pinned to the latest crates.io line as of 2026-07.)
 
 # Internal crates — path dependencies shared across the workspace. Each carries
 # a `version` (the workspace package version) so `cargo publish` can resolve them

@@ -1,0 +1,68 @@
+# This is a **standalone workspace root** (not a member of the repository's main
+# workspace — see the root `Cargo.toml` `exclude` note). It exists separately
+# because `gpui 0.2.2` pins `cocoa = "=0.26.0"` (macOS-only), which is
+# semver-incompatible with the `cocoa ^0.26.1` that `dioxus-desktop` requires
+# (pulled into the main workspace's lockfile via the aggregator crate's optional
+# `a2ui-dioxus` dep). The two cannot share a Cargo.lock, so the GPUI backend
+# builds here with its own.
+#
+# Build with: `cargo build --manifest-path crates/gpui/Cargo.toml --features backend`
+[workspace]
+
+[package]
+name = "a2ui-gpui"
+version = "0.3.1"
+edition = "2024"
+authors = ["Liangdi <wu@liangdi.me>"]
+license = "MIT"
+repository = "https://github.com/Liangdi/a2ui"
+description = "GPUI (Zed) + gpui-component GUI backend for A2UI (Agent to UI)"
+
+[features]
+default = []
+# Pull in the real GPUI runtime + the gpui-component widget set. OFF by default
+# so the crate compiles to an empty shell without the heavy GUI toolchain.
+# Enable with `--features backend`.
+backend = [
+    "dep:gpui",
+    "dep:gpui-component",
+    "dep:gpui-component-assets",
+    "dep:a2ui-image",
+]
+
+[dependencies]
+# Path deps into the main workspace's leaf crates (path deps across workspaces
+# are fine — Cargo resolves these packages in their own workspace context).
+a2ui-base = { path = "../core", version = "0.3.1" }
+serde_json = "1"
+# Optional: the GPUI runtime. The `backend` feature is the single switch that
+# links the gpui + gpui-component stack. gpui's default features already pull
+# the Linux wayland + x11 backends + its own blade GPU path.
+gpui = { version = "0.2.2", optional = true }
+# Optional: the longbridge gpui-component widget set (Button / Input / Slider /
+# Select / Checkbox / TabBar / List / Divider / Root). `default-features = false`
+# drops the opt-in webview / decimal / tree-sitter grammars.
+gpui-component = { version = "0.5.1", default-features = false, optional = true }
+# Optional: bundled fonts + icon assets required by `gpui_component::init`.
+gpui-component-assets = { version = "0.5.1", optional = true }
+# Optional: shared image source resolution (http / data: / file:// → bytes)
+# for the `Image` component, mirroring the other backends. Gated on `backend`.
+a2ui-image = { path = "../image", version = "0.3.1", optional = true }
+
+[dev-dependencies]
+# Examples share the basic catalog + the agent_chat scenarios from a2ui-tui,
+# and drive an a2ui-base MessageProcessor. The `backend` feature (required by
+# the `[[example]]` blocks below) supplies gpui + gpui-component.
+a2ui-base = { path = "../core", version = "0.3.1" }
+a2ui-tui = { path = "../tui", version = "0.3.1" }
+serde_json = "1"
+gpui-component-assets = "0.5.1"
+anyhow = "1"
+
+[[example]]
+name = "08_agent_chat"
+required-features = ["backend"]
+
+[[example]]
+name = "17_scifi_hud"
+required-features = ["backend"]

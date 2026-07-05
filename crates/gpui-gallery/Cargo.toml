@@ -1,0 +1,33 @@
+# Standalone workspace root for the GPUI gallery (see `crates/gpui/Cargo.toml`
+# and the root `Cargo.toml` `exclude` note for why the GPUI backend is split
+# into its own workspace — the `gpui`/`dioxus` `cocoa` pin conflict).
+#
+# Build / run with:
+#   cargo run --manifest-path crates/gpui-gallery/Cargo.toml
+[workspace]
+
+[package]
+name = "a2ui-gpui-gallery"
+version = "0.3.1"
+edition = "2024"
+authors = ["Liangdi <wu@liangdi.me>"]
+license = "MIT"
+repository = "https://github.com/Liangdi/a2ui"
+description = "A2UI gallery — browse and render the sample specs in a GPUI window"
+
+[[bin]]
+name = "a2ui_gpui_gallery"
+path = "src/main.rs"
+
+[dependencies]
+a2ui-base = { path = "../core", version = "0.3.1" }
+a2ui-tui = { path = "../tui", version = "0.3.1" }           # build_basic/minimal_catalog
+a2ui-gallery = { path = "../gallery", version = "0.3.1" }   # sample_loader
+# The `backend` feature enables the GPUI windowing backend (blade GPU + the
+# Linux wayland/x11 backends). Required for this binary.
+a2ui-gpui = { path = "../gpui", version = "0.3.1", features = ["backend"] }
+gpui = "0.2.2"
+gpui-component = { version = "0.5.1", default-features = false }
+gpui-component-assets = "0.5.1"
+serde_json = "1"
+anyhow = "1"
