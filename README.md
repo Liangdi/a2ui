@@ -1,4 +1,4 @@
-# A2UI — A2UI 协议的 Rust 实现(ratatui 终端 + Slint / egui / Bevy / Iced 桌面后端)
+# A2UI — A2UI 协议的 Rust 实现(ratatui 终端 + Slint / egui / Bevy / Iced / Dioxus / GPUI 桌面后端)
 
 [![crates.io](https://img.shields.io/crates/v/a2ui.svg)](https://crates.io/crates/a2ui)
 [![docs.rs](https://docs.rs/a2ui/badge.svg)](https://docs.rs/a2ui)
@@ -8,9 +8,9 @@
 
 [A2UI (Agent to UI) v1.0](https://github.com/a2ui-project/a2ui) 协议的 Rust 实现 —— 一个 JSON 流式 UI 协议,允许 AI Agent 动态生成并更新界面。
 
-同一套框架无关的核心(`a2ui-base`)之上,提供了 **6 个渲染后端**:默认的终端后端 `a2ui-tui`(基于 [ratatui](https://ratatui.rs/)),以及五个**可选的**原生桌面后端 —— [Slint](https://slint.dev/)、[egui](https://github.com/emilk/egui)、[Bevy](https://bevyengine.org)、[Iced](https://github.com/iced-rs/iced)、[Dioxus](https://github.com/DioxusLabs/dioxus)。各后端的渲染保真度与「真输入」能力见[「后端支持矩阵」](#后端支持矩阵)。
+同一套框架无关的核心(`a2ui-base`)之上,提供了 **7 个渲染后端**:默认的终端后端 `a2ui-tui`(基于 [ratatui](https://ratatui.rs/)),以及六个**可选的**原生桌面后端 —— [Slint](https://slint.dev/)、[egui](https://github.com/emilk/egui)、[Bevy](https://bevyengine.org)、[Iced](https://github.com/iced-rs/iced)、[Dioxus](https://github.com/DioxusLabs/dioxus)、[GPUI](https://gpui.rs)(基于 [gpui-component](https://github.com/longbridge/gpui-component) 组件库)。各后端的渲染保真度与「真输入」能力见[「后端支持矩阵」](#后端支持矩阵)。
 
-项目组织为 Cargo workspace:`a2ui-base`(框架无关核心)+ 6 个后端(`a2ui-tui` / `a2ui-slint` / `a2ui-egui` / `a2ui-bevy` / `a2ui-iced` / `a2ui-dioxus`)+ 各自的 `*-gallery` 展示 app + `a2ui`(umbrella,re-export 保持 `use a2ui::core::...` / `use a2ui::tui::...` 等路径不破)。
+项目组织为 Cargo workspace:`a2ui-base`(框架无关核心)+ 6 个 workspace 内后端(`a2ui-tui` / `a2ui-slint` / `a2ui-egui` / `a2ui-bevy` / `a2ui-iced` / `a2ui-dioxus`)+ 各自的 `*-gallery` 展示 app + `a2ui`(umbrella,re-export 保持 `use a2ui::core::...` / `use a2ui::tui::...` 等路径不破)。**第七个后端 `a2ui-gpui` 因依赖冲突生活在独立 workspace 里**(详见 [GPUI 后端](#gpui-桌面后端)与[已知构建限制](#已知构建限制bevy--iced-不能同构建))。
 
 ## 特性
 
@@ -52,12 +52,15 @@
 |:---:|:---:|:---:|
 | **ratatui 终端**（`a2ui` 的 `17_scifi_hud`）<br>![Sci-fi HUD — ratatui](screenshot/sci-fi-hud-tui.png) | **Slint 桌面**（`a2ui-slint` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Slint](screenshot/sci-fi-hud-slint.png) | **egui 桌面**（`a2ui-egui` 的 `17_scifi_hud`）<br>![Sci-fi HUD — egui](screenshot/sci-fi-hud-egui.png) |
 | **Iced 桌面**（`a2ui-iced` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Iced](screenshot/sci-fi-hud-iced.png) | **Dioxus 桌面**（`a2ui-dioxus` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Dioxus](screenshot/sci-fi-hud-dioxus.png) | **Bevy 桌面**（`a2ui-bevy` 的 `17_scifi_hud`）<br>![Sci-fi HUD — Bevy](screenshot/sci-fi-hud-bevy.png) |
+| **GPUI 桌面**（`a2ui-gpui` 的 `17_scifi_hud`）<br>![Sci-fi HUD — GPUI](screenshot/sci-fi-hud-gpui.png) |  |  |
 
-六个后端，同一份协议数据 —— 仅**数据**经协议流动，渲染层各自为政。
+七个后端，同一份协议数据 —— 仅**数据**经协议流动，渲染层各自为政。
 
-ratatui 版用自定义 `TuiComponent` 画 ASCII 仪表 + 字符网格雷达；Slint 版用内联 `slint!` 组件 + flex 条仪表 + ASCII 字符网格雷达（呼应 ratatui 原版）；egui 版用原生 `ProgressBar` 仪表 + `Painter` 绘制的雷达扫描（即时模式:`ui()` 每帧从 data model 读值重建整棵控件树）；Iced 版用 `progress_bar` 仪表 + `Canvas` 雷达；Dioxus 版用 CSS 进度条 + **SVG** 雷达扫描,渲染到系统 WebView；Bevy 版用**原生 Bevy UI 节点**(保留式 ECS:实体树 spawn 一次,每帧原位 mutate `Text`/`Node`/颜色)+ flex 条仪表 + ASCII 字符网格雷达。六者架构一致——仅**数据**经协议流动,渲染层各自为政。
+ratatui 版用自定义 `TuiComponent` 画 ASCII 仪表 + 字符网格雷达；Slint 版用内联 `slint!` 组件 + flex 条仪表 + ASCII 字符网格雷达（呼应 ratatui 原版）；egui 版用原生 `ProgressBar` 仪表 + `Painter` 绘制的雷达扫描（即时模式:`ui()` 每帧从 data model 读值重建整棵控件树）；Iced 版用 `progress_bar` 仪表 + `Canvas` 雷达；Dioxus 版用 CSS 进度条 + **SVG** 雷达扫描,渲染到系统 WebView；Bevy 版用**原生 Bevy UI 节点**(保留式 ECS:实体树 spawn 一次,每帧原位 mutate `Text`/`Node`/颜色)+ flex 条仪表 + ASCII 字符网格雷达；GPUI 版(Zed 的 GPU UI 框架 + gpui-component)用 `Progress` 仪表 + **SVG** 雷达扫描(混合即时/保留模式:`render` 每帧重建控件树)。七者架构一致——仅**数据**经协议流动,渲染层各自为政。
 
-> sci-fi HUD 现已在**全部六个后端**(ratatui 终端 + Slint / egui / Iced / Dioxus / Bevy 桌面)实现。
+> sci-fi HUD 现已在**全部七个后端**(ratatui 终端 + Slint / egui / Iced / Dioxus / Bevy / GPUI 桌面)实现。
+>
+> GPUI 版的截图在 `Xvfb`(X11 虚拟显示)下用 `import` 抓取:GPUI 的 Wayland 窗口同样躲不过桌面截图工具(`grim` / `gnome-screenshot` 都被锁),而 GPUI 又没有 egui/Bevy 那种内置自截图 API,所以退而求其次,在 `xvfb-run` 下让 GPUI 走 X11 后端渲染再用 `import -window root` 抓整屏裁出窗口。
 >
 > Bevy 版的截图由 `scripts/capture_bevy_screenshot.sh` 产生:锁定 GNOME Wayland 下桌面截图工具不可用(`org.gnome.Shell.Screenshot` D-Bus 被拒、X11 工具看不见 Wayland 原生窗口),故示例内置一个 env 触发的自截图模式,直接读窗口渲染目标(`Screenshot::primary_window()` + `save_to_disk`),与合成器无关。Slint 版的截图由 `scripts/capture_slint_screenshot.sh` 产生:同样的 Wayland 限制下,示例安装一个 headless 平台(`MinimalSoftwareWindow`),软件渲染器直接光栅化进内存像素缓冲区(无需窗口 / 合成器)再编码 PNG。egui 版的截图由 `scripts/capture_egui_screenshot.sh` 产生:示例用 egui 内置的 `ViewportCommand::Screenshot` 触发一次截图 —— eframe 的 glow 后端在**绘制之后**直接读 GPU 帧缓冲区(`read_screen_rgba`),无需合成器介入,与 Bevy / Slint 的 in-app 截图路径同理。
 
@@ -98,31 +101,34 @@ cargo run -p a2ui --example 12_handshake
 ├───────────────────────────────────────────────────────────────────────┤
 │  a2ui-base (框架无关:Protocol / Model / Catalog / Processor)          │
 └───────────────────────────────────────────────────────────────────────┘
+
+                  ⤷ 同一 a2ui-base 还支撑着 a2ui-gpui(GPUI + gpui-component,
+                     独立 workspace —— 见下文「GPUI 桌面后端」)
 ```
 
-依赖自下而上:`a2ui-base` 同时支撑六个后端 —— `a2ui-tui`(ratatui,默认)、`a2ui-slint`(Slint 桌面,可选)、`a2ui-egui`(egui 桌面,可选)、`a2ui-bevy`(Bevy ECS UI 桌面,可选)、`a2ui-iced`(Iced 桌面,可选)与 `a2ui-dioxus`(Dioxus WebView 桌面,可选)。`a2ui-tui` ← `a2ui-gallery`;`a2ui-slint` ← `a2ui-slint-gallery`;`a2ui-egui` ← `a2ui-egui-gallery`;`a2ui-bevy` ← `a2ui-bevy-gallery`;`a2ui-iced` ← `a2ui-iced-gallery`;`a2ui-dioxus` ← `a2ui-dioxus-gallery`;`a2ui`(umbrella)依赖 core + tui(slint / egui / bevy / iced / dioxus 分别在同名 feature 后)。`a2ui-base` 完全不依赖 ratatui/slint/egui/bevy/iced/dioxus,可独立用于其他 backend。
+依赖自下而上:`a2ui-base` 同时支撑六个后端 —— `a2ui-tui`(ratatui,默认)、`a2ui-slint`(Slint 桌面,可选)、`a2ui-egui`(egui 桌面,可选)、`a2ui-bevy`(Bevy ECS UI 桌面,可选)、`a2ui-iced`(Iced 桌面,可选)与 `a2ui-dioxus`(Dioxus WebView 桌面,可选)。`a2ui-tui` ← `a2ui-gallery`;`a2ui-slint` ← `a2ui-slint-gallery`;`a2ui-egui` ← `a2ui-egui-gallery`;`a2ui-bevy` ← `a2ui-bevy-gallery`;`a2ui-iced` ← `a2ui-iced-gallery`;`a2ui-dioxus` ← `a2ui-dioxus-gallery`;`a2ui`(umbrella)依赖 core + tui(slint / egui / bevy / iced / dioxus 分别在同名 feature 后)。`a2ui-base` 完全不依赖 ratatui/slint/egui/bevy/iced/dioxus/gpui,可独立用于其他 backend。此外 `a2ui-base` 还支撑着 `a2ui-gpui`(GPUI + gpui-component,独立 workspace,见上文「架构」图与「GPUI 桌面后端」)。
 
 ## 后端支持矩阵
 
-六个后端共享同一套 `a2ui-base` 核心(交互逻辑 / `dispatch_event` / `apply_event_result`),但渲染保真度与「真输入」能力因 GUI 框架而异:
+七个后端共享同一套 `a2ui-base` 核心(交互逻辑 / `dispatch_event` / `apply_event_result`),但渲染保真度与「真输入」能力因 GUI 框架而异:
 
 > ✅ 完整渲染(可交互控件接受输入) · 🟡 尽力渲染(只读 / 有限交互) · ⬜ 占位符
 
-| 组件 | TUI (ratatui) | Slint | egui | Bevy | Iced | Dioxus |
-|------|:---:|:---:|:---:|:---:|:---:|:---:|
-| Text / Row / Column / Card / List / Divider | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Button | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Modal | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| TextField | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| CheckBox | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Slider | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| ChoicePicker | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Tabs | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| DateTimeInput | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Icon | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
-| Image | ✅² | ✅⁶ | ✅⁸ | ✅⁷ | ✅⁵ | ✅³ |
-| Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
-| AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ |
+| 组件 | TUI (ratatui) | Slint | egui | Bevy | Iced | Dioxus | GPUI |
+|------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| Text / Row / Column / Card / List / Divider | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Button | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Modal | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| TextField | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| CheckBox | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Slider | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| ChoicePicker | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Tabs | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| DateTimeInput | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Icon | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Image | ✅² | ✅⁶ | ✅⁸ | ✅⁷ | ✅⁵ | ✅³ | ✅⁹ |
+| Video | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ | ⬜ |
+| AudioPlayer | ✅¹ | ⬜ | ⬜ | ⬜ | ⬜ | ✅⁴ | ⬜ |
 
 ¹ 需 `audio` 特性。
 ² TUI 经 `ratatui-image` 真实解码并显示图像像素(kitty / iTerm2 / Sixel / Halfblocks 自动降级,仅本地路径)。
@@ -132,15 +138,23 @@ cargo run -p a2ui --example 12_handshake
 ⁶ Slint 经原生 `Image` 组件 + `image` crate 解码渲染图像像素:URL 经共享 `a2ui-image` 解析——本地路径(含 `file://`)直接读文件,`http(s)` URL 由 `ureq` 拉取字节,`data:` URI(base64 / percent-decode)就地解码(切换样例时清空缓存);仅解码失败的图片为带标签占位符。
 ⁷ Bevy 经原生 `ImageNode`(wgpu 纹理)渲染图像像素:URL 经共享 `a2ui-image` 解析、`image` crate 解码为 `bevy::image::Image` 后缓存 `Handle`(切换样例时清空)。本地路径(含 `file://`)直接读文件;`http(s)` URL 由 `ureq` 在 UI 线程同步拉取(样例图片少,与 Slint 同构);`data:` URI(base64 / percent-decode)就地解码;仅解码失败为带标签占位符。Icon 经内嵌的 ~12 KB NotoEmoji 子集字体显示 emoji(图标名映射表与 TUI / Iced 同名,Bevy 用 emoji 码点)。
 ⁸ egui 经原生 `Image` 组件(wgpu/glow 纹理)渲染图像像素:URL 经共享 `a2ui-image` 解析、`image` crate 解码为 `egui::ColorImage` → `TextureHandle` 后缓存(切换样例时清空)。本地路径(含 `file://`)直接读文件;`http(s)` URL 由 `ureq` 在每帧渲染前同步拉取一次(样例图片少,与 Bevy / Slint 同构;失败者缓存为占位符不重试);`data:` URI(base64 / percent-decode)就地解码;仅解码失败为带标签占位符。Icon 同样经内嵌的 ~12 KB NotoEmoji 子集字体显示 emoji(与 Bevy 同名 `a2ui-icons.ttf`,映射表用 emoji 码点)。
+⁹ GPUI(Zed 的 GPU UI 框架)经 `img()` + gpui `Image` 渲染像素:URL 经共享 `a2ui-image` 解析、按扩展名 / `data:` mime / magic bytes 嗅探出 `ImageFormat` 后交给 `Image::from_bytes`,在 gpui 的后台执行器上拉取并缓存为 `Arc<Image>`(切换样例时清空)。本地路径 / `http(s)` / `data:` 统一走这条异步解析→解码→缓存路径。Icon 用 emoji 字形(映射表与 TUI / Iced 同名)。`fit` 映射到 `ObjectFit`。
 
 - **TUI 是参考实现**:18 组件全部完整渲染;图片默认开启(`ratatui-image`),音频需 `audio` 特性,视频始终为占位符。
-- **可交互输入控件(TextField / Slider / CheckBox / ChoicePicker / DateTimeInput)的「真输入」**:Slint、egui、Bevy、Iced、Dioxus 与 TUI 完整支持(Slint 用原生 `LineEdit` / `Slider` / `CheckBox` / `ComboBox` 控件,变化回调直接写回 data model,与 Iced / egui 同构)。
+- **可交互输入控件(TextField / Slider / CheckBox / ChoicePicker / DateTimeInput)的「真输入」**:Slint、egui、Bevy、Iced、Dioxus、GPUI 与 TUI 完整支持(Slint 用原生 `LineEdit` / `Slider` / `CheckBox` / `ComboBox` 控件,变化回调直接写回 data model,与 Iced / egui 同构)。
 - **Bevy 的可交互控件**(保留式 ECS reconciler + 原生 `bevy_ui_widgets`):ChoicePicker 由 reconciler 为每个选项 spawn 可点击行(单选 `●`/`○`、多选 `☑`/`☐`),点击经 marker 写回 data model;Tabs 有可点击 tab 栈 + 仅渲染激活面板(`activeTab` 绑定时写回 model,否则本地跟踪);DateTimeInput 复用 TextField 的 `TextInputNode` 绑定到 `value`;Icon 显示 emoji;Image 经 wgpu 纹理真实渲染。
 - **Iced 是映射最干净的后端**(无状态桥 / 无 diff),五个可交互控件全部原生 —— ChoicePicker 用原生 `pick_list`(单选)/ checkbox 组(多选),DateTimeInput 用绑定到 data model 的可编辑文本框,Tabs 有可点击 tab 栏(绑定的 `activeTab` 写回 data model;gallery 样例未绑定 `activeTab`,则选中的 tab 在本地跟踪,点击仍能切换面板);Icon 直接显示 emoji(映射表与 TUI 一致);**Image 也真实渲染**(本地路径即时解码,远程 URL 后台拉取 + 缓存,见脚注⁵);**Dioxus 架构最独特**(响应式 signals + WebView/CSS 渲染),且借 WebView 之力,Image / Video / AudioPlayer 均用原生 HTML 媒体元素真实渲染——**它是唯一覆盖全部 18 个 A2UI 组件的后端**(连 TUI 的 Video 都是占位符,终端无法播放视频)。
 
-## 已知构建限制(bevy + iced 不能同构建)
+## 已知构建限制(bevy + iced 不能同构建 / gpui 独立 workspace)
 
 各 GUI 后端是 **opt-in**(`cargo build -p a2ui-<backend> --features backend`)。**不要**用 `cargo build/check/test/clippy --workspace` 或 `--all-features` 把它们一起编译:`iced 0.14`(→ wgpu 27 → naga 27)与 `bevy 0.19`(→ bevy_shader → naga_oil 0.22)都解析到 `codespan-reporting 0.12.0`,但 feature 需求互斥——naga_oil **需要**其 `termcolor` feature,而 naga 27.0.3 只在 termcolor **关闭**时编译。Cargo 把两者统一到同一份 codespan 0.12.0(termcolor 被开启),naga 27 随即编译失败(`String: WriteColor not satisfied`)。
+
+**GPUI 后端更进一步——它无法与其它任何后端共享同一个 `Cargo.lock`**,因此被排除在主 workspace 之外(`crates/gpui` / `crates/gpui-gallery` 各自有独立 `[workspace]`)。原因:`gpui 0.2.2` 精确锁定 `cocoa = "=0.26.0"`(macOS-only 依赖),而 `dioxus-desktop`(经 umbrella crate 的可选 `a2ui-dioxus` 依赖进入主 lockfile)需要 `cocoa ^0.26.1`——两者都是 `target.'cfg(target_os = "macos")'` 的依赖,在 Linux 上根本不编译,但 Cargo 为生成可移植的 lockfile 仍会解析并统一它们,而没有任何一个 `cocoa` 版本能同时满足 `=0.26.0` 与 `^0.26.1`。所以 GPUI 后端必须用 `--manifest-path` 单独构建:
+
+```bash
+cargo build --manifest-path crates/gpui-gallery/Cargo.toml          # gallery
+cargo run  --manifest-path crates/gpui/Cargo.toml --example 08_agent_chat --features backend
+```
 
 每个后端单独构建/lint/测试都正常(`-p a2ui-<backend> --features backend`),只有 bevy + iced 出现在同一次 `cargo` 调用里才触发。仓库提供 `just` recipe 按后端逐个跑,避开此冲突:
 
@@ -272,7 +286,7 @@ cargo run -p a2ui-iced-gallery -- login    # 按名称子串(大小写不敏感)
 
 ## Dioxus 桌面后端
 
-除上述后端外,项目还提供 **`a2ui-dioxus`**:它把 A2UI 组件树渲染到原生桌面 **WebView** 窗口,基于 [Dioxus](https://github.com/DioxusLabs/dioxus)(响应式 signals 架构,固定 0.7 版本)。**这是六个后端里架构最独特的一个**:
+除上述后端外,项目还提供 **`a2ui-dioxus`**:它把 A2UI 组件树渲染到原生桌面 **WebView** 窗口,基于 [Dioxus](https://github.com/DioxusLabs/dioxus)(响应式 signals 架构,固定 0.7 版本)。**这是七个后端里架构最独特的一个**:
 
 - **响应式 signals** —— Dioxus 像 React:运行时状态放在根的 `Signal` 里,UI 是对它的纯读取。既不需要 Iced 的 `Message` 枚举(Elm view/update),也不需要 egui 的 `EditBuffers` 状态桥。**无消息枚举,无状态桥** —— 信号本身就是交互通道,任何写入自动重渲染订阅了它的组件。
 - **递归组件** —— 整棵树是**一个** `A2uiNode` 组件逐节点渲染自身(Dioxus 原生支持递归组件,不像 Slint 要 bounded-depth codegen)。
@@ -300,6 +314,33 @@ umbrella crate 也在 `dioxus` cargo feature 之后将后端 re-export 为 `a2ui
 cargo run -p a2ui-dioxus-gallery             # 第一个样例
 cargo run -p a2ui-dioxus-gallery -- 3        # 按 1 起始的序号
 cargo run -p a2ui-dioxus-gallery -- login    # 按名称子串(大小写不敏感)
+```
+
+## GPUI 桌面后端
+
+第七个后端 **`a2ui-gpui`** 把 A2UI 组件树渲染到原生桌面窗口,基于 [GPUI](https://gpui.rs)(Zed 的 GPU 加速 UI 框架),控件层用 [gpui-component](https://github.com/longbridge/gpui-component)(longbridge 的 60+ 跨平台组件库)。所有版本钉在 crates.io 最新线:`gpui 0.2.2` + `gpui-component 0.5.1` + `gpui-component-assets 0.5.1`(gpui-component 0.5.1 依赖 `gpui ^0.2.2`,版本自洽)。
+
+GPUI 是**混合即时/保留模式**:像 egui 一样每帧重建 `Render` 视图,但**有状态控件**(TextField / Slider / ChoicePicker)持有跨帧存活的 `Entity<…State>`——所以(不同于 Iced 无状态的 `view`、也不同于 egui 的 `EditBuffers` 字符串映射)本后端按组件 id 缓存 `Entity<InputState>` / `Entity<SliderState>` / `Entity<SelectState>`,首帧惰性创建、用 data model 播种初值、订阅其 change 事件写回。**无状态控件**(Button / CheckBox / TabBar / 列表行)挂 `cx.listener` 闭包,在 render 借用释放后触发,直接改动运行时——不需要 egui 那种 collect-then-apply 缓冲。
+
+### 运行 Gallery(GPUI 版)
+
+因为 GPUI 后端生活在独立 workspace(见[已知构建限制](#已知构建限制bevy--iced-不能同构建--gpui-独立-workspace)),用 `--manifest-path` 构建:
+
+```bash
+cargo run --manifest-path crates/gpui-gallery/Cargo.toml             # 第一个样例
+cargo run --manifest-path crates/gpui-gallery/Cargo.toml -- 3        # 按 1 起始的序号
+cargo run --manifest-path crates/gpui-gallery/Cargo.toml -- login    # 按名称子串(大小写不敏感)
+```
+
+> **GNOME Wayland 标题栏坑**:gpui 默认请求服务器端装饰(Server-side),而 GNOME Wayland 的策略是 CSD-only,会忽略该请求——结果窗口光秃秃、拖不动、没有关闭按钮。Gallery(及两个 example)已强制 `WindowDecorations::Client` + `appears_transparent`,并在视图顶部画一个 gpui-component `TitleBar`(提供拖拽 + 最小化/最大化/关闭,X11 / macOS 上无副作用)。
+
+### 示例
+
+GPUI 后端也带了与其它后端同名的两个示例,共用 `a2ui_tui::agent_chat` 的场景与 `a2ui-base` 的 `MessageProcessor`:
+
+```bash
+cargo run --manifest-path crates/gpui/Cargo.toml --example 08_agent_chat  --features backend   # AI 聊天(后台 Timer 模拟 SSE 流式)
+cargo run --manifest-path crates/gpui/Cargo.toml --example 17_scifi_hud   --features backend   # 赛博朋克 HUD(每帧从 data model 读值,SVG 雷达扫描)
 ```
 
 ## 协议概览
