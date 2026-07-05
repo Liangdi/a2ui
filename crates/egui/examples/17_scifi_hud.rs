@@ -496,10 +496,19 @@ fn render_scanner(ui: &mut egui::Ui, snap: &Snapshot) {
     frame.show(ui, |ui| {
         ui.set_min_height(ui.available_height());
         ui.vertical_centered(|c| c.label(mono("[ SCANNER ]", 13.0, CYAN)));
+        ui.add_space(2.0);
 
-        // Radar grid: take the available square and draw rings + sweep on it.
-        let avail = (ui.available_width().min(ui.available_height()) - 6.0).max(40.0);
-        let (rect, _) = ui.allocate_exact_size(Vec2::splat(avail), Sense::hover());
+        // Radar grid: fill the space between the title and the bearing readout
+        // (mirrors the iced/dioxus backends, where the radar *area* fills the
+        // panel and the circle is inscribed + centered by `paint_radar`). This
+        // avoids an unbalanced top-anchored square that leaves the panel's lower
+        // half empty when the panel is taller than it is wide.
+        let bearing_h = 22.0;
+        let radar_size = Vec2::new(
+            ui.available_width(),
+            (ui.available_height() - bearing_h).max(40.0),
+        );
+        let (rect, _) = ui.allocate_exact_size(radar_size, Sense::hover());
         let painter = ui.painter_at(rect);
         paint_radar(&painter, rect, snap.angle as f32);
 
