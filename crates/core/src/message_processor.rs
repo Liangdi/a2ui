@@ -112,6 +112,13 @@ impl MessageProcessor {
     }
 
     /// Stop a reactive subscription or pending action; late responses are ignored.
+    /// Release a host-owned subscription and its queued updates without a cancellation event.
+    /// Already-sent remote work cannot be recalled; unshared late replies are ignored.
+    pub fn release_evaluation(&mut self, id: &str) {
+        self.evaluator.forget(id);
+        self.remove_cancelled_evaluation_calls();
+    }
+
     pub fn cancel_evaluation(&mut self, id: &str) {
         self.evaluator.cancel(id);
         self.remove_cancelled_evaluation_calls();
@@ -132,6 +139,11 @@ impl MessageProcessor {
     }
 
     /// Consume changed evaluation states (including explicit pending/errors).
+    /// Read a retained subscription's status without consuming host updates.
+    pub fn evaluation_status(&self, id: &str) -> Option<crate::evaluation::EvaluationStatus> {
+        self.evaluator.latest_status(id)
+    }
+
     pub fn drain_evaluation_updates(&mut self) -> Vec<crate::evaluation::EvaluationUpdate> {
         self.evaluator.drain()
     }
