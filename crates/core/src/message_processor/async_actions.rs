@@ -164,6 +164,14 @@ impl MessageProcessor {
         self.remove_cancelled_evaluation_calls();
     }
 
+    /// Read a check subscription without consuming the host update queue.
+    pub fn check_status(&self, id: &str) -> Option<CheckUpdate> {
+        self.async_actions
+            .checks
+            .get(id)
+            .and_then(|check| check.last.clone())
+    }
+
     pub fn drain_check_updates(&mut self) -> Vec<CheckUpdate> {
         std::mem::take(&mut self.async_actions.check_updates)
     }

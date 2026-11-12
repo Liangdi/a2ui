@@ -132,6 +132,11 @@ impl MessageProcessor {
     }
 
     /// Consume changed evaluation states (including explicit pending/errors).
+    /// Read a retained subscription's status without consuming host updates.
+    pub fn evaluation_status(&self, id: &str) -> Option<crate::evaluation::EvaluationStatus> {
+        self.evaluator.latest_status(id)
+    }
+
     pub fn drain_evaluation_updates(&mut self) -> Vec<crate::evaluation::EvaluationUpdate> {
         self.evaluator.drain()
     }
