@@ -222,11 +222,39 @@ fn run(case: &Value) -> Result<(), String> {
                     return Err(format!("unexpected outgoing message: {message}"));
                 }
             }
-            if wire_errors.len() != action_errors.len() {
-                return Err("action error channel and wire error count differ".into());
+            for expected in &action_errors {
+                if !wire_errors
+                    .iter()
+                    .any(|actual| require_subset(expected, actual).is_ok())
+                {
+                    return Err(format!("action error missing from wire: {expected}"));
+                }
             }
-            for (expected, actual) in action_errors.iter().zip(&wire_errors) {
-                require_subset(expected, actual)?;
+            for actual in &wire_errors {
+                if let Some(id) = actual.get("functionCallId") {
+                    if !calls
+                        .iter()
+                        .any(|call: &Value| call["functionCallId"] == *id)
+                    {
+                        return Err(format!("wire error has unknown call ID: {actual}"));
+                    }
+                    if !errors.iter().any(|error| {
+                        error["code"] == actual["code"]
+                            && actual["message"]
+                                .as_str()
+                                .unwrap_or("")
+                                .ends_with(error["message"].as_str().unwrap_or(""))
+                    }) {
+                        return Err(format!(
+                            "wire error has no matching evaluation/action diagnostic: {actual}, diagnostics {errors:?}"
+                        ));
+                    }
+                } else if !action_errors
+                    .iter()
+                    .any(|expected| require_subset(expected, actual).is_ok())
+                {
+                    return Err(format!("unexpected uncorrelated wire error: {actual}"));
+                }
             }
             let expected_actions = step
                 .get("expectActions")

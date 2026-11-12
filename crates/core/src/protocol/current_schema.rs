@@ -54,6 +54,51 @@ impl CurrentSchemaValidator {
         Ok(Self { incoming, outgoing })
     }
 
+    /// Validate a released common type without catalog-specific function signatures.
+    ///
+    /// This is a schema-backed boundary, not Rust-model schema generation. The
+    /// returned JSON retains exactly the supplied wire fields (including null),
+    /// with no implicit defaults or coercions. Unknown definitions fail locally.
+    pub fn validate_common_type(&self, definition: &str, value: &Value) -> Result<Value> {
+        let common: Value = serde_json::from_str(include_str!("schemas/common_types.json"))?;
+        if common["$defs"].get(definition).is_none() {
+            return Err(A2uiError::Validation(format!(
+                "unknown common type: {definition}"
+            )));
+        }
+        // Common models validate the generic call envelope, independently of
+        // any negotiated catalog's function signatures.
+        let generic_catalog = serde_json::json!({"$defs":{"anyFunction":{
+            "type":"object", "properties":{
+                "@call":{"type":"string"}, "catalogId":{"type":"string"},
+                "args":{"type":"object"}
+            },"required":["@call"],"additionalProperties":false
+        }}});
+        let registry = jsonschema::Registry::new()
+            .add(
+                "https://a2ui.org/specification/v1_0/common_types.json",
+                common,
+            )
+            .map_err(schema_error)?
+            .add(
+                "https://a2ui.org/specification/v1_0/catalog.json",
+                generic_catalog,
+            )
+            .map_err(schema_error)?
+            .prepare()
+            .map_err(schema_error)?;
+        let schema = serde_json::json!({
+            "$ref": format!("https://a2ui.org/specification/v1_0/common_types.json#/$defs/{definition}")
+        });
+        let validator = jsonschema::options()
+            .offline()
+            .with_registry(&registry)
+            .build(&schema)
+            .map_err(schema_error)?;
+        validator.validate(value).map_err(schema_error)?;
+        Ok(value.clone())
+    }
+
     /// Validate the original wire value before parsing it into typed messages.
     pub fn parse_incoming(&self, wire: &str) -> Result<super::server_to_client::A2uiMessage> {
         let raw: Value = serde_json::from_str(wire)?;

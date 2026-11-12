@@ -46,10 +46,13 @@ fn official_current_catalog_corpus() {
             ));
             continue;
         }
-        if !matches!(action, "from_json" | "round_trip" | "derive") {
+        if !matches!(
+            action,
+            "from_json" | "round_trip" | "derive" | "validation_schema"
+        ) {
             skipped.push((
                 name.to_owned(),
-                "SDK serialization/canonical flattened schema not implemented",
+                "native SDK serialization not implemented",
             ));
             continue;
         }
@@ -117,6 +120,55 @@ fn run(case: &Value, raw: Value, version: &str) -> Result<(), String> {
         return Ok(());
     }
     let parsed = parsed.map_err(|e| e.to_string())?;
+    if case["action"] == "validation_schema" {
+        let file = case["expectFile"]
+            .as_str()
+            .unwrap()
+            .rsplit('/')
+            .next()
+            .unwrap();
+        let expected: Value = serde_json::from_str(
+            &std::fs::read_to_string(format!(
+                "{}/tests/conformance/validation-schema/{file}",
+                env!("CARGO_MANIFEST_DIR")
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        let actual = parsed.validation_schema().map_err(|e| e.to_string())?;
+        fn canonical(value: &mut Value) {
+            match value {
+                Value::Object(object) => {
+                    for (key, value) in object {
+                        canonical(value);
+                        if matches!(key.as_str(), "enum" | "required") {
+                            if let Some(values) = value.as_array_mut() {
+                                values.sort_by_key(Value::to_string);
+                            }
+                        }
+                    }
+                }
+                Value::Array(values) => {
+                    for child in values {
+                        canonical(child);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let mut actual = actual;
+        let mut expected = expected;
+        canonical(&mut actual);
+        canonical(&mut expected);
+        if actual != expected {
+            std::fs::write(
+                format!("/tmp/{file}.actual"),
+                serde_json::to_string_pretty(&actual).unwrap(),
+            )
+            .unwrap();
+            return Err(format!("canonical schema differs: /tmp/{file}.actual"));
+        }
+    }
     if case["action"] == "round_trip" {
         if parsed.to_json() != raw {
             return Err("roundtrip changed document".into());

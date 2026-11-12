@@ -35,13 +35,23 @@ Additional pinned corpus results, with named exclusions checked in under
 `crates/core/tests/conformance`:
 
 - Function routing: **41/43 pass**, with two exclusions (legacy v0.9 and non-JSON values).
-- Catalog definitions: **43/73 pass**, with 30 exclusions covering legacy APIs,
-  native SDK built-in equivalence/serialization and canonical flattened schemas.
-- RPC functions: **28/33 pass**, with five UI binding/check/action exclusions.
-  Passing cases cover incoming calls, caller/activation boundaries, reply
-  correlation, timeout, cancellation, disposal and late replies. The excluded
-  cases require the official mounted resolver semantics, structured rule results,
-  action completion values or correlated surface errors not exposed by this host API.
+- Catalog definitions: **45/73 pass**, with 28 named exclusions covering legacy APIs
+  and native SDK built-in equivalence/serialization. Both current canonical
+  validation-schema golden cases now match.
+- RPC functions: **32/33 pass**. Mounted properties/checks, structured rule results,
+  correlated surface errors and bounded action completion results are additive host
+  APIs. One case still needs native functions to mutate surface data in execution
+  order; the current immutable `DataContext` cannot support that faithfully.
+- Current wire pointer and deletion suites: **7/7 each**, through the real processor.
+- Current validator: **5/49 complete schema-boundary cases**; 44 named exclusions
+  require stateful topology or richer diagnostic semantics. Common types: **11 current
+  schema-backed runtime cases** with exact JSON roundtrips, including two native
+  FunctionResponse serde cases; 11 legacy/model-schema cases excluded. This is not
+  generated-Rust-model or full validator conformance.
+- All three official scaling workloads were measured with warmups and five samples.
+  Processing-only growth ratios were 3.865, 3.911 and 4.132 (bound 8). Composition
+  remains measured-only because parent/child constraints are unsupported. See the
+  [scaling audit](message-processor-scaling-audit.md) for scope and reproduction.
 
 `CurrentSchemaValidator::new(catalog_json)` compiles the pinned released incoming
 and outgoing schemas against a locally supplied negotiated catalog. Use
@@ -61,8 +71,8 @@ The additive [CatalogDefinition](catalog-definition.md) loads and validates
 authored current catalogs, preserves authored round-trips and supports derivation,
 Unicode XID identifiers, local references and offline common-type bundling. It is
 separate from the native `Catalog` registry: loading schemas does not create native
-functions or custom component renderers. Its self-contained resource document is
-not the SDK's canonical flattened validation schema.
+functions or custom component renderers. Its separate `validation_schema()` API emits canonical flattened current schemas,
+with bounded traversal and explicit rejection of unsupported closed nested mixins.
 
 The additive [resumable evaluator](resumable-evaluation.md) preserves the existing
 synchronous API while exposing pending values explicitly. It provides shared
@@ -74,18 +84,17 @@ as completion.
 ## Remaining gaps (not a full conformance claim)
 
 - The complete official suite has not been implemented or executed. The exact
-  catalog, routing and RPC exclusions above remain open; broader schema-generation,
-  scaling and native-adapter conformance suites remain outstanding.
+  catalog, routing and RPC exclusions above remain open; full model-derived schema generation,
+  stateful validator/composition semantics and native-adapter suites remain outstanding.
 - Backend integration is separate from core evaluation. The dependent GPUI Kit
   adapter now subscribes to supported scalar properties and checks automatically,
   with loading/error states and disabled buttons on failed checks. Nested dynamic
-  option/tab-label structures and full property schemas remain incomplete. These
-  backend tests do not satisfy the five excluded official mounted-UI RPC cases.
+  option/tab-label structures and full property schemas remain incomplete. The new mounted core API is tested independently; native UI coverage remains separate.
 - Mixed-catalog custom components need host-native registrations. GPUI Kit rejects
   unsupported catalog/name pairs instead of impersonating a same-named basic
   component. Legacy backends and bundled draft samples are not all migrated.
 - Catalog definition coverage does not establish full native SDK equivalence,
-  legacy catalog compatibility or canonical flattened-schema generation. Runtime
+  legacy catalog compatibility or every authored schema composition. Runtime
   functions still require native implementations or an authorized agent transport.
 - The dependent GPUI Kit native smoke test verified a textbox label, button name
   and description, and Submit changing from disabled to enabled after entering

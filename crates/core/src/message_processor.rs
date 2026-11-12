@@ -6,6 +6,7 @@ mod async_actions;
 mod renderer_actions;
 pub use async_actions::{ActionError, CheckUpdate};
 mod incoming_rpc;
+mod mounted;
 mod renderer_call;
 use incoming_rpc::InvocationFailure;
 mod rpc_lifecycle;
@@ -39,6 +40,7 @@ pub struct MessageProcessor {
     outgoing_messages: Vec<ClientMessage>,
     agent_function_responses: Vec<FunctionResponse>,
     rpc_pending: rpc_lifecycle::RpcPendingState,
+    mounted: mounted::Mounted,
     evaluator: crate::evaluation::Evaluator,
     async_actions: async_actions::AsyncActions,
     agent_transport_available: bool,
@@ -63,6 +65,7 @@ impl MessageProcessor {
             outgoing_messages: Vec::new(),
             agent_function_responses: Vec::new(),
             rpc_pending: rpc_lifecycle::RpcPendingState::default(),
+            mounted: mounted::Mounted::default(),
             evaluator: crate::evaluation::Evaluator::default(),
             async_actions: async_actions::AsyncActions::default(),
             agent_transport_available: true,
@@ -83,6 +86,7 @@ impl MessageProcessor {
         self.outgoing_messages.clear();
         self.agent_function_responses.clear();
         self.rpc_pending = rpc_lifecycle::RpcPendingState::default();
+        self.mounted = mounted::Mounted::default();
         self.evaluator = crate::evaluation::Evaluator::default();
         self.async_actions = async_actions::AsyncActions::default();
         self.pending_validation = crate::validate::ValidationReport::new();
@@ -138,6 +142,7 @@ impl MessageProcessor {
         self.rpc_pending.cancel_surface(surface_id);
         self.prune_settled_agent_calls();
         self.remove_cancelled_evaluation_calls();
+        self.advance_evaluations();
     }
 
     /// Notify the evaluator after a host changes surface data directly rather
@@ -429,8 +434,23 @@ impl MessageProcessor {
         match &msg.payload {
             A2uiPayload::AgentFunctionResponse(payload) => {
                 let mut evaluator = std::mem::take(&mut self.evaluator);
-                evaluator.response(self, &payload.agent_function_response);
+                let error = evaluator.response(self, &payload.agent_function_response);
                 self.evaluator = evaluator;
+                if let Some((surface_id, code, message)) = error {
+                    self.queue_outgoing(ClientMessage {
+                        version: "1.0".into(),
+                        payload: ClientPayload::Error(ErrorPayload {
+                            error: ErrorData {
+                                code,
+                                message,
+                                surface_id: Some(surface_id),
+                                function_call_id: Some(
+                                    payload.agent_function_response.function_call_id.clone(),
+                                ),
+                            },
+                        }),
+                    });
+                }
             }
             A2uiPayload::UpdateDataModel(payload) => self
                 .evaluator
@@ -443,8 +463,9 @@ impl MessageProcessor {
                 .invalidate_surface(&payload.delete_surface.surface_id, true),
             _ => {}
         }
+        let mounted_result = self.refresh_mounted();
         self.advance_evaluations();
-        Ok(())
+        mounted_result
     }
 
     /// Process multiple messages sequentially.
