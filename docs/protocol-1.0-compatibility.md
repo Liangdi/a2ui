@@ -29,3 +29,12 @@ Legacy `callFunction`/`actionResponse` and helpers remain available only as draf
 - Accessibility metadata is parsed, but each backend must implement native screen-reader semantics. Media decoding, gesture-gated functions and platform-specific behavior are not validated by the core tests.
 
 These limits are deliberate review items for the draft PR, not hidden compatibility guarantees.
+
+### Caller and user-activation safety
+
+Current and legacy remote calls enforce native caller declarations, including
+nested argument calls. Legacy calls without a catalog ID require an unambiguous
+function name and use an empty data model rather than an unrelated surface.
+Functions requiring user activation are denied in passive renderer evaluation
+as well as remote calls. Core does not yet expose a trusted gesture context;
+renderers must not rely on these functions executing from properties or checks.

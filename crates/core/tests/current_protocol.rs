@@ -195,3 +195,71 @@ fn legacy_function_normalization_never_rewrites_the_data_model() {
         raw["createSurface"]["dataModel"]
     );
 }
+
+#[test]
+fn passive_renderer_evaluation_cannot_activate_gesture_functions() {
+    use a2ui_base::model::data_model::DataModel;
+    let data = DataModel::new();
+    let catalog = Catalog::new("test").with_function(Box::new(Echo {
+        allowed: AllowedCallers::RendererOrAgent,
+        activation: true,
+    }));
+    let context = DataContext::new(&data, &catalog.functions);
+    assert!(
+        context
+            .resolve_dynamic_json(&json!({"@call":"echo","args":{"value":"no"}}))
+            .is_err()
+    );
+}
+
+#[test]
+fn legacy_rpc_obeys_remote_caller_and_activation_rules() {
+    for (allowed, activation) in [
+        (AllowedCallers::RendererOnly, false),
+        (AllowedCallers::RendererOrAgent, true),
+    ] {
+        let mut proc = processor(allowed, activation);
+        apply(
+            &mut proc,
+            json!({"version":"v1.0","functionCallId":"legacy",
+            "wantResponse":true,"callFunction":{"call":"echo","args":{"value":"no"}}}),
+        );
+        let message = serde_json::to_value(proc.drain_outgoing().pop().unwrap()).unwrap();
+        assert_eq!(message["error"]["code"], "INVALID_FUNCTION_CALL");
+    }
+}
+
+#[test]
+fn legacy_rpc_rejects_forbidden_nested_calls() {
+    let mut proc = MessageProcessor::new(vec![
+        Catalog::new("remote")
+            .with_function(Box::new(Echo {
+                allowed: AllowedCallers::RendererOrAgent,
+                activation: false,
+            }))
+            .with_function(Box::new(
+                a2ui_base::catalog::basic_functions::RequiredFunction,
+            )),
+    ]);
+    apply(
+        &mut proc,
+        json!({"version":"v1.0","functionCallId":"legacy",
+        "wantResponse":true,"callFunction":{"call":"echo","catalogId":"remote","args":{
+            "value":{"@call":"required","args":{"value":"no"}}
+        }}}),
+    );
+    let message = serde_json::to_value(proc.drain_outgoing().pop().unwrap()).unwrap();
+    assert_eq!(message["error"]["code"], "INVALID_FUNCTION_CALL");
+}
+
+#[test]
+fn authorized_legacy_rpc_still_returns_a_legacy_response() {
+    let mut proc = processor(AllowedCallers::RendererOrAgent, false);
+    apply(
+        &mut proc,
+        json!({"version":"v1.0","functionCallId":"legacy",
+        "wantResponse":true,"callFunction":{"call":"echo","args":{"value":42}}}),
+    );
+    let message = serde_json::to_value(proc.drain_outgoing().pop().unwrap()).unwrap();
+    assert_eq!(message["functionResponse"]["value"], 42);
+}

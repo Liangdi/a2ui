@@ -91,12 +91,14 @@ impl<'a> DataContext<'a> {
         function: &dyn crate::catalog::function_api::FunctionImplementation,
     ) -> Result<(), crate::error::A2uiError> {
         use crate::catalog::function_api::AllowedCallers;
-        let forbidden = if self.agent_caller {
-            function.allowed_callers() == AllowedCallers::RendererOnly
-                || function.requires_user_activation()
-        } else {
-            function.allowed_callers() == AllowedCallers::AgentOnly
-        };
+        // No trusted user-gesture context is currently propagated by renderers.
+        // Passive property/check evaluation must never grant activation.
+        let forbidden = function.requires_user_activation()
+            || if self.agent_caller {
+                function.allowed_callers() == AllowedCallers::RendererOnly
+            } else {
+                function.allowed_callers() == AllowedCallers::AgentOnly
+            };
         if forbidden {
             return Err(crate::error::A2uiError::Validation(format!(
                 "caller is not allowed to execute function: {}",

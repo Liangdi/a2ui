@@ -40,7 +40,8 @@ pub trait FunctionImplementation: Send + Sync + 'static {
         AllowedCallers::RendererOnly
     }
 
-    /// A function requiring a user gesture may not be invoked by the agent.
+    /// Requires a trusted user gesture. Passive evaluation and agent calls are denied.
+    /// No activation-capable context is currently exposed by the core.
     fn requires_user_activation(&self) -> bool {
         false
     }

@@ -549,73 +549,32 @@ impl MessageProcessor {
         let fc = &payload.call_function;
         let call_id = &payload.function_call_id;
 
-        // 1. Find the function across all catalogs
-        let mut found_func: Option<&dyn crate::catalog::function_api::FunctionImplementation> =
-            None;
-        let mut found_functions_map: Option<
-            &std::collections::HashMap<
-                String,
-                Box<dyn crate::catalog::function_api::FunctionImplementation>,
-            >,
-        > = None;
-
-        for catalog in self.catalogs.values() {
-            if let Some(f) = catalog.get_function(&fc.call) {
-                found_func = Some(f);
-                found_functions_map = Some(&catalog.functions);
-                break;
-            }
-        }
-
-        // 2. Function not found → reject with error
-        let Some(func) = found_func else {
-            self.queue_outgoing(ClientMessage {
-                version: "v1.0".to_string(),
-                payload: ClientPayload::Error(ErrorPayload {
-                    error: ErrorData {
-                        code: "INVALID_FUNCTION_CALL".to_string(),
-                        message: format!("function not found: {}", fc.call),
-                        surface_id: None,
-                        function_call_id: Some(call_id.clone()),
-                    },
-                }),
-            });
-            return Ok(());
-        };
-
-        // 3. Build a DataContext using the first available surface's DataModel.
-        //    We execute and collect results in a block so the borrows are dropped
-        //    before we call queue_outgoing (which needs &mut self).
-        let execution_result: std::result::Result<serde_json::Value, A2uiError> = {
-            let empty_dm;
-            let data_model: &DataModel = match self.model.surfaces().next() {
-                Some(surface) => &surface.data_model.borrow(),
-                None => {
-                    empty_dm = DataModel::new();
-                    &empty_dm
+        // Legacy messages still originate from an agent. Route them through the
+        // same authorization, recursive argument evaluation and return checks as
+        // current RPC, rather than treating them as local renderer evaluation.
+        let execution_result = (|| {
+            let mut call_function = fc.clone();
+            if call_function.catalog_id.is_none() {
+                let mut candidates = self
+                    .catalogs
+                    .iter()
+                    .filter(|(_, catalog)| catalog.get_function(&fc.call).is_some());
+                let (id, _) = candidates.next().ok_or_else(|| {
+                    A2uiError::Validation(format!("function not found: {}", fc.call))
+                })?;
+                if candidates.next().is_some() {
+                    return Err(A2uiError::Validation(
+                        "legacy function call requires catalogId when the name is ambiguous".into(),
+                    ));
                 }
-            };
-            let functions_map = found_functions_map.unwrap();
-            let ctx = crate::model::data_context::DataContext::new(data_model, functions_map);
-
-            // 4. Resolve args (may contain path bindings or nested function calls)
-            let mut resolved_args = HashMap::new();
-            for (key, val) in &fc.args {
-                let resolved = ctx.resolve_dynamic_value(
-                    &serde_json::from_value::<crate::protocol::common_types::DynamicValue>(
-                        val.clone(),
-                    )
-                    .unwrap_or(
-                        crate::protocol::common_types::DynamicValue::String(val.to_string()),
-                    ),
-                );
-                resolved_args.insert(key.clone(), resolved);
+                call_function.catalog_id = Some(id.clone());
             }
-
-            // 5. Execute the function
-            func.execute(&resolved_args, &ctx)
-        };
-        // borrows on self.model and self.catalogs are released here
+            self.execute_renderer_function(&CallRendererFunction {
+                surface_id: None,
+                function_call_id: call_id.clone(),
+                call_function,
+            })
+        })();
 
         // 6. Queue outgoing messages based on result
         match execution_result {
