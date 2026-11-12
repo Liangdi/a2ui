@@ -107,3 +107,13 @@ publish:
 publish-gpui:
     cargo publish --manifest-path {{gpui-lib}} --registry crates-io
     cargo publish --manifest-path {{gpui-gallery}} --registry crates-io
+
+# Current GPUI Kit adapter (separate from the legacy GPUI backend).
+gpui-kit-check:
+    cargo check --manifest-path crates/gpui-kit/Cargo.toml --features backend --examples
+
+gpui-kit-test:
+    cargo test --manifest-path crates/gpui-kit/Cargo.toml --features backend --lib
+
+gpui-kit-gallery *args:
+    cargo run --manifest-path crates/gpui-kit/Cargo.toml --features backend --example gallery -- {{args}}

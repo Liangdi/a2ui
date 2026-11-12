@@ -10,7 +10,7 @@ members = ["crates/core", "crates/image", "crates/tui", "crates/gallery", "crate
 # self-contained workspace (each with its own `[workspace]` table) and build
 # independently — see `crates/gpui/Cargo.toml` / `crates/gpui-gallery/Cargo.toml`
 # and the build recipe in the comment block below.
-exclude = ["crates/gpui", "crates/gpui-gallery"]
+exclude = ["crates/gpui", "crates/gpui-gallery", "crates/gpui-kit"]
 # `cargo build` / `cargo run` with no `-p` compile only the ratatui stack. Every
 # GUI backend (slint / egui / bevy / iced / dioxus) is opt-in — each pulls a
 # sizeable GUI toolchain, so build one explicitly, e.g.
