@@ -25,12 +25,81 @@ impl StrictValidationError {
             path: path.into(),
         }
     }
-    pub fn renderer_error(&self) -> Value {
-        let mut error = json!({"code":self.code, "message":self.message, "path":self.path});
-        if let Some(id) = &self.surface_id {
-            error["surfaceId"] = json!(id);
+    /// Project a correlated wire error without asserting an unverified payload
+    /// location. `path` remains the detailed local diagnostic; the wire uses the
+    /// root pointer unless the original message is supplied to the method below.
+    /// Uncorrelated errors stay local: the official schema requires a surface or
+    /// function-call ID even for a generic error. No identifier is fabricated.
+    pub fn renderer_error(&self) -> Option<Value> {
+        self.project(self.surface_id.as_deref(), None, "")
+    }
+
+    /// Recover correlation from one recognized source payload and use a local
+    /// path only when it actually resolves in that payload. Graph-ID paths and
+    /// missing-field paths fall back to the honest root pointer, not fake indices.
+    pub fn renderer_error_for_message(&self, message: &Value) -> Option<Value> {
+        let payloads = [
+            "createSurface",
+            "updateComponents",
+            "updateDataModel",
+            "deleteSurface",
+            "callRendererFunction",
+            "agentFunctionResponse",
+        ]
+        .into_iter()
+        .filter_map(|key| message.get(key).map(|payload| (key, payload)))
+        .collect::<Vec<_>>();
+        if payloads.len() != 1 {
+            return self.renderer_error();
         }
-        json!({"version":"1.0", "error":error})
+        let (kind, payload) = payloads[0];
+        let source_surface = if kind == "agentFunctionResponse" {
+            None
+        } else {
+            payload["surfaceId"].as_str()
+        };
+        let surface = self.surface_id.as_deref().or(source_surface);
+        let same_surface = self
+            .surface_id
+            .as_deref()
+            .is_none_or(|id| source_surface == Some(id));
+        let path = if same_surface && payload.pointer(&self.path).is_some() {
+            self.path.as_str()
+        } else {
+            ""
+        };
+        let call = if surface.is_none()
+            && matches!(kind, "callRendererFunction" | "agentFunctionResponse")
+        {
+            payload["functionCallId"].as_str()
+        } else {
+            None
+        };
+        self.project(surface, call, path)
+    }
+    fn project(&self, surface: Option<&str>, call: Option<&str>, path: &str) -> Option<Value> {
+        if surface.is_none() && call.is_none() {
+            return None;
+        }
+        let validation_code = matches!(
+            self.code.as_str(),
+            "VALIDATION_FAILED" | "UNALLOWED_PARENT" | "UNALLOWED_CHILD"
+        );
+        let code = if validation_code && surface.is_none() {
+            "INVALID_MESSAGE"
+        } else {
+            self.code.as_str()
+        };
+        let mut error = json!({"code":code,"message":self.message});
+        if let Some(id) = surface {
+            error["surfaceId"] = json!(id);
+            if validation_code {
+                error["path"] = json!(path);
+            }
+        } else if let Some(id) = call {
+            error["functionCallId"] = json!(id);
+        }
+        Some(json!({"version":"1.0","error":error}))
     }
 }
 #[derive(Clone, Default)]

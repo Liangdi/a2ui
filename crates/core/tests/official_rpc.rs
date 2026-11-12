@@ -109,10 +109,29 @@ fn send(p: &mut MessageProcessor, value: &Value) -> TestResult {
     p.process_json_message(&value.to_string())
         .map_err(|e| e.to_string())
 }
+fn wire_value(message: &a2ui_base::protocol::client_to_server::ClientMessage) -> Value {
+    let value = serde_json::to_value(message).unwrap();
+    if value.get("error").is_some() || value.pointer("/rendererFunctionResponse/error").is_some() {
+        static VALIDATOR: std::sync::OnceLock<
+            a2ui_base::protocol::current_schema::CurrentSchemaValidator,
+        > = std::sync::OnceLock::new();
+        VALIDATOR
+            .get_or_init(|| {
+                a2ui_base::protocol::current_schema::CurrentSchemaValidator::new(
+                    serde_json::from_str(include_str!("conformance/catalogs/basic_v1.json"))
+                        .unwrap(),
+                )
+                .unwrap()
+            })
+            .validate_outgoing(&value)
+            .unwrap_or_else(|error| panic!("invalid emitted RPC error {value}: {error}"));
+    }
+    value
+}
 fn outgoing(p: &mut MessageProcessor) -> Vec<Value> {
     p.drain_outgoing()
         .into_iter()
-        .map(|v| serde_json::to_value(v).unwrap())
+        .map(|v| wire_value(&v))
         .collect()
 }
 fn catalog_info(case: &Value) -> (String, String) {
@@ -716,7 +735,7 @@ fn ui(case: &Value) -> TestResult {
         let errors = p.drain_outgoing();
         let actual = errors
             .iter()
-            .map(|e| serde_json::to_value(e).unwrap())
+            .map(wire_value)
             .find(|e| e.get("error").is_some())
             .ok_or("missing surface error")?;
         let mut expected = error.clone();

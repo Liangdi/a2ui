@@ -33,7 +33,10 @@ fn schema_defined_slot_edges_enforce_child_constraints() {
     );
     let error=validator.validate_message(&create(json!([{"id":"root","component":"Box","customSlot":"video"},{"id":"video","component":"Video"}]))).unwrap_err();
     assert_eq!(error.code, "UNALLOWED_CHILD", "{error:?}");
-    assert_eq!(error.renderer_error()["error"]["code"], "UNALLOWED_CHILD");
+    assert_eq!(
+        error.renderer_error().unwrap()["error"]["code"],
+        "UNALLOWED_CHILD"
+    );
     // Failed structural validation must not poison the subsequent valid create.
     validator.validate_message(&create(json!([{"id":"root","component":"Box","customSlot":"text"},{"id":"text","component":"Text"}]))).unwrap();
 }

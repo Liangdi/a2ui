@@ -223,10 +223,18 @@ fn run(case: &Value) -> Result<(), String> {
                 }
             }
             for expected in &action_errors {
-                if !wire_errors
-                    .iter()
-                    .any(|actual| require_subset(expected, actual).is_ok())
-                {
+                if !wire_errors.iter().any(|actual| {
+                    let mut diagnostic = actual.clone();
+                    if let Some(call_id) = actual.get("functionCallId") {
+                        if let Some(call) = calls
+                            .iter()
+                            .find(|call: &&Value| call["functionCallId"] == *call_id)
+                        {
+                            diagnostic["surfaceId"] = call["surfaceId"].clone();
+                        }
+                    }
+                    require_subset(expected, &diagnostic).is_ok()
+                }) {
                     return Err(format!("action error missing from wire: {expected}"));
                 }
             }

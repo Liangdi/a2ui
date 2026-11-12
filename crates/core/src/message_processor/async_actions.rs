@@ -258,7 +258,13 @@ impl MessageProcessor {
         std::mem::take(&mut self.async_actions.errors)
     }
 
-    fn report_action_error(&mut self, action: &PendingAction, code: String, message: String) {
+    fn report_action_error(
+        &mut self,
+        action: &PendingAction,
+        code: String,
+        message: String,
+        function_call_id: Option<String>,
+    ) {
         let error = ActionError {
             surface_id: action.surface.clone(),
             component_id: action.component.clone(),
@@ -269,20 +275,22 @@ impl MessageProcessor {
         self.async_actions.errors.push(error);
         // The processor already emits a correlated wire error for failed remote
         // calls. Keep the action-specific diagnostic without emitting it twice.
-        if let Some(existing) = self.outgoing_messages.iter_mut().find_map(|outgoing| {
-            if let ClientPayload::Error(payload) = &mut outgoing.payload
-                && payload.error.surface_id.as_deref() == Some(action.surface.as_str())
-                && payload.error.code == code
-                && payload.error.function_call_id.is_some()
-                && message.ends_with(&payload.error.message)
+        if let Some(id) = function_call_id.as_deref() {
+            if let Some(existing) =
+                self.outgoing_messages
+                    .iter_mut()
+                    .find_map(|outgoing| match &mut outgoing.payload {
+                        ClientPayload::Error(payload)
+                            if payload.error.function_call_id.as_deref() == Some(id) =>
+                        {
+                            Some(&mut payload.error)
+                        }
+                        _ => None,
+                    })
             {
-                Some(&mut payload.error)
-            } else {
-                None
+                existing.message = message;
+                return;
             }
-        }) {
-            existing.message = message;
-            return;
         }
         self.queue_outgoing(ClientMessage {
             version: "1.0".into(),
@@ -290,8 +298,8 @@ impl MessageProcessor {
                 error: ErrorData {
                     code,
                     message,
-                    surface_id: Some(action.surface.clone()),
-                    function_call_id: None,
+                    surface_id: function_call_id.is_none().then(|| action.surface.clone()),
+                    function_call_id,
                 },
             }),
         });
@@ -313,6 +321,7 @@ impl MessageProcessor {
             let mut failed = false;
             if let Some((entry, id)) = action.current.take() {
                 let status = self.evaluator.latest_status(&id);
+                let function_call_id = self.evaluator.error_call_id(&id).map(str::to_owned);
                 if matches!(
                     status,
                     Some(
@@ -336,6 +345,7 @@ impl MessageProcessor {
                                     &action,
                                     "INVALID_ACTION".into(),
                                     "Action userMessage must resolve to a string or null".into(),
+                                    None,
                                 );
                                 failed = true;
                             }
@@ -349,7 +359,7 @@ impl MessageProcessor {
                             }
                             _ => message,
                         };
-                        self.report_action_error(&action, code, message);
+                        self.report_action_error(&action, code, message, function_call_id);
                         failed = true;
                     }
                     Some(EvaluationStatus::Cancelled) => {
@@ -382,6 +392,7 @@ impl MessageProcessor {
                         &action,
                         "EXPRESSION_ERROR".into(),
                         error.to_string(),
+                        None,
                     ),
                 }
             } else {
