@@ -14,7 +14,10 @@ diagnostics are not re-emitted on unrelated replies. Drain the
 ordinary outgoing message queue for `callAgentFunction` messages. Feed incoming
 `agentFunctionResponse` messages through `process_message`; matching responses
 resume evaluations. Unknown, cancelled, duplicate and stale replies do not alter
-active results. No implicit transport or network connection is created.
+active results. No implicit transport or network connection is created. Hosts without a delivery
+path should call `set_agent_transport_available(false)`; new remote evaluations
+then fail locally without queueing an RPC. It defaults to true for existing
+queue-draining hosts. The flag does not cancel previously queued/transmitted calls.
 
 Evaluation recursively resolves bindings, literal containers and function calls.
 All sibling arguments are visited before returning `Pending`, allowing independent

@@ -36,6 +36,7 @@ pub struct MessageProcessor {
     agent_function_responses: Vec<FunctionResponse>,
     evaluator: crate::evaluation::Evaluator,
     async_actions: async_actions::AsyncActions,
+    agent_transport_available: bool,
     /// Validation config; `None` = validation fully OFF (the default, which
     /// preserves the existing graceful-degradation behavior — bad refs / dup
     /// ids / cycles are silently tolerated and components still load).
@@ -58,6 +59,7 @@ impl MessageProcessor {
             agent_function_responses: Vec::new(),
             evaluator: crate::evaluation::Evaluator::default(),
             async_actions: async_actions::AsyncActions::default(),
+            agent_transport_available: true,
             validation: None,
             pending_validation: crate::validate::ValidationReport::new(),
         }
@@ -77,6 +79,17 @@ impl MessageProcessor {
         self.evaluator = crate::evaluation::Evaluator::default();
         self.async_actions = async_actions::AsyncActions::default();
         self.pending_validation = crate::validate::ValidationReport::new();
+    }
+
+    /// Declare whether the host can deliver newly queued agent RPCs. This does
+    /// not create a connection. Defaults to true for existing queue-draining hosts.
+    /// Already queued/transmitted calls are unaffected; cancel them explicitly.
+    pub fn set_agent_transport_available(&mut self, available: bool) {
+        self.agent_transport_available = available;
+    }
+
+    pub fn agent_transport_available(&self) -> bool {
+        self.agent_transport_available
     }
 
     /// Start an opt-in current expression evaluation. Only pass Action for a
@@ -303,6 +316,12 @@ impl MessageProcessor {
 
     /// Queue an explicit renderer-to-agent RPC. Transport delivery belongs to the host.
     pub fn call_agent_function(&mut self, call: CallAgentFunction) -> Result<()> {
+        if !self.agent_transport_available {
+            return Err(A2uiError::InvalidFunctionCall(format!(
+                "No outbound listener is available for agent function {}",
+                call.call_function.call
+            )));
+        }
         if self.model.get_surface(&call.surface_id).is_none() {
             return Err(A2uiError::SurfaceNotFound(call.surface_id));
         }

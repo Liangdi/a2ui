@@ -76,6 +76,9 @@ fn run(case: &Value) -> Result<(), String> {
         catalogs.push(catalog);
     }
     let mut p = MessageProcessor::new(catalogs);
+    if let Some(available) = case["surface"]["outboundListener"].as_bool() {
+        p.set_agent_transport_available(available);
+    }
     let mut surface =
         json!({"surfaceId":"main","dataModel":case.get("dataModel").cloned().unwrap_or(json!({}))});
     if let Some(id) = case["surface"].get("catalogId") {
@@ -83,6 +86,7 @@ fn run(case: &Value) -> Result<(), String> {
     }
     send(&mut p, json!({"version":"1.0","createSurface":surface}))?;
     let mut ids = Vec::new();
+    let mut check_ids = std::collections::HashSet::new();
     let mut values: HashMap<String, Value> = HashMap::new();
     let mut calls = Vec::new();
     for (index, step) in case["steps"].as_array().unwrap().iter().enumerate() {
@@ -97,6 +101,7 @@ fn run(case: &Value) -> Result<(), String> {
                     "expectValues",
                     "expectErrors",
                     "expectOutbound",
+                    "expectActions",
                     "outboundInAnyOrder",
                     "cancelSurfaceCalls",
                 ]
@@ -106,22 +111,38 @@ fn run(case: &Value) -> Result<(), String> {
                 }
             }
             if let Some(expression) = step.get("evaluate") {
-                let action = step["as"] == "action";
-                let id = p
-                    .start_evaluation(
-                        "main",
-                        "",
-                        expression.clone(),
-                        if action {
-                            EvaluationMode::Action
-                        } else {
-                            EvaluationMode::Reactive
-                        },
-                    )
-                    .map_err(|e| e.to_string())?;
-                if !action {
-                    values.insert(id.clone(), Value::Null);
-                    ids.push(id);
+                match step["as"].as_str() {
+                    Some("event") => p
+                        .start_current_action("main", "source", "", json!({"event":expression}))
+                        .map_err(|e| e.to_string())?,
+                    Some("action") => p
+                        .start_current_action(
+                            "main",
+                            "source",
+                            "",
+                            json!({"functionCall":expression}),
+                        )
+                        .map_err(|e| e.to_string())?,
+                    Some("check") => {
+                        let id = p
+                            .start_check("main", "", expression.clone())
+                            .map_err(|e| e.to_string())?;
+                        check_ids.insert(id.clone());
+                        ids.push(id);
+                    }
+                    None => {
+                        let id = p
+                            .start_evaluation(
+                                "main",
+                                "",
+                                expression.clone(),
+                                EvaluationMode::Reactive,
+                            )
+                            .map_err(|e| e.to_string())?;
+                        values.insert(id.clone(), Value::Null);
+                        ids.push(id);
+                    }
+                    other => return Err(format!("unsupported evaluation mode: {other:?}")),
                 }
             } else if let Some(response) = step.get("respond") {
                 let call: &Value = calls
@@ -154,9 +175,15 @@ fn run(case: &Value) -> Result<(), String> {
             }
             let mut errors = Vec::new();
             for update in p.drain_evaluation_updates() {
+                if check_ids.contains(&update.id) {
+                    continue;
+                }
                 match update.status {
                     EvaluationStatus::Ready(value) => {
                         values.insert(update.id, value);
+                    }
+                    EvaluationStatus::Cancelled => {
+                        values.insert(update.id, Value::Null);
                     }
                     EvaluationStatus::Pending => {
                         values.insert(update.id, Value::Null);
@@ -170,11 +197,50 @@ fn run(case: &Value) -> Result<(), String> {
             for diagnostic in p.drain_evaluation_diagnostics() {
                 errors.push(json!({"code":diagnostic.code,"message":diagnostic.message}));
             }
-            let outbound: Vec<Value> = p
-                .drain_outgoing()
-                .into_iter()
-                .map(|message| serde_json::to_value(message).unwrap()["callAgentFunction"].clone())
-                .collect();
+            for update in p.drain_check_updates() {
+                values.insert(update.id, json!(update.valid));
+                if let Some(error) = update.error {
+                    errors.push(json!({"code":error.code,"message":error.message}));
+                }
+            }
+            let action_errors: Vec<Value> = p.drain_action_errors().into_iter().map(|error|
+                json!({"code":error.code,"message":error.message,"surfaceId":error.surface_id})
+            ).collect();
+            errors.extend(action_errors.iter().cloned());
+            let mut wire_errors = Vec::new();
+            let mut outbound = Vec::new();
+            let mut actions = Vec::new();
+            for message in p.drain_outgoing() {
+                let message = serde_json::to_value(message).unwrap();
+                if let Some(call) = message.get("callAgentFunction") {
+                    outbound.push(call.clone());
+                } else if let Some(action) = message.get("action") {
+                    actions.push(action.clone());
+                } else if let Some(error) = message.get("error") {
+                    wire_errors.push(error.clone());
+                } else {
+                    return Err(format!("unexpected outgoing message: {message}"));
+                }
+            }
+            if wire_errors.len() != action_errors.len() {
+                return Err("action error channel and wire error count differ".into());
+            }
+            for (expected, actual) in action_errors.iter().zip(&wire_errors) {
+                require_subset(expected, actual)?;
+            }
+            let expected_actions = step
+                .get("expectActions")
+                .and_then(Value::as_array)
+                .cloned()
+                .unwrap_or_default();
+            if expected_actions.len() != actions.len() {
+                return Err(format!(
+                    "actions expected {expected_actions:?}, got {actions:?}"
+                ));
+            }
+            for (expected, actual) in expected_actions.iter().zip(&actions) {
+                require_subset(expected, actual)?;
+            }
             let mut actual: Vec<Value> = outbound
                 .iter()
                 .map(|call| {
@@ -246,15 +312,6 @@ fn official_agent_routing_corpus() {
         assert_eq!(case["action"], "route_agent_function");
         let reason = if case["protocolVersion"] != "1.0" {
             Some("legacy v0.9 surface API not implemented")
-        } else if case["surface"]["outboundListener"] == false {
-            Some("explicit outbound transport availability API missing")
-        } else if case["steps"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|s| s["as"] == "event" || s["as"] == "check")
-        {
-            Some("event/check subscription mode not implemented")
         } else {
             None
         };

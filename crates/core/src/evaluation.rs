@@ -442,6 +442,15 @@ impl Evaluator {
                 match prepared {
                     Ok(RendererCall::Local(value)) => EvaluationStatus::Ready(value),
                     Ok(RendererCall::Remote(call_function)) => {
+                        if !processor.agent_transport_available() {
+                            return error(
+                                "EXPRESSION_ERROR",
+                                &format!(
+                                    "No outbound listener is available for agent function {}",
+                                    call_function.call
+                                ),
+                            );
+                        }
                         if self.calls.len() >= 4096 {
                             return error(
                                 "EXPRESSION_ERROR",

@@ -322,3 +322,21 @@ fn surface_call_cancellation_keeps_subscriptions_for_next_data_change() {
     answer(&mut p, &new, json!("new"));
     assert_eq!(state(&mut p, &id), EvaluationStatus::Ready(json!("new")));
 }
+
+#[test]
+fn unavailable_transport_fails_locally_without_queueing_an_rpc() {
+    let mut p = processor();
+    p.set_agent_transport_available(false);
+    let id = p
+        .start_evaluation("s", "", json!({"@call":"remote"}), EvaluationMode::Reactive)
+        .unwrap();
+    assert!(
+        matches!(state(&mut p,&id),EvaluationStatus::Error{code,..} if code == "EXPRESSION_ERROR")
+    );
+    assert!(calls(&mut p).is_empty());
+    p.cancel_evaluation(&id);
+    p.set_agent_transport_available(true);
+    p.start_evaluation("s", "", json!({"@call":"remote"}), EvaluationMode::Reactive)
+        .unwrap();
+    assert_eq!(calls(&mut p).len(), 1);
+}

@@ -48,15 +48,16 @@ inside a `formatString` template inherit that function's selected catalog.
 
 `agent_function_routing.yaml` is the unmodified 43-case official corpus at the
 same revision. Run `cargo test -p a2ui-base --test official_agent_routing -- --nocapture`.
-Currently 28 cases execute and pass, with 15 explicitly named unsupported cases
+Currently 41 cases execute and pass, with 2 explicitly named unsupported cases
 in `agent-routing-coverage.json`. The harness fails any behavioral divergence,
 unknown operation, or change to that omitted-case list. The remaining cases
-require event/check modes, a transport-listener availability API, legacy v0.9
-surface support, or non-JSON values that `serde_json::Value` cannot represent.
+require legacy v0.9 surface support or non-JSON values that
+`serde_json::Value` cannot represent.
 
 Executed cases compare every step's outbound calls, reactive values and errors,
-including catalog selection, argument defaults, sharing, cancellation/retry,
-parallel siblings, template diagnostics and imperative actions. Omitted call
+including catalog selection, transport availability, argument defaults, sharing, cancellation/retry,
+parallel siblings, template diagnostics, imperative actions, ordered async event
+contexts, userMessage validation and pending/non-failing checks. Omitted call
 `args` is compared as the protocol's empty argument map; error message assertions
 use the corpus's substring convention. Partial template values and diagnostics
 come from separate runtime channels, not from suppressing errors in the harness.
