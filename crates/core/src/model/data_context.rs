@@ -172,8 +172,7 @@ impl<'a> DataContext<'a> {
     ) -> Result<(), crate::error::A2uiError> {
         use crate::catalog::function_api::AllowedCallers;
         // Incoming agent messages cannot acquire trusted user activation.
-        let forbidden = (function.requires_user_activation()
-            && (!self.user_activated || self.agent_caller))
+        let forbidden = (function.requires_user_activation() && !self.user_activated)
             || if self.agent_caller {
                 function.allowed_callers() == AllowedCallers::RendererOnly
             } else {

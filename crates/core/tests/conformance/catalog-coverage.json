@@ -1,0 +1,128 @@
+{
+  "source": "a2ui-project/a2ui",
+  "revision": "eb1fd7f0f8e9ff78d29ab6da7e3169bc1edb0f41",
+  "suite": "conformance/core/catalog.yaml",
+  "passed": 43,
+  "excluded": [
+    {
+      "name": "test_v08_basic_catalog_from_json",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v09_basic_catalog_from_json",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v10_basic_catalog_from_json",
+      "reason": "native SDK built-in equivalence not established"
+    },
+    {
+      "name": "test_catalog_from_json_missing_catalog_id_error",
+      "reason": "legacy catalog API outside current definition scope"
+    },
+    {
+      "name": "test_catalog_from_json_override_catalog_id",
+      "reason": "legacy catalog API outside current definition scope"
+    },
+    {
+      "name": "test_v09_catalog_from_json_user_activation_agent_only_loads",
+      "reason": "legacy catalog API outside current definition scope"
+    },
+    {
+      "name": "test_v09_catalog_from_json_allows_hyphen_identifiers",
+      "reason": "legacy catalog API outside current definition scope"
+    },
+    {
+      "name": "test_v09_published_basic_catalog_validates_function_calls",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v09_published_basic_catalog_rejects_function_call_extra_key",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v09_published_minimal_catalog_is_self_contained",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v09_published_minimal_catalog_validates_function_calls",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v09_published_minimal_catalog_rejects_function_call_extra_key",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v091_published_basic_catalog_is_self_contained",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v091_published_basic_catalog_validates_function_calls",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v091_published_basic_catalog_rejects_function_call_extra_key",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v09_published_vegachart_catalog_is_self_contained",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v08_basic_catalog_to_json",
+      "reason": "legacy catalog API outside current definition scope"
+    },
+    {
+      "name": "test_v09_basic_catalog_to_json",
+      "reason": "legacy catalog API outside current definition scope"
+    },
+    {
+      "name": "test_v10_basic_catalog_to_json",
+      "reason": "SDK serialization/canonical flattened schema not implemented"
+    },
+    {
+      "name": "test_v08_basic_catalog_round_trip",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v09_basic_catalog_round_trip",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v091_basic_catalog_round_trip",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v09_minimal_catalog_round_trip",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_mcp_catalog_round_trip",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v08_basic_validation_schema",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v09_basic_validation_schema",
+      "reason": "non-current catalog source"
+    },
+    {
+      "name": "test_v10_basic_validation_schema",
+      "reason": "SDK serialization/canonical flattened schema not implemented"
+    },
+    {
+      "name": "test_v09_custom_validation_schema_flattening",
+      "reason": "legacy catalog API outside current definition scope"
+    },
+    {
+      "name": "test_v10_custom_validation_schema_leaf_defs",
+      "reason": "SDK serialization/canonical flattened schema not implemented"
+    },
+    {
+      "name": "test_v09_catalog_derive_keeps_protocol_version",
+      "reason": "legacy catalog API outside current definition scope"
+    }
+  ]
+}

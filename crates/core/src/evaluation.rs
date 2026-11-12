@@ -89,6 +89,11 @@ pub(crate) struct Evaluator {
 }
 
 impl Evaluator {
+    /// Reserve evaluator-owned IDs against explicit host RPC aliases.
+    pub(crate) fn contains_call_id(&self, id: &str) -> bool {
+        self.calls.values().any(|call| call.id == id)
+    }
+
     fn push_update(&mut self, update: EvaluationUpdate) {
         if let Some(existing) = self
             .updates

@@ -6,7 +6,7 @@ Audit baseline: [`a2ui-project/a2ui` at `eb1fd7f0f8e9ff78d29ab6da7e3169bc1edb0f4
 
 - Current `"1.0"` message envelopes and capabilities namespace, with the legacy `"v1.0"` namespace retained for existing examples.
 - Current role-based RPC: `callRendererFunction`, `rendererFunctionResponse`, `callAgentFunction`, and `agentFunctionResponse`. Hosts drain outgoing messages for transport, and drain agent function responses for application handling.
-- Remote renderer calls select an explicit registered catalog and the named surface's model. Surface-independent calls use an empty model, never an arbitrary existing surface. Functions must explicitly opt in to agent callers; user-activation functions are rejected. Return values are checked against the native declaration.
+- Remote renderer calls select an explicit registered catalog and the named surface's model. Surface-independent calls use an empty model, never an arbitrary existing surface. The top-level target must explicitly opt in to agent callers. Current nested arguments are renderer-local expressions: renderer-only native functions are allowed, agent-only functions are rejected, and no remote fallback or cached agent result is used. Ordinary wire processing has no user activation; a trusted host may explicitly invoke the separate gesture entry point. Return values are checked against the native declaration.
 - Exactly-one result/error RPC responses, including explicit JSON null results.
 - `@path` and `@call` dynamic directives; recursive arrays, literal objects and null; literal `path`/`call` dictionaries; doubled `@@` literal-key escaping. Fallible evaluation reports malformed directives and unavailable catalog overrides.
 - Optional default surface catalog and preserved surface metadata; `@catalogId`, `@metadata`, `@checks` and `@accessibility` component accessors.
@@ -74,10 +74,26 @@ These limits remain explicit draft-PR review items.
 
 ### Caller and user-activation safety
 
-Current and legacy remote calls enforce native caller declarations, including
-nested argument calls. Legacy calls without a catalog ID require an unambiguous
+Current remote calls enforce agent authorization on the top-level target and renderer authorization on nested expressions. Legacy calls retain the conservative agent-caller check for nested argument calls. Legacy calls without a catalog ID require an unambiguous
 function name and use an empty data model rather than an unrelated surface.
 Passive evaluation and agent calls cannot acquire user activation. Only a trusted
 host gesture may enter activation-capable action APIs. Schema-only calls are
 validated before remote routing, and failed native calls never silently fall back
 to the agent.
+
+
+### Incoming RPC caller scopes
+
+The current caller distinction follows the pinned official Python RPC handler
+(`rpc_handler.py`, `_check_execution_permissions` and `_resolve_dynamic_arguments`),
+`DataContext.resolve_without_agent`, and the TypeScript handler's
+`resolveArgumentValue(..., {allowAgentRouting: false})` at revision
+`eb1fd7f0f8e9ff78d29ab6da7e3169bc1edb0f41`. Official native builtins are not
+relabelled as agent-callable. Nested expressions still enforce argument validation,
+activation requirements, catalog/version boundaries, and native availability.
+
+`process_json_message` additionally emits a correlated protocol error for malformed
+current renderer RPC envelopes when a string function-call ID can be recovered.
+Execution-stage failures (including nested expression failures) return
+`EXECUTION_ERROR`; invalid top-level target authorization/schema returns
+`INVALID_FUNCTION_CALL`.
