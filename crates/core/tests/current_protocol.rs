@@ -517,3 +517,71 @@ fn incoming_activation_requires_explicit_trusted_host_entry_point() {
     let message = serde_json::to_value(proc.drain_outgoing().pop().unwrap()).unwrap();
     assert_eq!(message["rendererFunctionResponse"]["value"], "activated");
 }
+
+#[test]
+fn native_catalog_protocol_identity_distinguishes_draft_and_release() {
+    for version in ["1.0", "v1.0", "v0.9"] {
+        let mut proc = MessageProcessor::new(vec![]);
+        proc.register_native_catalog(
+            Catalog::new("test").with_function(Box::new(Echo {
+                allowed: AllowedCallers::RendererOrAgent,
+                activation: false,
+            })),
+            version,
+        )
+        .unwrap();
+        apply(&mut proc, rpc(None, json!("ok")));
+        let message = serde_json::to_value(proc.drain_outgoing().pop().unwrap()).unwrap();
+        if version == "1.0" {
+            assert_eq!(message["rendererFunctionResponse"]["value"], "ok");
+        } else {
+            assert!(
+                message["rendererFunctionResponse"]["error"]["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains("protocol version")
+            );
+        }
+        apply(
+            &mut proc,
+            json!({"version":"v1.0","functionCallId":"draft","wantResponse":true,"callFunction":{"call":"echo","catalogId":"test","args":{"value":"ok"}}}),
+        );
+        let message = serde_json::to_value(proc.drain_outgoing().pop().unwrap()).unwrap();
+        if version == "v1.0" {
+            assert_eq!(message["functionResponse"]["value"], "ok", "{message}");
+        } else {
+            assert!(
+                message["error"]["message"]
+                    .as_str()
+                    .unwrap()
+                    .contains("protocol version")
+            );
+        }
+    }
+}
+
+#[test]
+fn inline_draft_catalog_keeps_exact_version_identity() {
+    let mut proc = MessageProcessor::new(vec![]);
+    proc.register_inline_catalog(json!({"catalogId":"test","protocolVersion":"v1.0","components":{},"functions":{"echo":{"returnType":"any","allowedCallers":"rendererOrAgent"}}})).unwrap();
+    apply(&mut proc, rpc(None, json!("wrong version")));
+    let message = serde_json::to_value(proc.drain_outgoing().pop().unwrap()).unwrap();
+    assert!(
+        message["rendererFunctionResponse"]["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("protocol version")
+    );
+    apply(
+        &mut proc,
+        json!({"version":"v1.0","functionCallId":"draft","wantResponse":true,"callFunction":{"call":"echo","catalogId":"test","args":{}}}),
+    );
+    let message = serde_json::to_value(proc.drain_outgoing().pop().unwrap()).unwrap();
+    assert!(
+        !message["error"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("protocol version"),
+        "{message}"
+    );
+}

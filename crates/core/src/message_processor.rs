@@ -493,6 +493,25 @@ impl MessageProcessor {
         self.catalogs.keys().cloned().collect()
     }
 
+    /// Register a native catalog with its exact protocol identity.
+    /// The legacy draft `v1.0` and released `1.0` are intentionally distinct.
+    /// Existing catalogs passed to `new` retain unspecified-version compatibility.
+    pub fn register_native_catalog(
+        &mut self,
+        catalog: Catalog,
+        protocol_version: impl Into<String>,
+    ) -> Result<()> {
+        let version = protocol_version.into();
+        if version.is_empty() {
+            return Err(A2uiError::Validation(
+                "catalog protocol version must not be empty".into(),
+            ));
+        }
+        self.catalog_versions.insert(catalog.id.clone(), version);
+        self.catalogs.insert(catalog.id.clone(), catalog);
+        Ok(())
+    }
+
     /// Register an inline catalog from a raw JSON value.
     ///
     /// The catalog is parsed via [`parse_inline_catalog`](crate::capabilities::parse_inline_catalog). Each
@@ -549,10 +568,10 @@ impl MessageProcessor {
             .get("protocolVersion")
             .and_then(serde_json::Value::as_str)
         {
-            self.catalog_versions.insert(
-                parsed.catalog_id.clone(),
-                version.trim_start_matches('v').into(),
-            );
+            self.catalog_versions
+                .insert(parsed.catalog_id.clone(), version.into());
+        } else {
+            self.catalog_versions.remove(&parsed.catalog_id);
         }
         self.catalogs.insert(parsed.catalog_id, catalog);
         Ok(())
