@@ -5,8 +5,12 @@ use std::collections::HashMap;
 mod async_actions;
 mod renderer_actions;
 pub use async_actions::{ActionError, CheckUpdate};
+mod incoming_rpc;
 mod renderer_call;
+use incoming_rpc::InvocationFailure;
+mod rpc_lifecycle;
 pub use renderer_call::RendererCall;
+pub use rpc_lifecycle::RpcCallError;
 
 use crate::catalog::Catalog;
 use crate::error::{A2uiError, Result};
@@ -34,6 +38,7 @@ pub struct MessageProcessor {
     /// Outgoing client-to-server messages produced during processing.
     outgoing_messages: Vec<ClientMessage>,
     agent_function_responses: Vec<FunctionResponse>,
+    rpc_pending: rpc_lifecycle::RpcPendingState,
     evaluator: crate::evaluation::Evaluator,
     async_actions: async_actions::AsyncActions,
     agent_transport_available: bool,
@@ -57,6 +62,7 @@ impl MessageProcessor {
             catalog_versions: HashMap::new(),
             outgoing_messages: Vec::new(),
             agent_function_responses: Vec::new(),
+            rpc_pending: rpc_lifecycle::RpcPendingState::default(),
             evaluator: crate::evaluation::Evaluator::default(),
             async_actions: async_actions::AsyncActions::default(),
             agent_transport_available: true,
@@ -76,6 +82,7 @@ impl MessageProcessor {
         self.model = SurfaceGroupModel::new();
         self.outgoing_messages.clear();
         self.agent_function_responses.clear();
+        self.rpc_pending = rpc_lifecycle::RpcPendingState::default();
         self.evaluator = crate::evaluation::Evaluator::default();
         self.async_actions = async_actions::AsyncActions::default();
         self.pending_validation = crate::validate::ValidationReport::new();
@@ -128,6 +135,8 @@ impl MessageProcessor {
     /// invalidation restarts their evaluation; stale replies remain inert.
     pub fn cancel_surface_calls(&mut self, surface_id: &str) {
         self.evaluator.cancel_surface_calls(surface_id);
+        self.rpc_pending.cancel_surface(surface_id);
+        self.prune_settled_agent_calls();
         self.remove_cancelled_evaluation_calls();
     }
 
@@ -280,6 +289,26 @@ impl MessageProcessor {
                 "1.0 message requires version and exactly one current payload".into(),
             ));
         }
+        if let Some(call) = obj.get("callRendererFunction") {
+            let function = call
+                .get("callFunction")
+                .filter(|v| v.is_object())
+                .ok_or_else(|| {
+                    A2uiError::Validation(
+                        "callRendererFunction requires callFunction object".into(),
+                    )
+                })?;
+            if !function.get("catalogId").is_some_and(|v| v.is_string()) {
+                return Err(A2uiError::Validation(
+                    "callFunction requires catalogId".into(),
+                ));
+            }
+            if function.get("args").is_some_and(|v| !v.is_object()) {
+                return Err(A2uiError::Validation(
+                    "callFunction args must be an object".into(),
+                ));
+            }
+        }
         if let Some(update) = obj.get("updateDataModel") {
             if update.get("value").is_none() {
                 return Err(A2uiError::Validation(
@@ -328,22 +357,8 @@ impl MessageProcessor {
 
     /// Queue an explicit renderer-to-agent RPC. Transport delivery belongs to the host.
     pub fn call_agent_function(&mut self, call: CallAgentFunction) -> Result<()> {
-        if !self.agent_transport_available {
-            return Err(A2uiError::InvalidFunctionCall(format!(
-                "No outbound listener is available for agent function {}",
-                call.call_function.call
-            )));
-        }
-        if self.model.get_surface(&call.surface_id).is_none() {
-            return Err(A2uiError::SurfaceNotFound(call.surface_id));
-        }
-        self.queue_outgoing(ClientMessage {
-            version: "1.0".into(),
-            payload: ClientPayload::CallAgentFunction(CallAgentFunctionPayload {
-                call_agent_function: call,
-            }),
-        });
-        Ok(())
+        self.begin_agent_call(call, None, std::time::Instant::now())
+            .map_err(|error| A2uiError::InvalidFunctionCall(error.to_string()))
     }
 
     /// Parse a JSONL stream (newline-delimited JSON objects).
@@ -378,8 +393,14 @@ impl MessageProcessor {
                 self.handle_renderer_function(&payload.call_renderer_function)
             }
             A2uiPayload::AgentFunctionResponse(payload) => {
-                self.agent_function_responses
-                    .push(payload.agent_function_response.clone());
+                if self
+                    .rpc_pending
+                    .response(&payload.agent_function_response, std::time::Instant::now())
+                {
+                    self.agent_function_responses
+                        .push(payload.agent_function_response.clone());
+                }
+                self.prune_settled_agent_calls();
                 Ok(())
             }
             A2uiPayload::CreateSurface(payload) => {
@@ -663,17 +684,33 @@ impl MessageProcessor {
     }
 
     fn handle_delete_surface(&mut self, data: &DeleteSurfaceData) -> Result<()> {
-        self.model.delete_surface(&data.surface_id)
+        self.model.delete_surface(&data.surface_id)?;
+        self.rpc_pending.cancel_surface(&data.surface_id);
+        self.prune_settled_agent_calls();
+        Ok(())
     }
 
     fn handle_renderer_function(&mut self, call: &CallRendererFunction) -> Result<()> {
-        let result = self.execute_renderer_function(call, true);
+        self.handle_renderer_function_with_activation(call, false)
+    }
+
+    fn handle_renderer_function_with_activation(
+        &mut self,
+        call: &CallRendererFunction,
+        user_activation: bool,
+    ) -> Result<()> {
+        let result = self.execute_renderer_function(call, true, user_activation);
         let outcome = match result {
             Ok(value) => FunctionOutcome::Success(FunctionValue { value }),
             Err(error) => FunctionOutcome::Failure(FunctionFailure {
                 error: FunctionError {
-                    code: "INVALID_FUNCTION_CALL".into(),
-                    message: error.to_string(),
+                    code: if error.execution {
+                        "EXECUTION_ERROR"
+                    } else {
+                        "INVALID_FUNCTION_CALL"
+                    }
+                    .into(),
+                    message: error.error.to_string(),
                 },
             }),
         };
@@ -693,7 +730,8 @@ impl MessageProcessor {
         &self,
         call: &CallRendererFunction,
         current: bool,
-    ) -> Result<serde_json::Value> {
+        user_activation: bool,
+    ) -> std::result::Result<serde_json::Value, InvocationFailure> {
         use crate::catalog::function_api::{AllowedCallers, ReturnType};
         let catalog_id = call.call_function.catalog_id.as_deref().ok_or_else(|| {
             A2uiError::Validation("callRendererFunction requires explicit catalogId".into())
@@ -701,26 +739,36 @@ impl MessageProcessor {
         let catalog = self
             .catalogs
             .get(catalog_id)
-            .ok_or_else(|| A2uiError::Validation(format!("unknown catalog: {catalog_id}")))?;
+            .ok_or_else(|| A2uiError::Validation(format!("Catalog not found: {catalog_id}")))?;
         let expected_version = if current { "1.0" } else { "v1.0" };
         if self
             .catalog_versions
             .get(catalog_id)
             .is_some_and(|version| version != expected_version)
         {
-            return Err(A2uiError::CatalogNotFound(catalog_id.into()));
+            return Err(A2uiError::Validation(format!(
+                "catalog {catalog_id} protocol version does not match message protocol version"
+            ))
+            .into());
         }
         let function = catalog
             .get_function(&call.call_function.call)
             .ok_or_else(|| {
-                A2uiError::Validation(format!("unknown function: {}", call.call_function.call))
+                A2uiError::Validation(format!("Function not found: {}", call.call_function.call))
             })?;
-        if function.allowed_callers() == AllowedCallers::RendererOnly
-            || function.requires_user_activation()
-        {
-            return Err(A2uiError::Validation(
-                "function is not callable by an agent".into(),
-            ));
+        if function.allowed_callers() == AllowedCallers::RendererOnly {
+            return Err(A2uiError::Validation(format!(
+                "Function '{}' cannot be called by agent (allowedCallers is rendererOnly).",
+                function.name()
+            ))
+            .into());
+        }
+        if function.requires_user_activation() && !user_activation {
+            return Err(A2uiError::Validation(format!(
+                "Function '{}' requires user activation context to execute.",
+                function.name()
+            ))
+            .into());
         }
         let empty = DataModel::new();
         let surface_data = match &call.surface_id {
@@ -742,10 +790,16 @@ impl MessageProcessor {
         let mut context = crate::model::data_context::DataContext::new(data, &catalog.functions)
             .with_catalog_id(catalog_id)
             .with_catalogs(&self.catalogs, default_catalog)
-            .with_catalog_versions(&self.catalog_versions)
-            .with_agent_caller();
+            .with_catalog_versions(&self.catalog_versions);
         if current {
             context = context.with_current_protocol();
+        } else {
+            // Preserve the conservative draft RPC policy. Released 1.0 resolves
+            // nested arguments locally as renderer expressions, never remote RPC.
+            context = context.with_agent_caller();
+        }
+        if user_activation {
+            context = context.with_user_activation();
         }
         let mut args: HashMap<_, _> = call
             .call_function
@@ -756,9 +810,12 @@ impl MessageProcessor {
                     .resolve_dynamic_json(value)
                     .map(|value| (key.clone(), value))
             })
-            .collect::<Result<_>>()?;
+            .collect::<Result<_>>()
+            .map_err(InvocationFailure::execution)?;
         function.prepare_args(&mut args)?;
-        let value = function.execute(&args, &context)?;
+        let value = function
+            .execute(&args, &context)
+            .map_err(InvocationFailure::execution)?;
         let valid = match function.return_type_for_protocol(current) {
             ReturnType::String => value.is_string(),
             ReturnType::Number => value.is_number(),
@@ -769,9 +826,9 @@ impl MessageProcessor {
             ReturnType::Any => true,
         };
         if !valid {
-            return Err(A2uiError::Validation(
+            return Err(InvocationFailure::execution(A2uiError::Validation(
                 "function returned a value inconsistent with its declared return type".into(),
-            ));
+            )));
         }
         Ok(value)
     }
@@ -807,7 +864,9 @@ impl MessageProcessor {
                     call_function,
                 },
                 false,
+                false,
             )
+            .map_err(|failure| failure.error)
         })();
 
         // 6. Queue outgoing messages based on result

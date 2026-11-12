@@ -146,6 +146,18 @@ fn agent_response_is_available_to_the_host() {
     let mut proc = processor(AllowedCallers::RendererOnly, false);
     apply(
         &mut proc,
+        json!({"version":"1.0","createSurface":{"surfaceId":"s"}}),
+    );
+    proc.call_agent_function(
+        serde_json::from_value(json!({
+            "surfaceId":"s", "functionCallId":"a",
+            "callFunction":{"@call":"remote", "catalogId":"test", "args":{}}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    apply(
+        &mut proc,
         json!({"version":"1.0","agentFunctionResponse":{"functionCallId":"a","value":{"ok":true}}}),
     );
     assert_eq!(proc.drain_agent_function_responses().len(), 1);
@@ -164,7 +176,7 @@ fn rejects_ambiguous_current_envelopes_and_reserved_surface_component() {
 }
 
 #[test]
-fn nested_agent_calls_cannot_bypass_native_caller_permissions() {
+fn current_rpc_nested_renderer_only_builtins_execute_locally() {
     let mut proc = MessageProcessor::new(vec![
         Catalog::new("test")
             .with_function(Box::new(Echo {
@@ -177,12 +189,15 @@ fn nested_agent_calls_cannot_bypass_native_caller_permissions() {
     ]);
     apply(
         &mut proc,
-        rpc(None, json!({"@call":"required","args":{"value":"x"}})),
+        rpc(
+            None,
+            json!({"@call":"required","catalogId":"test","args":{"value":"x"}}),
+        ),
     );
     let message = serde_json::to_value(proc.drain_outgoing().pop().unwrap()).unwrap();
     assert_eq!(
-        message["rendererFunctionResponse"]["error"]["code"],
-        "INVALID_FUNCTION_CALL"
+        message["rendererFunctionResponse"]["value"],
+        json!({"valid":true})
     );
 }
 
@@ -414,4 +429,91 @@ fn legacy_rpc_preserves_legacy_function_context_and_return_type() {
         response["rendererFunctionResponse"]["value"],
         json!({"valid":true})
     );
+}
+
+#[test]
+fn current_rpc_nested_arguments_reject_agent_only_activation_and_remote_fallback() {
+    for (allowed, activation) in [
+        (AllowedCallers::AgentOnly, false),
+        (AllowedCallers::RendererOrAgent, true),
+    ] {
+        let mut proc = MessageProcessor::new(vec![
+            Catalog::new("test").with_function(Box::new(Echo {
+                allowed: AllowedCallers::RendererOrAgent,
+                activation: false,
+            })),
+            Catalog::new("nested").with_function(Box::new(Echo {
+                allowed,
+                activation,
+            })),
+        ]);
+        apply(
+            &mut proc,
+            rpc(
+                None,
+                json!({"@call":"echo","catalogId":"nested","args":{"value":"unsafe"}}),
+            ),
+        );
+        let outgoing = proc.drain_outgoing();
+        assert_eq!(outgoing.len(), 1);
+        let message = serde_json::to_value(&outgoing[0]).unwrap();
+        assert_eq!(
+            message["rendererFunctionResponse"]["error"]["code"],
+            "EXECUTION_ERROR"
+        );
+    }
+    let mut proc = processor(AllowedCallers::RendererOrAgent, false);
+    apply(
+        &mut proc,
+        rpc(
+            None,
+            json!({"@call":"missing","catalogId":"test","args":{}}),
+        ),
+    );
+    let outgoing = proc.drain_outgoing();
+    assert_eq!(
+        outgoing.len(),
+        1,
+        "nested expression must not queue remote fallback"
+    );
+    let message = serde_json::to_value(&outgoing[0]).unwrap();
+    assert_eq!(
+        message["rendererFunctionResponse"]["error"]["code"],
+        "EXECUTION_ERROR"
+    );
+}
+
+#[test]
+fn malformed_current_rpc_queues_correlated_error() {
+    let mut proc = processor(AllowedCallers::RendererOrAgent, false);
+    for call in [
+        json!({"functionCallId":"bad"}),
+        json!({"functionCallId":"bad","callFunction":{"@call":"echo","catalogId":"test","args":[]}}),
+    ] {
+        assert!(
+            proc.process_json_message(
+                &json!({"version":"1.0","callRendererFunction":call}).to_string()
+            )
+            .is_err()
+        );
+        let message = serde_json::to_value(proc.drain_outgoing().pop().unwrap()).unwrap();
+        assert_eq!(message["error"]["functionCallId"], "bad");
+        assert_eq!(message["error"]["code"], "INVALID_FUNCTION_CALL");
+    }
+}
+
+#[test]
+fn incoming_activation_requires_explicit_trusted_host_entry_point() {
+    let mut proc = processor(AllowedCallers::RendererOrAgent, true);
+    let request = rpc(None, json!("activated"));
+    apply(&mut proc, request.clone());
+    let message = serde_json::to_value(proc.drain_outgoing().pop().unwrap()).unwrap();
+    assert_eq!(
+        message["rendererFunctionResponse"]["error"]["code"],
+        "INVALID_FUNCTION_CALL"
+    );
+    let call = serde_json::from_value(request["callRendererFunction"].clone()).unwrap();
+    proc.process_renderer_call_from_user_gesture(&call).unwrap();
+    let message = serde_json::to_value(proc.drain_outgoing().pop().unwrap()).unwrap();
+    assert_eq!(message["rendererFunctionResponse"]["value"], "activated");
 }
