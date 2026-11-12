@@ -4,10 +4,6 @@
   "suite": "conformance/core/agent_function_routing.yaml",
   "unsupported": [
     {
-      "name": "test_agent_routing_without_outbound_listener_fails_locally",
-      "reason": "explicit outbound transport availability API missing"
-    },
-    {
       "name": "test_agent_routing_pre_v1_surface_is_not_routed",
       "reason": "legacy v0.9 surface API not implemented"
     },

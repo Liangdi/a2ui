@@ -76,6 +76,9 @@ fn run(case: &Value) -> Result<(), String> {
         catalogs.push(catalog);
     }
     let mut p = MessageProcessor::new(catalogs);
+    if let Some(available) = case["surface"]["outboundListener"].as_bool() {
+        p.set_agent_transport_available(available);
+    }
     let mut surface =
         json!({"surfaceId":"main","dataModel":case.get("dataModel").cloned().unwrap_or(json!({}))});
     if let Some(id) = case["surface"].get("catalogId") {
@@ -309,8 +312,6 @@ fn official_agent_routing_corpus() {
         assert_eq!(case["action"], "route_agent_function");
         let reason = if case["protocolVersion"] != "1.0" {
             Some("legacy v0.9 surface API not implemented")
-        } else if case["surface"]["outboundListener"] == false {
-            Some("explicit outbound transport availability API missing")
         } else {
             None
         };
