@@ -23,6 +23,7 @@ pub struct SchemaOnlyFunction {
     callers: AllowedCallers,
     user_activation: bool,
     args_validator: Option<jsonschema::Validator>,
+    args_schema: Option<serde_json::Value>,
 }
 
 impl SchemaOnlyFunction {
@@ -44,6 +45,7 @@ impl SchemaOnlyFunction {
             callers: AllowedCallers::RendererOnly,
             user_activation: false,
             args_validator: None,
+            args_schema: None,
         }
     }
     /// Retain declared caller boundaries and compile a local-only argument schema.
@@ -57,6 +59,7 @@ impl SchemaOnlyFunction {
         self.args_validator = Some(jsonschema::validator_for(&args).map_err(|error| {
             A2uiError::Validation(format!("invalid function args schema: {error}"))
         })?);
+        self.args_schema = Some(args);
         self.callers = callers;
         self.user_activation = user_activation;
         Ok(self)
@@ -88,10 +91,22 @@ impl FunctionImplementation for SchemaOnlyFunction {
         if let Some(validator) = &self.args_validator {
             let value = serde_json::to_value(args)?;
             validator.validate(&value).map_err(|error| {
-                A2uiError::Validation(format!("invalid function arguments: {error}"))
+                A2uiError::Validation(format!(
+                    "Validation failed for function '{}': {error}",
+                    self.name
+                ))
             })?;
         }
         Ok(())
+    }
+
+    fn prepare_args(&self, args: &mut HashMap<String, serde_json::Value>) -> Result<(), A2uiError> {
+        if let Some(schema) = &self.args_schema {
+            let mut value = serde_json::to_value(&*args)?;
+            apply_defaults(schema, schema, &mut value, 0)?;
+            *args = serde_json::from_value(value)?;
+        }
+        self.validate_args(args)
     }
 
     fn execute(
@@ -101,6 +116,50 @@ impl FunctionImplementation for SchemaOnlyFunction {
     ) -> Result<serde_json::Value, A2uiError> {
         Err(A2uiError::NoNativeImplementation(self.name.to_string()))
     }
+}
+
+// Defaults apply only to missing properties, never replace explicit null.
+fn apply_defaults(
+    root: &serde_json::Value,
+    schema: &serde_json::Value,
+    value: &mut serde_json::Value,
+    depth: usize,
+) -> Result<(), A2uiError> {
+    if depth > 128 {
+        return Err(A2uiError::Validation(
+            "argument defaults exceed depth limit".into(),
+        ));
+    }
+    if let Some(reference) = schema.get("$ref").and_then(serde_json::Value::as_str) {
+        if let Some(pointer) = reference.strip_prefix('#') {
+            if let Some(target) = root.pointer(pointer) {
+                apply_defaults(root, target, value, depth + 1)?;
+            }
+        }
+    }
+    if let (Some(properties), Some(object)) = (
+        schema
+            .get("properties")
+            .and_then(serde_json::Value::as_object),
+        value.as_object_mut(),
+    ) {
+        for (name, property) in properties {
+            if !object.contains_key(name)
+                && let Some(default) = property.get("default")
+            {
+                object.insert(name.clone(), default.clone());
+            }
+            if let Some(child) = object.get_mut(name) {
+                apply_defaults(root, property, child, depth + 1)?;
+            }
+        }
+    }
+    if let (Some(items), Some(array)) = (schema.get("items"), value.as_array_mut()) {
+        for child in array {
+            apply_defaults(root, items, child, depth + 1)?;
+        }
+    }
+    Ok(())
 }
 
 /// Parse a return-type string (as found in a catalog's `returnType` field)

@@ -92,16 +92,17 @@ impl MessageProcessor {
         call.catalog_id = Some(catalog_id.clone());
         if let Some(function) = catalog.get_function(&call.call) {
             if function.allowed_callers() == AllowedCallers::AgentOnly {
-                return Err(A2uiError::InvalidFunctionCall(
-                    "agentOnly function cannot be called by renderer".into(),
-                ));
+                return Err(A2uiError::InvalidFunctionCall(format!(
+                    "agentOnly function {} cannot be called by renderer",
+                    call.call
+                )));
             }
             if function.requires_user_activation() && !user_activated {
                 return Err(A2uiError::InvalidFunctionCall(
                     "function requires user activation".into(),
                 ));
             }
-            function.validate_args(&call.args)?;
+            function.prepare_args(&mut call.args)?;
             if function.is_native() {
                 let value = function.execute(&call.args, &context)?;
                 let valid = return_matches(
@@ -187,6 +188,23 @@ mod tests {
             Ok(RendererCall::Remote(_))
         ));
     }
+    #[test]
+    fn schema_defaults_preserve_explicit_values_and_fill_nested_objects() {
+        use crate::catalog::FunctionImplementation;
+        let function = crate::catalog::SchemaOnlyFunction::new("quote".into(), ReturnType::Any)
+            .with_policy(json!({"type":"object","properties":{
+                "currency":{"type":"string","default":"USD"},
+                "options":{"type":"object","default":{},"properties":{"extendedHours":{"type":"boolean","default":false}}}
+            }}), AllowedCallers::RendererOnly, false).unwrap();
+        let mut args = std::collections::HashMap::new();
+        function.prepare_args(&mut args).unwrap();
+        assert_eq!(args["currency"], "USD");
+        assert_eq!(args["options"]["extendedHours"], false);
+        args.insert("currency".into(), json!("EUR"));
+        function.prepare_args(&mut args).unwrap();
+        assert_eq!(args["currency"], "EUR");
+    }
+
     #[test]
     fn external_schema_references_are_not_fetched() {
         let result = crate::catalog::SchemaOnlyFunction::new("remote".into(), ReturnType::Any)

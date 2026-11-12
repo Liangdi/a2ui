@@ -61,6 +61,11 @@ pub trait FunctionImplementation: Send + Sync + 'static {
         Ok(())
     }
 
+    /// Apply declared defaults and validate arguments before routing.
+    fn prepare_args(&self, args: &mut HashMap<String, serde_json::Value>) -> Result<(), A2uiError> {
+        self.validate_args(args)
+    }
+
     /// Execute the function with resolved arguments.
     ///
     /// Args are already resolved (dynamic values evaluated) by the DataContext.
