@@ -2,6 +2,8 @@
 
 use std::collections::HashMap;
 
+mod renderer_actions;
+
 use crate::catalog::Catalog;
 use crate::error::{A2uiError, Result};
 use crate::model::data_model::DataModel;
