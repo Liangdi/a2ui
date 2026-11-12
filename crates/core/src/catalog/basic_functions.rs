@@ -720,7 +720,11 @@ impl FunctionImplementation for FormatStringFunction {
         context: &DataContext,
     ) -> Result<Value, A2uiError> {
         let value = require_str(args, "value", "formatString")?;
-        let result = interpolate_string(value, context);
+        let result = if context.is_current_protocol() {
+            super::template::interpolate(value, context)?
+        } else {
+            interpolate_string(value, context)
+        };
         Ok(Value::String(result))
     }
 }

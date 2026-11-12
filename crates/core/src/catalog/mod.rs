@@ -14,3 +14,5 @@ pub use registry::Catalog;
 pub use schema_only::SchemaOnlyFunction;
 
 pub(crate) mod regex_subset;
+
+mod template;

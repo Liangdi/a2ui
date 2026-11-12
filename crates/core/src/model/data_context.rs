@@ -155,7 +155,12 @@ impl<'a> DataContext<'a> {
             };
         if forbidden {
             return Err(crate::error::A2uiError::Validation(format!(
-                "caller is not allowed to execute function: {}",
+                "function cannot be called by {}: {}",
+                if self.agent_caller {
+                    "agent"
+                } else {
+                    "renderer"
+                },
                 function.name()
             )));
         }
@@ -376,6 +381,26 @@ impl<'a> DataContext<'a> {
             resolved_args.insert(key.clone(), resolved);
         }
         func.execute(&resolved_args, self).ok()
+    }
+
+    /// Strict template invocation in the currently executing function's catalog.
+    /// Template syntax cannot override catalog identity.
+    pub fn try_call_function_by_name(
+        &self,
+        name: &str,
+        args: &HashMap<String, Value>,
+    ) -> Result<Value, crate::error::A2uiError> {
+        use crate::error::A2uiError;
+        if name == "@index" {
+            return self.resolve_index(args).ok_or_else(|| A2uiError::Validation("@index function can only be evaluated inside a collection template iteration scope.".into()));
+        }
+        let function = self
+            .functions
+            .get(name)
+            .ok_or_else(|| A2uiError::InvalidFunctionCall(format!("unknown function: {name}")))?;
+        self.check_caller(function.as_ref())?;
+        function.validate_args(args)?;
+        function.execute(args, self)
     }
 
     /// Execute a function call, retaining the historical null-on-error display API.

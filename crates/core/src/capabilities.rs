@@ -169,6 +169,7 @@ pub fn parse_inline_catalog(json: &serde_json::Value) -> Result<InlineCatalog> {
             })?;
             let return_type = fobj
                 .get("returnType")
+                .or_else(|| fval.pointer("/properties/returnType/const"))
                 .and_then(|v| v.as_str())
                 .ok_or_else(|| {
                     A2uiError::Validation(format!(
