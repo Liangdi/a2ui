@@ -16,3 +16,6 @@ pub use schema_only::SchemaOnlyFunction;
 pub(crate) mod regex_subset;
 
 mod template;
+
+pub mod definition;
+pub use definition::CatalogDefinition;

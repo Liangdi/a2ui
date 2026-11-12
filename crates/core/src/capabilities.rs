@@ -131,9 +131,9 @@ fn validate_name<'a>(name: &'a str, kind: &str) -> Result<&'a str> {
 /// - for each entry in the `functions` map: its name, `returnType` (required),
 ///   and the keys of `args.properties` (argument names).
 ///
-/// Every component and function name is validated against
-/// `^[A-Za-z_][A-Za-z0-9_]*$` and duplicate names within their respective maps
-/// are rejected.
+/// Released-1.0 documents use Unicode XID identifier checks, current catalog
+/// policy validation, and explicit union selection. Legacy documents retain
+/// the existing ASCII identifier checks.
 pub fn parse_inline_catalog(json: &serde_json::Value) -> Result<InlineCatalog> {
     let obj = json
         .as_object()
@@ -150,12 +150,38 @@ pub fn parse_inline_catalog(json: &serde_json::Value) -> Result<InlineCatalog> {
         ));
     }
 
+    let current_definition = if obj
+        .get("protocolVersion")
+        .and_then(serde_json::Value::as_str)
+        .is_some_and(|v| v.trim_start_matches('v') == "1.0")
+    {
+        Some(crate::catalog::CatalogDefinition::from_json(
+            json.clone(),
+            None,
+            Some("1.0"),
+        )?)
+    } else {
+        None
+    };
+    let check_name = |name: &str, kind: &str| -> Result<()> {
+        if current_definition.is_some() {
+            crate::catalog::definition::validate_identifier(name, kind)
+        } else {
+            validate_name(name, kind).map(|_| ())
+        }
+    };
+
     // --- components ---
     let mut component_names = Vec::new();
     if let Some(components) = obj.get("components").and_then(|v| v.as_object()) {
         for key in components.keys() {
-            validate_name(key, "component")?;
-            component_names.push(key.clone());
+            check_name(key, "component")?;
+            if current_definition
+                .as_ref()
+                .is_none_or(|definition| definition.components().contains_key(key))
+            {
+                component_names.push(key.clone());
+            }
         }
     }
 
@@ -163,7 +189,13 @@ pub fn parse_inline_catalog(json: &serde_json::Value) -> Result<InlineCatalog> {
     let mut functions = Vec::new();
     if let Some(funcs) = obj.get("functions").and_then(|v| v.as_object()) {
         for (key, fval) in funcs {
-            validate_name(key, "function")?;
+            check_name(key, "function")?;
+            if current_definition
+                .as_ref()
+                .is_some_and(|definition| !definition.functions().contains_key(key))
+            {
+                continue;
+            }
             let fobj = fval.as_object().ok_or_else(|| {
                 A2uiError::Validation(format!("inline catalog function '{key}' must be an object"))
             })?;
@@ -192,7 +224,7 @@ pub fn parse_inline_catalog(json: &serde_json::Value) -> Result<InlineCatalog> {
                 && let Some(props) = args.get("properties").and_then(|v| v.as_object())
             {
                 for arg_key in props.keys() {
-                    validate_name(arg_key, "function argument")?;
+                    check_name(arg_key, "function argument")?;
                     arg_names.push(arg_key.clone());
                 }
             }
