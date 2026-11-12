@@ -406,6 +406,7 @@ impl<'a> DataContext<'a> {
             let resolved = self.resolve_dynamic_json(val).ok()?;
             resolved_args.insert(key.clone(), resolved);
         }
+        func.prepare_args(&mut resolved_args).ok()?;
         func.execute(&resolved_args, self).ok()
     }
 
@@ -425,8 +426,9 @@ impl<'a> DataContext<'a> {
             .get(name)
             .ok_or_else(|| A2uiError::InvalidFunctionCall(format!("unknown function: {name}")))?;
         self.check_caller(function.as_ref())?;
-        function.validate_args(args)?;
-        function.execute(args, self)
+        let mut args = args.clone();
+        function.prepare_args(&mut args)?;
+        function.execute(&args, self)
     }
 
     /// Execute a function call, retaining the historical null-on-error display API.
@@ -485,6 +487,7 @@ impl<'a> DataContext<'a> {
         for (key, value) in &fc.args {
             args.insert(key.clone(), self.resolve_dynamic_json(value)?);
         }
+        func.prepare_args(&mut args)?;
         func.execute(&args, &execution_context)
     }
 
