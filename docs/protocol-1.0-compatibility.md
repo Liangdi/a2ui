@@ -43,9 +43,9 @@ Additional pinned corpus results, with named exclusions checked in under
   The additive [native effect API](native-data-effects.md) preserves existing
   execution signatures and validates an atomic command batch before commit.
 - Current wire pointer and deletion suites: **7/7 each**, through the real processor.
-- Current validator: **35 unique complete cases** across the schema-only and
-  opt-in strict structural boundaries. Three additional cases reject invalid
-  input but use RecursionError where older fixtures expect ValidationError.
+- Current validator: **38 unique complete cases** across the schema-only and
+  schema and strict structural boundaries. Category checks now mirror the
+  reference exception inheritance; there are no known divergences in executed cases.
   Remaining diagnostics/integration gaps are explicit in the manifests and
   [strict boundary documentation](strict-current-validation.md).
 - Common types: **11 current schema-backed runtime cases** with exact JSON
@@ -88,8 +88,7 @@ as completion.
 
 - The complete official suite has not been implemented or executed. The exact
   catalog, routing and RPC exclusions above remain open; full model-derived schema generation,
-  complete stateful validation integration/composition semantics and native-adapter
-  suites remain outstanding.
+  complete SDK-normalized diagnostic output and native-adapter suites remain outstanding.
 - Backend integration is separate from core evaluation. The dependent GPUI Kit
   adapter now subscribes to supported scalar properties and checks automatically,
   with loading/error states and disabled buttons on failed checks. Nested option labels/tab titles are subscribed, but full custom property schemas
@@ -106,7 +105,7 @@ as completion.
   choice-group semantics, media playback and platform-specific gesture behavior
   remain gaps. Other backends do not inherit these native verification results.
 
-These limits remain explicit draft-PR review items.
+These are explicit capability and verification boundaries, not universal conformance claims.
 
 ### Caller and user-activation safety
 
@@ -141,7 +140,17 @@ precision is bounded before allocation. Explicit RPC IDs cannot be reused after
 settlement or processor reset; reserved evaluator IDs use a separate namespace.
 Identity and pending/result capacity limits fail closed and are documented on the API.
 
-The strict structural boundary remains opt-in rather than automatically installed
-by every renderer. Mixed-catalog wire validation can falsely reject custom widgets;
-complete lifecycle ordering and detailed SDK diagnostic normalization remain open.
-These are readiness limits, not hidden passes.
+Recommended current-protocol hosts use `ValidatedMessageProcessor` or the paired
+`CheckedIngress` integration primitive. They freeze negotiated schemas/defaults,
+stage structural validation, and distinguish rejection from accepted post-commit
+diagnostics so callers do not replay an already-applied message. Mixed component
+and function catalogs are validated against their actual negotiated definitions.
+Composition constraints are enforced; unsupported conditional composition policies
+fail closed. Detailed SDK diagnostic path/array normalization remains incomplete.
+
+The dependent adapter provides `ValidatedGpuiApp`, owning checked ingress and one
+private renderer runtime, with an adapter-owned native catalog that excludes
+unsupported audio/video. Legacy APIs remain available explicitly for compatibility.
+Native toolkit textbox/select descriptions are not exposed by the current upstream
+API; supported labels and group metadata are documented without pretending wrapper
+descriptions target the real textbox. Full media playback is outside this subset.
