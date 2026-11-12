@@ -552,27 +552,38 @@ impl GpuiApp {
             let surface_id = self.processor.model.surfaces().next().map(|s| s.id.clone());
             if let Some(surface_id) = surface_id {
                 let action_id = want_response.then(|| uuid::Uuid::new_v4().to_string());
-                if let Some(id) = &action_id {
-                    let _ = self
-                        .processor
-                        .register_action(&surface_id, id, response_path);
+                // Deserialize the shared wire fields so this adapter also builds
+                // with cores that add optional action metadata. All user-derived
+                // content remains JSON data rather than interpolated JSON text.
+                let action = serde_json::from_value::<ActionData>(serde_json::json!({
+                    "name": event_name,
+                    "surfaceId": surface_id,
+                    "sourceComponentId": node_id,
+                    "timestamp": chrono::Utc::now().to_rfc3339(),
+                    "context": context,
+                    "wantResponse": want_response.then_some(true),
+                    "actionId": action_id,
+                }));
+                match action {
+                    Ok(action) => {
+                        if let Some(id) = &action.action_id {
+                            let _ = self.processor.register_action(
+                                &action.surface_id,
+                                id,
+                                response_path,
+                            );
+                        }
+                        // These are the existing draft catalog's event actions.
+                        // Current agent-function actions need the core migration.
+                        self.pending_actions.push(ClientMessage {
+                            version: "v1.0".into(),
+                            payload: ClientPayload::Action(ActionPayload { action }),
+                        });
+                    }
+                    Err(error) => {
+                        eprintln!("Unable to encode A2UI action: {error}");
+                    }
                 }
-                // These are the existing draft catalog's event actions. Current
-                // A2UI agent-function actions require the separate core migration.
-                self.pending_actions.push(ClientMessage {
-                    version: "v1.0".into(),
-                    payload: ClientPayload::Action(ActionPayload {
-                        action: ActionData {
-                            name: event_name,
-                            surface_id,
-                            source_component_id: node_id.into(),
-                            timestamp: chrono::Utc::now().to_rfc3339(),
-                            context,
-                            want_response: want_response.then_some(true),
-                            action_id,
-                        },
-                    }),
-                });
             }
         } else if let Some(result) = result {
             let _ = apply_event_result(&mut self.processor, result);
