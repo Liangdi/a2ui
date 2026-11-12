@@ -22,6 +22,12 @@ Apply incoming messages with `GpuiApp::process_message` inside an entity update 
 
 The initial view retains the existing gallery chrome and displays one surface. Use a view per independent surface. Incoming updates reconcile widget state by surface/component/template scope. Unrelated messages retain input entities, local tabs and modal openings; authoritative value changes update existing widgets in place. Binding/range configuration changes rebuild only the affected widget. Removed scopes release entities and subscriptions. Loading/error replacements drop hidden widget focus rather than keeping an invisible editor active.
 
+## Negotiating the native subset
+
+`a2ui_gpui_kit::catalog::native_catalog()` returns a `SchemaBackedCatalog` with the distinct adapter-owned ID `urn:a2ui:gpui-kit:catalog:native:1`. It derives the released basic definitions, retains the real native functions, and excludes `AudioPlayer` and `Video`. Send `to_json()` to the agent as the catalog definition, use this ID in generated surfaces, and register the returned native catalog in the runtime (or supply the schema-backed value to the core validated ingress). Its schemas reject media components rather than advertising unusable players. The canonical basic catalog remains available for compatibility, with explicit media placeholders.
+
+This subset is a supported-widget contract, not a claim of pixel-identical rendering or complete assistive-technology parity. The metadata and presentation limits below still apply. Arbitrary custom catalog identifiers do not acquire native widget dispatch.
+
 ## Coverage and limits
 
 - Native text inputs (including masked password fields), buttons, checkbox, slider, choices and tabs; nested rows, columns, lists, cards and modals.
@@ -37,7 +43,7 @@ The initial view retains the existing gallery chrome and displays one surface. U
 
 ## Verification
 
-On Apple Silicon/macOS: library, example build, 35 unit tests and Clippy passed. Native smoke testing covered initial rendering, switching to a login form, typing into both fields, activating its button, switching away and back, and confirming form state reset. A separate current-protocol native smoke check verified the textbox accessible label, the actual button name and description, hidden decorative content absent from the accessibility tree, and the disabled-to-enabled button transition after entering a valid name. Live-region announcements and textbox descriptions were not verified. Other operating systems and complete visual/component conformance have not been tested.
+On Apple Silicon/macOS: library, example build, 36 unit tests and Clippy passed. Native smoke testing covered initial rendering, switching to a login form, typing into both fields, activating its button, switching away and back, and confirming form state reset. A separate current-protocol native smoke check verified the textbox accessible label, the actual button name and description, hidden decorative content absent from the accessibility tree, and the disabled-to-enabled button transition after entering a valid name. Live-region announcements and textbox descriptions were not verified. Other operating systems and complete visual/component conformance have not been tested.
 
 
 The `accessibility` example exercises current reactive text, validation and native metadata without a network transport:

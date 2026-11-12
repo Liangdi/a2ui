@@ -67,3 +67,6 @@ pub use theme::customize;
 
 #[cfg(feature = "backend")]
 pub mod accessibility;
+
+#[cfg(feature = "backend")]
+pub mod catalog;

@@ -198,6 +198,7 @@ pub(crate) fn check_native_catalog(
         id,
         "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
             | "https://a2ui.org/specification/v1_0/catalogs/minimal/catalog.json"
+            | crate::catalog::NATIVE_CATALOG_ID
     ) {
         return Err(format!("No GPUI Kit renderer registered for catalog: {id}"));
     }
