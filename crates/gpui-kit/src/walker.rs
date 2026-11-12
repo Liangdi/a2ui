@@ -47,7 +47,7 @@ pub(super) fn render_node(
     cx: &mut Context<GpuiApp>,
 ) -> AnyElement {
     let key = crate::reactive::instance_key(walk.surface_id, component_id, base_path);
-    let Some(_guard) = RenderGuard::enter(&walk.render_path, key) else {
+    let Some(_guard) = RenderGuard::enter(&walk.render_path, key.clone()) else {
         return gpui_kit::div()
             .child("Component cycle or nesting limit reached")
             .into_any_element();
@@ -55,6 +55,7 @@ pub(super) fn render_node(
     let comp_model = match walk.components.get(component_id) {
         Some(m) => m,
         None => {
+            evict_hidden_widget(walk, &key);
             return gpui_kit::div()
                 .child(format!("Component not found: {component_id}"))
                 .into_any_element();
@@ -64,10 +65,12 @@ pub(super) fn render_node(
     if walk.current_protocol
         && let Err(error) = check_native_catalog(walk.processor, walk.catalog_id, comp_model)
     {
+        evict_hidden_widget(walk, &key);
         return gpui_kit::div().child(error).into_any_element();
     }
     let reactive = walk.reactive.view(walk.surface_id, component_id, base_path);
     if walk.current_protocol && reactive.is_none() {
+        evict_hidden_widget(walk, &key);
         return gpui_kit::div()
             .child("Component subscription limit reached")
             .into_any_element();
