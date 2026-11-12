@@ -2,11 +2,6 @@
   "source": "a2ui-project/a2ui",
   "revision": "eb1fd7f0f8e9ff78d29ab6da7e3169bc1edb0f41",
   "suite": "conformance/core/rpc_functions.yaml",
-  "passed": 32,
-  "unsupported": [
-    {
-      "name": "test_rpc_ui_action_agent_error_halts_pipeline",
-      "reason": "native execute receives immutable DataContext; mutable surface effects require a host effect API"
-    }
-  ]
+  "passed": 33,
+  "unsupported": []
 }

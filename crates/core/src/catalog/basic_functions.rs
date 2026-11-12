@@ -422,10 +422,26 @@ impl FunctionImplementation for FormatNumberFunction {
         })?;
 
         let grouping = opt_bool(args, "grouping").unwrap_or(true);
-        let decimals = opt_f64(args, "decimals").map(|d| d as usize);
+        let decimals = bounded_decimals(args)?;
 
         let formatted = format_number_impl(val, grouping, decimals);
         Ok(Value::String(formatted))
+    }
+}
+
+/// Allocation safety bound, matching modern Intl maximum fractional precision.
+fn bounded_decimals(args: &HashMap<String, Value>) -> Result<Option<usize>, A2uiError> {
+    match args.get("decimals") {
+        None => Ok(None),
+        Some(value) => value
+            .as_f64()
+            .filter(|n| n.is_finite() && *n >= 0.0 && *n <= 100.0 && n.fract() == 0.0)
+            .map(|n| Some(n as usize))
+            .ok_or_else(|| {
+                A2uiError::InvalidFunctionCall(
+                    "decimals must be an integer between 0 and 100".into(),
+                )
+            }),
     }
 }
 
@@ -536,7 +552,7 @@ impl FunctionImplementation for FormatCurrencyFunction {
         let currency = require_str(args, "currency", "formatCurrency")?;
 
         let grouping = opt_bool(args, "grouping").unwrap_or(true);
-        let decimals = opt_f64(args, "decimals").map(|d| d as usize);
+        let decimals = bounded_decimals(args)?;
 
         let formatted = format_number_impl(val, grouping, decimals);
         let prefix = match currency {
@@ -719,6 +735,8 @@ impl FunctionImplementation for FormatStringFunction {
         args: &HashMap<String, Value>,
         context: &DataContext,
     ) -> Result<Value, A2uiError> {
+        // Also protect direct native invocation from the processor/renderer.
+        let _guard = context.enter_function()?;
         let value = require_str(args, "value", "formatString")?;
         let result = if context.is_current_protocol() {
             super::template::interpolate(value, context)?
@@ -1037,6 +1055,10 @@ impl FunctionImplementation for OpenUrlFunction {
 
     fn return_type(&self) -> ReturnType {
         ReturnType::Void
+    }
+
+    fn requires_user_activation(&self) -> bool {
+        true
     }
 
     fn execute(

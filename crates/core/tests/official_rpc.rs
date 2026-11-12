@@ -1,8 +1,8 @@
 //! Pinned official RPC corpus, using the same native mocks as the Python runner.
 //!
-//! The corpus is consumed unchanged. Cases that require the Python SDK's mounted
-//! NodeResolver/action-result API are explicitly recorded in rpc-coverage.json;
-//! they must not be counted as passing merely because an expression test passes.
+//! The corpus is consumed unchanged. UI cases use mounted component/check
+//! subscriptions and tracked action results. Native fixture effects use the real
+//! atomic data-effect API; rpc-coverage.json records all 33 passing cases.
 use a2ui_base::{
     catalog::{
         Catalog, FunctionImplementation, SchemaOnlyFunction,
@@ -519,6 +519,33 @@ fn run(case: &Value) -> TestResult {
     }
 }
 
+struct UiEffectFunction {
+    name: &'static str,
+    path: String,
+    value: Value,
+}
+impl FunctionImplementation for UiEffectFunction {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+    fn return_type(&self) -> ReturnType {
+        ReturnType::Boolean
+    }
+    fn data_effects(
+        &self,
+        _: &HashMap<String, Value>,
+        _: &DataContext,
+    ) -> Result<Vec<a2ui_base::catalog::function_api::DataEffect>, A2uiError> {
+        Ok(vec![a2ui_base::catalog::function_api::DataEffect::Set {
+            path: self.path.clone(),
+            value: self.value.clone(),
+        }])
+    }
+    fn execute(&self, _: &HashMap<String, Value>, _: &DataContext) -> Result<Value, A2uiError> {
+        Ok(json!(true))
+    }
+}
+
 fn ui(case: &Value) -> TestResult {
     let scenario = case["args"]
         .get("uiBindingScenario")
@@ -533,6 +560,7 @@ fn ui(case: &Value) -> TestResult {
             "components",
             "observe",
             "actionPayload",
+            "localFunctions",
             "inboundResponseValue",
             "inboundResponseError",
         ],
@@ -540,7 +568,29 @@ fn ui(case: &Value) -> TestResult {
     )?;
     let sid = field(scenario, "surfaceId")?;
     let cid = field(scenario, "catalogId")?;
-    let mut p = MessageProcessor::new(vec![Catalog::new(cid)]);
+    let mut catalog = Catalog::new(cid);
+    if let Some(functions) = scenario["localFunctions"].as_object() {
+        for (name, definition) in functions {
+            keys(definition, &["returnType", "effect"], "local function")?;
+            if definition["returnType"] != "boolean" {
+                return Err("unsupported mock return type".into());
+            }
+            keys(&definition["effect"], &["setData"], "local effect")?;
+            let effect = &definition["effect"]["setData"];
+            keys(effect, &["path", "value"], "setData effect")?;
+            let name = match name.as_str() {
+                "markStarted" => "markStarted",
+                "finish" => "finish",
+                _ => return Err("unknown native fixture function".into()),
+            };
+            catalog = catalog.with_function(Box::new(UiEffectFunction {
+                name,
+                path: field(effect, "path")?.into(),
+                value: effect["value"].clone(),
+            }));
+        }
+    }
+    let mut p = MessageProcessor::new(vec![catalog]);
     let components = scenario.get("components").cloned().unwrap_or_else(|| {
         scenario
             .get("component")
@@ -603,7 +653,14 @@ fn ui(case: &Value) -> TestResult {
     if outgoing.len() != 1 {
         return Err(format!("expected one outbound call, got {outgoing:?}"));
     }
-    let call = serde_json::to_value(&outgoing[0]).map_err(|e| e.to_string())?;
+    let mut call = serde_json::to_value(&outgoing[0]).map_err(|e| e.to_string())?;
+    // Optional args is an empty object when omitted on the wire.
+    if call["callAgentFunction"]["callFunction"]
+        .get("args")
+        .is_none()
+    {
+        call["callAgentFunction"]["callFunction"]["args"] = json!({});
+    }
     subset(&expect["outboundCall"], &call)?;
     let call_id = call["callAgentFunction"]["functionCallId"]
         .as_str()
@@ -630,11 +687,24 @@ fn ui(case: &Value) -> TestResult {
         )?;
     }
     if let Some(id) = action {
-        let value = p
+        let outcome = p
             .take_current_action_result(&id)
-            .ok_or("action still pending")?
-            .map_err(|e| e.message)?;
-        subset(&expect["result"], &value)?;
+            .ok_or("action still pending")?;
+        if let Some(expected) = expect.get("result") {
+            subset(expected, &outcome.map_err(|e| e.message)?)?;
+        } else if outcome.is_ok() {
+            return Err("expected failed action pipeline".into());
+        }
+    }
+    if let Some(expected) = expect.get("dataModel") {
+        let surface = p.model.get_surface(sid).ok_or("missing surface")?;
+        let actual = surface.data_model.borrow();
+        if actual.as_value() != expected {
+            return Err(format!(
+                "data model expected {expected}, got {}",
+                actual.as_value()
+            ));
+        }
     }
     for ((component, property), id) in siblings {
         subset(
@@ -666,15 +736,11 @@ fn official_rpc_corpus() {
         serde_json::from_str(include_str!("conformance/rpc-coverage.json")).unwrap();
     assert_eq!(cases.len(), 33, "official corpus count changed");
     let unsupported = manifest["unsupported"].as_array().unwrap();
-    let mut actual_unsupported = Vec::new();
+    let actual_unsupported: Vec<Value> = Vec::new();
     let mut passed = 0;
     let mut failures = Vec::new();
     for case in cases {
         let name = case["name"].as_str().unwrap();
-        if name == "test_rpc_ui_action_agent_error_halts_pipeline" {
-            actual_unsupported.push(json!({"name":name,"reason":"native execute receives immutable DataContext; mutable surface effects require a host effect API"}));
-            continue;
-        }
         let result = if case["args"].get("uiBindingScenario").is_some()
             || case["args"].get("uiActionFallbackScenario").is_some()
         {

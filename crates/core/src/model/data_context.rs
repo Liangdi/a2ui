@@ -1,6 +1,6 @@
 //! Scoped data access with dynamic value resolution.
 
-use std::collections::HashMap;
+use std::{cell::Cell, collections::HashMap, rc::Rc};
 
 use serde_json::Value;
 
@@ -38,9 +38,40 @@ pub struct DataContext<'a> {
     surface_catalog_id: Option<&'a str>,
     current_protocol: bool,
     user_activated: bool,
+    evaluation_budget: Rc<EvaluationBudget>,
+}
+
+#[derive(Default)]
+struct EvaluationBudget {
+    depth: Cell<usize>,
+    calls: Cell<usize>,
+}
+
+/// Restores depth on every exit, including errors and unwinding. The shared
+/// counters survive catalog switches and nested/template context clones.
+pub(crate) struct EvaluationGuard(Rc<EvaluationBudget>);
+impl Drop for EvaluationGuard {
+    fn drop(&mut self) {
+        self.0.depth.set(self.0.depth.get() - 1);
+    }
 }
 
 impl<'a> DataContext<'a> {
+    pub(crate) fn enter_function(&self) -> Result<EvaluationGuard, crate::error::A2uiError> {
+        let budget = &self.evaluation_budget;
+        if budget.depth.get() == 0 {
+            budget.calls.set(0);
+        }
+        if budget.depth.get() >= 64 || budget.calls.get() >= 4096 {
+            return Err(crate::error::A2uiError::InvalidFunctionCall(
+                "expression function budget exceeded (64 nested frames or 4096 calls)".into(),
+            ));
+        }
+        budget.depth.set(budget.depth.get() + 1);
+        budget.calls.set(budget.calls.get() + 1);
+        Ok(EvaluationGuard(Rc::clone(budget)))
+    }
+
     /// Create a new DataContext at the root scope.
     pub fn new(
         data_model: &'a DataModel,
@@ -62,6 +93,7 @@ impl<'a> DataContext<'a> {
             surface_catalog_id: None,
             current_protocol: false,
             user_activated: false,
+            evaluation_budget: Rc::new(EvaluationBudget::default()),
         }
     }
 
@@ -89,6 +121,7 @@ impl<'a> DataContext<'a> {
             surface_catalog_id: self.surface_catalog_id,
             current_protocol: self.current_protocol,
             user_activated: self.user_activated,
+            evaluation_budget: Rc::clone(&self.evaluation_budget),
         }
     }
 
@@ -393,6 +426,7 @@ impl<'a> DataContext<'a> {
         name: &str,
         args: &HashMap<String, Value>,
     ) -> Option<Value> {
+        let _guard = self.enter_function().ok()?;
         // System function: @index — only meaningful inside a template iteration.
         if name == "@index" {
             return self.resolve_index(args);
@@ -406,6 +440,9 @@ impl<'a> DataContext<'a> {
             resolved_args.insert(key.clone(), resolved);
         }
         func.prepare_args(&mut resolved_args).ok()?;
+        if !func.data_effects(&resolved_args, self).ok()?.is_empty() {
+            return None;
+        }
         func.execute(&resolved_args, self).ok()
     }
 
@@ -417,6 +454,7 @@ impl<'a> DataContext<'a> {
         args: &HashMap<String, Value>,
     ) -> Result<Value, crate::error::A2uiError> {
         use crate::error::A2uiError;
+        let _guard = self.enter_function()?;
         if name == "@index" {
             return self.resolve_index(args).ok_or_else(|| A2uiError::Validation("@index function can only be evaluated inside a collection template iteration scope.".into()));
         }
@@ -427,6 +465,11 @@ impl<'a> DataContext<'a> {
         self.check_caller(function.as_ref())?;
         let mut args = args.clone();
         function.prepare_args(&mut args)?;
+        if !function.data_effects(&args, self)?.is_empty() {
+            return Err(A2uiError::InvalidFunctionCall(
+                "data effects require the trusted action processor".into(),
+            ));
+        }
         function.execute(&args, self)
     }
 
@@ -440,6 +483,7 @@ impl<'a> DataContext<'a> {
         fc: &FunctionCall,
     ) -> Result<Value, crate::error::A2uiError> {
         use crate::error::A2uiError;
+        let _guard = self.enter_function()?;
         if fc.call == "@index" {
             return self.resolve_index(&fc.args).ok_or_else(|| A2uiError::Validation(
                 "@index function can only be evaluated inside a collection template iteration scope.".into()));
@@ -487,6 +531,11 @@ impl<'a> DataContext<'a> {
             args.insert(key.clone(), self.resolve_dynamic_json(value)?);
         }
         func.prepare_args(&mut args)?;
+        if !func.data_effects(&args, &execution_context)?.is_empty() {
+            return Err(A2uiError::InvalidFunctionCall(
+                "data effects require the trusted action processor".into(),
+            ));
+        }
         func.execute(&args, &execution_context)
     }
 

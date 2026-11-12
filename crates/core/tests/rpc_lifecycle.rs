@@ -225,3 +225,67 @@ fn explicit_calls_cannot_alias_an_evaluator_owned_id() {
     );
     assert!(p.drain_outgoing().is_empty());
 }
+
+#[test]
+fn terminal_ids_cannot_be_reused_even_across_surface_and_reset() {
+    for terminal in ["timeout", "cancel", "success", "failure"] {
+        let mut p = processor();
+        let now = Instant::now();
+        p.begin_agent_call(call("reused", "s"), Some(Duration::from_secs(1)), now)
+            .unwrap();
+        p.drain_outgoing();
+        match terminal {
+            "timeout" => p.expire_agent_calls(now + Duration::from_secs(1)),
+            "cancel" => p.cancel_surface_calls("s"),
+            "success" => send(
+                &mut p,
+                json!({"version":"1.0","agentFunctionResponse":{"functionCallId":"reused","value":1}}),
+            ),
+            _ => send(
+                &mut p,
+                json!({"version":"1.0","agentFunctionResponse":{"functionCallId":"reused","error":{"code":"REMOTE","message":"failed"}}}),
+            ),
+        }
+        p.drain_agent_call_results();
+        p.drain_agent_function_responses();
+        assert_eq!(
+            p.begin_agent_call(call("reused", "other"), None, now)
+                .unwrap_err()
+                .code,
+            "DUPLICATE",
+            "{terminal}"
+        );
+        p.reset();
+        send(
+            &mut p,
+            json!({"version":"1.0","createSurface":{"surfaceId":"other"}}),
+        );
+        assert_eq!(
+            p.begin_agent_call(call("reused", "other"), None, now)
+                .unwrap_err()
+                .code,
+            "DUPLICATE"
+        );
+        send(
+            &mut p,
+            json!({"version":"1.0","agentFunctionResponse":{"functionCallId":"reused","value":"late"}}),
+        );
+        assert!(p.drain_agent_call_results().is_empty());
+        assert!(p.drain_agent_function_responses().is_empty());
+        p.begin_agent_call(call("fresh", "other"), None, now)
+            .unwrap();
+    }
+}
+#[test]
+fn explicit_rpc_rejects_reserved_or_unbounded_ids() {
+    let mut p = processor();
+    for id in [String::new(), "x".repeat(257), "a2ui-eval:anything".into()] {
+        assert_eq!(
+            p.begin_agent_call(call(&id, "s"), None, Instant::now())
+                .unwrap_err()
+                .code,
+            "INVALID_FUNCTION_CALL"
+        );
+    }
+    assert!(p.drain_outgoing().is_empty());
+}

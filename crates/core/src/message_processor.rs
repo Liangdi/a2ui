@@ -41,6 +41,7 @@ pub struct MessageProcessor {
     agent_function_responses: Vec<FunctionResponse>,
     rpc_pending: rpc_lifecycle::RpcPendingState,
     mounted: mounted::Mounted,
+    native_effects_changed: std::cell::Cell<bool>,
     evaluator: crate::evaluation::Evaluator,
     async_actions: async_actions::AsyncActions,
     agent_transport_available: bool,
@@ -66,6 +67,7 @@ impl MessageProcessor {
             agent_function_responses: Vec::new(),
             rpc_pending: rpc_lifecycle::RpcPendingState::default(),
             mounted: mounted::Mounted::default(),
+            native_effects_changed: std::cell::Cell::new(false),
             evaluator: crate::evaluation::Evaluator::default(),
             async_actions: async_actions::AsyncActions::default(),
             agent_transport_available: true,
@@ -85,8 +87,9 @@ impl MessageProcessor {
         self.model = SurfaceGroupModel::new();
         self.outgoing_messages.clear();
         self.agent_function_responses.clear();
-        self.rpc_pending = rpc_lifecycle::RpcPendingState::default();
+        self.rpc_pending.reset();
         self.mounted = mounted::Mounted::default();
+        self.native_effects_changed.set(false);
         self.evaluator = crate::evaluation::Evaluator::default();
         self.async_actions = async_actions::AsyncActions::default();
         self.pending_validation = crate::validate::ValidationReport::new();
@@ -192,7 +195,8 @@ impl MessageProcessor {
                     }),
                 });
             }
-            if !self.drive_async_actions() {
+            let started = self.drive_async_actions();
+            if !started && !self.native_effects_changed.replace(false) {
                 break;
             }
         }
@@ -315,6 +319,11 @@ impl MessageProcessor {
             }
         }
         if let Some(update) = obj.get("updateDataModel") {
+            if let Some(path) = update.get("path") {
+                Self::validate_absolute_pointer(path.as_str().ok_or_else(|| {
+                    A2uiError::InvalidPointer("update path must be a string".into())
+                })?)?;
+            }
             if update.get("value").is_none() {
                 return Err(A2uiError::Validation(
                     "updateDataModel.value is required; use null to delete".into(),
@@ -358,6 +367,23 @@ impl MessageProcessor {
     /// Collect current-protocol responses to agent calls for the host application.
     pub fn drain_agent_function_responses(&mut self) -> Vec<FunctionResponse> {
         std::mem::take(&mut self.agent_function_responses)
+    }
+
+    fn validate_absolute_pointer(path: &str) -> Result<()> {
+        if !path.is_empty() && !path.starts_with('/') {
+            return Err(A2uiError::InvalidPointer(
+                "update/effect paths must be absolute JSON Pointers".into(),
+            ));
+        }
+        let mut chars = path.chars();
+        while let Some(ch) = chars.next() {
+            if ch == '~' && !matches!(chars.next(), Some('0' | '1')) {
+                return Err(A2uiError::InvalidPointer(
+                    "invalid JSON Pointer escape".into(),
+                ));
+            }
+        }
+        Ok(())
     }
 
     /// Queue an explicit renderer-to-agent RPC. Transport delivery belongs to the host.
@@ -871,6 +897,12 @@ impl MessageProcessor {
                 function.name()
             ))
         })?;
+        if !function.data_effects(&args, &context)?.is_empty() {
+            return Err(A2uiError::InvalidFunctionCall(
+                "data effects require the trusted action processor".into(),
+            )
+            .into());
+        }
         let value = function
             .execute(&args, &context)
             .map_err(InvocationFailure::execution)?;

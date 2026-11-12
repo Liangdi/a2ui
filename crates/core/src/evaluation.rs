@@ -329,13 +329,17 @@ impl Evaluator {
     ) -> EvaluationStatus {
         match value {
             Value::Array(items) => {
-                let statuses = items
-                    .iter()
-                    .enumerate()
-                    .map(|(index, value)| {
-                        self.evaluate(processor, job, value, &format!("{node}/{index}"), depth + 1)
-                    })
-                    .collect::<Vec<_>>();
+                let mut statuses = Vec::new();
+                for (index, value) in items.iter().enumerate() {
+                    let status =
+                        self.evaluate(processor, job, value, &format!("{node}/{index}"), depth + 1);
+                    if job.mode == EvaluationMode::Action
+                        && !matches!(status, EvaluationStatus::Ready(_))
+                    {
+                        return status;
+                    }
+                    statuses.push(status);
+                }
                 collect(statuses).map_ready(Value::Array)
             }
             Value::Object(object) if object.contains_key("@path") => {
@@ -370,8 +374,14 @@ impl Evaluator {
                 let mut args = HashMap::new();
                 let mut pending = false;
                 let mut failure = None;
-                // Visit all siblings before returning Pending; independent RPCs run in parallel.
-                for (name, value) in &call.args {
+                // Reactive siblings run in parallel; action arguments retain wire order
+                // and stop on pending/failure so later effects cannot run early.
+                let raw_args = object
+                    .get("args")
+                    .and_then(Value::as_object)
+                    .cloned()
+                    .unwrap_or_default();
+                for (name, value) in &raw_args {
                     match self.evaluate(
                         processor,
                         job,
@@ -382,8 +392,16 @@ impl Evaluator {
                         EvaluationStatus::Ready(value) => {
                             args.insert(name.clone(), value);
                         }
-                        EvaluationStatus::Pending => pending = true,
+                        EvaluationStatus::Pending => {
+                            if job.mode == EvaluationMode::Action {
+                                return EvaluationStatus::Pending;
+                            }
+                            pending = true;
+                        }
                         status @ (EvaluationStatus::Error { .. } | EvaluationStatus::Cancelled) => {
+                            if job.mode == EvaluationMode::Action {
+                                return status;
+                            }
                             failure = Some(status)
                         }
                     }
@@ -470,7 +488,7 @@ impl Evaluator {
                                 "Too many remote expression calls (limit 4096)",
                             );
                         }
-                        let id = uuid::Uuid::new_v4().to_string();
+                        let id = format!("a2ui-eval:{}", uuid::Uuid::new_v4());
                         self.outgoing.push(CallAgentFunction {
                             surface_id: job.surface.clone(),
                             function_call_id: id.clone(),
@@ -505,13 +523,19 @@ impl Evaluator {
                             .map(|tail| format!("@{tail}"))
                             .unwrap_or_else(|| key.clone()),
                     );
-                    statuses.push(self.evaluate(
+                    let status = self.evaluate(
                         processor,
                         job,
                         value,
                         &format!("{node}/{}", escape(key)),
                         depth + 1,
-                    ));
+                    );
+                    if job.mode == EvaluationMode::Action
+                        && !matches!(status, EvaluationStatus::Ready(_))
+                    {
+                        return status;
+                    }
+                    statuses.push(status);
                 }
                 collect(statuses)
                     .map_ready(|values| Value::Object(keys.into_iter().zip(values).collect()))

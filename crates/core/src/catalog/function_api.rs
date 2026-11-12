@@ -27,6 +27,17 @@ pub enum AllowedCallers {
     RendererOrAgent,
 }
 
+/// Data mutations declared by a trusted native implementation, never by wire schema.
+/// Paths resolve like data bindings against the invoking surface and template base.
+/// An absolute pointer selects the surface root. A batch is atomic.
+#[derive(Debug, Clone, PartialEq)]
+pub enum DataEffect {
+    Set {
+        path: String,
+        value: serde_json::Value,
+    },
+}
+
 /// A function implementation that can be executed by the A2UI runtime.
 pub trait FunctionImplementation: Send + Sync + 'static {
     /// The function name as it appears in the catalog.
@@ -45,8 +56,8 @@ pub trait FunctionImplementation: Send + Sync + 'static {
         AllowedCallers::RendererOnly
     }
 
-    /// Requires a trusted user gesture. Passive evaluation and agent calls are denied.
-    /// No activation-capable context is currently exposed by the core.
+    /// Requires a trusted user gesture. Passive and ordinary wire calls are denied.
+    /// Only the host may grant activation through an explicit action/gesture API.
     fn requires_user_activation(&self) -> bool {
         false
     }
@@ -64,6 +75,18 @@ pub trait FunctionImplementation: Send + Sync + 'static {
     /// Apply declared defaults and validate arguments before routing.
     fn prepare_args(&self, args: &mut HashMap<String, serde_json::Value>) -> Result<(), A2uiError> {
         self.validate_args(args)
+    }
+
+    /// Purely describe data writes for a trusted action invocation. Default: none.
+    /// The processor validates the whole batch before execute, then commits only
+    /// after successful execution and return validation. No external side effects
+    /// belong in this method. Passive/synchronous evaluation rejects these commands.
+    fn data_effects(
+        &self,
+        _args: &HashMap<String, serde_json::Value>,
+        _context: &DataContext,
+    ) -> Result<Vec<DataEffect>, A2uiError> {
+        Ok(Vec::new())
     }
 
     /// Execute the function with resolved arguments.

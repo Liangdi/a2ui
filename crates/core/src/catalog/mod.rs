@@ -19,3 +19,6 @@ mod template;
 
 pub mod definition;
 pub use definition::CatalogDefinition;
+
+pub mod schema_backed;
+pub use schema_backed::SchemaBackedCatalog;

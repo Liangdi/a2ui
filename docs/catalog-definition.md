@@ -36,10 +36,37 @@ Cyclic/unknown mixin references fail, and authored document depth is capped at 1
 
 ## Verification and remaining coverage
 
-The unmodified pinned official `core/catalog.yaml` corpus executes 45 cases with
+The unmodified pinned official `core/catalog.yaml` corpus executes 47 cases with
 zero failures: current loading, published-catalog self-containment/component
-validation, round-trips, derivation and both current canonical schema goldens. `catalog-coverage.json` names all 28
+validation, round-trips, derivation and both current canonical schema goldens. `catalog-coverage.json` names all 26
 exclusions and the harness rejects an unexpected change in that manifest. Excluded
-coverage includes legacy versions and native SDK built-in equivalence/serialization. This is not full catalog SDK
+coverage includes legacy versions only. This is not full catalog SDK
 conformance. Source schemas/fixtures are Apache-2.0; the original license is in
 `crates/core/tests/conformance/LICENSE`.
+
+## Native schema binding
+
+`SchemaBackedCatalog` retains a current authored definition alongside an exact
+native `Catalog` registry without adding fields to the existing public struct.
+Construction rejects missing/extra registrations, catalog ID/name mismatches,
+schema-only functions, and conflicting current return/caller/activation policies.
+`to_json()` serializes the bound authored metadata; `into_catalog()` supplies the
+native registrations to the existing processor. No arbitrary names are leaked.
+
+`SchemaBackedCatalog::basic()` binds all 14 real built-in function implementations
+and 18 schema-validating framework-independent component definitions to the
+published basic schema. This production schema is pinned at
+`a2ui-project/a2ui@eb1fd7f0f8e9ff78d29ab6da7e3169bc1edb0f41`,
+`catalogs/basic/v1/catalog.json`, under Apache-2.0 (license in
+`crates/core/src/protocol/schemas/LICENSE`). It is not loaded from test fixtures.
+Tests independently compare its serialization with the published conformance
+copy, exercise actual function execution/component rejection, and reject policy
+mismatches. This equivalence means schemas and native registration metadata,
+not proof of every visual component or all runtime function semantics. Native
+renderers still own their visual implementations; existing draft builders remain
+unchanged.
+
+The binding verifies signature metadata and routing policy, not that arbitrary
+native function code enforces every authored argument constraint/default or
+returns semantically correct values. Those remain implementation and runtime
+validation responsibilities. Loading a schema never authorizes native effects.

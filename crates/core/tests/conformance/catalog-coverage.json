@@ -2,7 +2,7 @@
   "source": "a2ui-project/a2ui",
   "revision": "eb1fd7f0f8e9ff78d29ab6da7e3169bc1edb0f41",
   "suite": "conformance/core/catalog.yaml",
-  "passed": 45,
+  "passed": 47,
   "excluded": [
     {
       "name": "test_v08_basic_catalog_from_json",
@@ -11,10 +11,6 @@
     {
       "name": "test_v09_basic_catalog_from_json",
       "reason": "non-current catalog source"
-    },
-    {
-      "name": "test_v10_basic_catalog_from_json",
-      "reason": "native SDK built-in equivalence not established"
     },
     {
       "name": "test_catalog_from_json_missing_catalog_id_error",
@@ -75,10 +71,6 @@
     {
       "name": "test_v09_basic_catalog_to_json",
       "reason": "legacy catalog API outside current definition scope"
-    },
-    {
-      "name": "test_v10_basic_catalog_to_json",
-      "reason": "native SDK serialization not implemented"
     },
     {
       "name": "test_v08_basic_catalog_round_trip",

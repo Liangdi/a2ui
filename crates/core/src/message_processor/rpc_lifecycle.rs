@@ -1,7 +1,7 @@
 //! Explicit host RPC lifetime management. Reactive evaluator calls retain their
 //! independent subscription lifecycle; this state owns only explicit RPC IDs.
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     time::{Duration, Instant},
 };
 
@@ -35,8 +35,16 @@ pub(super) struct RpcPendingState {
     results: Vec<FunctionResponse>,
     settled_ids: Vec<String>,
     disposed: bool,
+    used_ids: HashSet<String>,
 }
 impl RpcPendingState {
+    pub(super) fn reset(&mut self) {
+        self.pending.clear();
+        self.results.clear();
+        self.settled_ids.clear();
+        self.disposed = false;
+        // Preserve identities: replies can outlive a reset on the same transport.
+    }
     fn begin(
         &mut self,
         call: &CallAgentFunction,
@@ -47,10 +55,25 @@ impl RpcPendingState {
             return Err(RpcCallError::new("DISPOSED", "RPC state has been disposed"));
         }
         self.expire(now);
-        if self.pending.contains_key(&call.function_call_id) {
+        if self.used_ids.contains(&call.function_call_id) {
             return Err(RpcCallError::new(
                 "DUPLICATE",
-                "functionCallId is already pending",
+                "functionCallId has already been used by this processor",
+            ));
+        }
+        if call.function_call_id.is_empty()
+            || call.function_call_id.len() > 256
+            || call.function_call_id.starts_with("a2ui-eval:")
+        {
+            return Err(RpcCallError::new(
+                "INVALID_FUNCTION_CALL",
+                "RPC ID must be 1..256 bytes and must not use the reserved a2ui-eval: prefix",
+            ));
+        }
+        if self.used_ids.len() >= 65_536 || self.pending.len() + self.results.len() >= 4096 {
+            return Err(RpcCallError::new(
+                "CAPACITY",
+                "RPC identity or pending/result capacity reached",
             ));
         }
         let deadline = timeout
@@ -63,6 +86,7 @@ impl RpcPendingState {
                 })
             })
             .transpose()?;
+        self.used_ids.insert(call.function_call_id.clone());
         self.pending.insert(
             call.function_call_id.clone(),
             PendingCall {
@@ -130,6 +154,11 @@ impl MessageProcessor {
     /// Begin an explicit renderer-to-agent call. Deadlines use a monotonic clock;
     /// the host must call `expire_agent_calls` from its timer/event loop. Evaluator
     /// calls are not tracked here and remain controlled by their subscriptions.
+    /// IDs must be unique for this processor's lifetime, even across reset, and
+    /// must not use the reserved `a2ui-eval:` namespace. IDs are limited to 256 bytes;
+    /// the manager retains at most 65,536 identities and 4,096 pending/undrained
+    /// results. Drain results regularly; use a new processor and transport session
+    /// after exhausting lifetime identities rather than reusing IDs.
     pub fn begin_agent_call(
         &mut self,
         call: CallAgentFunction,
@@ -176,7 +205,7 @@ impl MessageProcessor {
         self.prune_settled_agent_calls();
     }
     /// Cancel explicit calls and permanently close this explicit RPC manager.
-    /// A subsequent processor `reset` creates a fresh manager. Reactive evaluator
+    /// A subsequent processor `reset` reopens the manager but retains used IDs. Reactive evaluator
     /// subscriptions are separate and are not disposed by this method.
     pub fn dispose_agent_calls(&mut self) {
         self.rpc_pending.dispose();
@@ -195,5 +224,25 @@ impl MessageProcessor {
                 }
                 _ => true,
             });
+    }
+}
+
+#[cfg(test)]
+mod identity_limits {
+    use super::*;
+    #[test]
+    fn exhausted_identity_budget_fails_closed_even_after_reset() {
+        let mut state = RpcPendingState::default();
+        state.used_ids.extend((0..65_536).map(|i| i.to_string()));
+        state.reset();
+        let call: CallAgentFunction = serde_json::from_value(serde_json::json!({
+            "functionCallId":"fresh", "surfaceId":"s", "callFunction":{"@call":"remote","args":{}}
+        }))
+        .unwrap();
+        assert_eq!(
+            state.begin(&call, None, Instant::now()).unwrap_err().code,
+            "CAPACITY"
+        );
+        assert!(state.pending.is_empty());
     }
 }
