@@ -263,3 +263,33 @@ fn authorized_legacy_rpc_still_returns_a_legacy_response() {
     let message = serde_json::to_value(proc.drain_outgoing().pop().unwrap()).unwrap();
     assert_eq!(message["functionResponse"]["value"], 42);
 }
+
+#[test]
+fn legacy_event_context_paths_bind_in_template_scope_only_for_draft_messages() {
+    use a2ui_base::model::data_model::DataModel;
+    let data = DataModel::from_value(json!({"rows":[{"name":"first"},{"name":"second"}]}));
+    let functions = HashMap::new();
+    let root = DataContext::new(&data, &functions);
+    let context = root.nested("rows/1");
+    for payload in ["createSurface", "updateComponents"] {
+        for version in ["v1.0", "1.0"] {
+            let raw = json!({"version":version, payload:{"surfaceId":"s","components":[{
+                "id":"button","component":"Button","action":{"event":{"name":"choose",
+                    "context":{"name":{"path":"name"},"nested":[{"path":"name"}]}
+                }}
+            }]}});
+            let parsed = MessageProcessor::parse_message(&raw.to_string()).unwrap();
+            let normalized = serde_json::to_value(parsed).unwrap();
+            let values = &normalized[payload]["components"][0]["action"]["event"]["context"];
+            let resolved = context.resolve_dynamic_json(values).unwrap();
+            if version == "v1.0" {
+                assert_eq!(resolved, json!({"name":"second","nested":["second"]}));
+            } else {
+                assert_eq!(
+                    resolved,
+                    json!({"name":{"path":"name"},"nested":[{"path":"name"}]})
+                );
+            }
+        }
+    }
+}

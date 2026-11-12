@@ -80,6 +80,19 @@ impl MessageProcessor {
                 "/callFunction",
             ] {
                 if let Some(value) = raw.pointer_mut(pointer) {
+                    // Event context values were dynamic in the draft too. Scope
+                    // conversion to component actions, never arbitrary data maps.
+                    if let Some(components) = value.as_array_mut() {
+                        for component in components {
+                            if let Some(context) = component.pointer_mut("/action/event/context") {
+                                if let Some(entries) = context.as_object_mut() {
+                                    for entry in entries.values_mut() {
+                                        Self::normalize_draft_functions(entry, true);
+                                    }
+                                }
+                            }
+                        }
+                    }
                     Self::normalize_draft_functions(value, false);
                 }
             }
