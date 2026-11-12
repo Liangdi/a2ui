@@ -8,6 +8,7 @@ Audit baseline: [`a2ui-project/a2ui` at `eb1fd7f0f8e9ff78d29ab6da7e3169bc1edb0f4
 - Current role-based RPC: `callRendererFunction`, `rendererFunctionResponse`, `callAgentFunction`, and `agentFunctionResponse`. Hosts drain outgoing messages for transport, and drain agent function responses for application handling.
 - Remote renderer calls select an explicit registered catalog and the named surface's model. Surface-independent calls use an empty model, never an arbitrary existing surface. The top-level target must explicitly opt in to agent callers. Current nested arguments are renderer-local expressions: renderer-only native functions are allowed, agent-only functions are rejected, and no remote fallback or cached agent result is used. Ordinary wire processing has no user activation; a trusted host may explicitly invoke the separate gesture entry point. Return values are checked against the native declaration.
 - Exactly-one result/error RPC responses, including explicit JSON null results.
+- Host-driven outgoing RPC lifecycle: optional deadlines, deterministic expiry, surface cancellation, disposal, duplicate/late-reply rejection and explicit transport availability. Hosts advance deadlines and drain completion queues; this does not add network retries or remote cancellation.
 - `@path` and `@call` dynamic directives; recursive arrays, literal objects and null; literal `path`/`call` dictionaries; doubled `@@` literal-key escaping. Fallible evaluation reports malformed directives and unavailable catalog overrides.
 - Optional default surface catalog and preserved surface metadata; `@catalogId`, `@metadata`, `@checks` and `@accessibility` component accessors.
 - Required `updateDataModel.value` on current messages, preserving explicit null deletion through deserialization and serialization.
@@ -30,6 +31,18 @@ also has 160 checked-in reference vectors and was compared with the upstream
 Python reference across 9,810 cases without a mismatch. These are exact suite
 claims, not a claim that every upstream conformance suite has run.
 
+Additional pinned corpus results, with named exclusions checked in under
+`crates/core/tests/conformance`:
+
+- Function routing: **41/43 pass**, with two exclusions (legacy v0.9 and non-JSON values).
+- Catalog definitions: **43/73 pass**, with 30 exclusions covering legacy APIs,
+  native SDK built-in equivalence/serialization and canonical flattened schemas.
+- RPC functions: **28/33 pass**, with five UI binding/check/action exclusions.
+  Passing cases cover incoming calls, caller/activation boundaries, reply
+  correlation, timeout, cancellation, disposal and late replies. The excluded
+  cases require the official mounted resolver semantics, structured rule results,
+  action completion values or correlated surface errors not exposed by this host API.
+
 `CurrentSchemaValidator::new(catalog_json)` compiles the pinned released incoming
 and outgoing schemas against a locally supplied negotiated catalog. Use
 `parse_incoming` to validate the original wire value before typed parsing.
@@ -44,6 +57,13 @@ surface default/explicit override, while template parts stay in the selected
 function's catalog. Schema-only functions retain argument schemas, defaults,
 caller restrictions, activation requirements and declared return types.
 
+The additive [CatalogDefinition](catalog-definition.md) loads and validates
+authored current catalogs, preserves authored round-trips and supports derivation,
+Unicode XID identifiers, local references and offline common-type bundling. It is
+separate from the native `Catalog` registry: loading schemas does not create native
+functions or custom component renderers. Its self-contained resource document is
+not the SDK's canonical flattened validation schema.
+
 The additive [resumable evaluator](resumable-evaluation.md) preserves the existing
 synchronous API while exposing pending values explicitly. It provides shared
 reactive calls, isolated imperative invocations, response resumption, cancellation,
@@ -53,22 +73,25 @@ as completion.
 
 ## Remaining gaps (not a full conformance claim)
 
-- The complete official suite has not been implemented or executed. Coverage and
-  named exclusions for the function-routing corpus are checked in under
-  `crates/core/tests/conformance`; broader schema-generation, scaling, catalog
-  derivation, RPC timeout and native-adapter suites remain outstanding.
-- Automatic async property/check subscription and native UI projection require
-  backend integration. The core evaluator is not proof of every renderer's
-  behavior. See its prototype boundaries for transport and lifecycle details.
+- The complete official suite has not been implemented or executed. The exact
+  catalog, routing and RPC exclusions above remain open; broader schema-generation,
+  scaling and native-adapter conformance suites remain outstanding.
+- Backend integration is separate from core evaluation. The dependent GPUI Kit
+  adapter now subscribes to supported scalar properties and checks automatically,
+  with loading/error states and disabled buttons on failed checks. Nested dynamic
+  option/tab-label structures and full property schemas remain incomplete. These
+  backend tests do not satisfy the five excluded official mounted-UI RPC cases.
 - Mixed-catalog custom components need host-native registrations. GPUI Kit rejects
   unsupported catalog/name pairs instead of impersonating a same-named basic
   component. Legacy backends and bundled draft samples are not all migrated.
-- Inline catalog metadata extraction is not a complete catalog-definition/UAX #31
-  implementation. Strict wire validation is available separately with a complete
-  local catalog; runtime functions still require native implementations or an
-  authorized agent transport.
-- Accessibility metadata is parsed, but native screen-reader semantics, media
-  decoding and platform-specific gesture behavior are not conformance-verified.
+- Catalog definition coverage does not establish full native SDK equivalence,
+  legacy catalog compatibility or canonical flattened-schema generation. Runtime
+  functions still require native implementations or an authorized agent transport.
+- The dependent GPUI Kit native smoke test verified a textbox label, button name
+  and description, and Submit changing from disabled to enabled after entering
+  `Ada`. Full assistive-technology semantics remain unverified; input descriptions,
+  choice-group semantics, media playback and platform-specific gesture behavior
+  remain gaps. Other backends do not inherit these native verification results.
 
 These limits remain explicit draft-PR review items.
 
