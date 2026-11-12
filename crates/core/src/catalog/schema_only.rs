@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use super::function_api::{FunctionImplementation, ReturnType};
+use super::function_api::{AllowedCallers, FunctionImplementation, ReturnType};
 use crate::error::A2uiError;
 use crate::model::data_context::DataContext;
 
@@ -20,6 +20,9 @@ use crate::model::data_context::DataContext;
 pub struct SchemaOnlyFunction {
     name: &'static str,
     return_type: ReturnType,
+    callers: AllowedCallers,
+    user_activation: bool,
+    args_validator: Option<jsonschema::Validator>,
 }
 
 impl SchemaOnlyFunction {
@@ -38,7 +41,25 @@ impl SchemaOnlyFunction {
         Self {
             name: leaked,
             return_type,
+            callers: AllowedCallers::RendererOnly,
+            user_activation: false,
+            args_validator: None,
         }
+    }
+    /// Retain declared caller boundaries and compile a local-only argument schema.
+    /// External schema references are disabled; inline declarations grant no native code.
+    pub fn with_policy(
+        mut self,
+        args: serde_json::Value,
+        callers: AllowedCallers,
+        user_activation: bool,
+    ) -> Result<Self, A2uiError> {
+        self.args_validator = Some(jsonschema::validator_for(&args).map_err(|error| {
+            A2uiError::Validation(format!("invalid function args schema: {error}"))
+        })?);
+        self.callers = callers;
+        self.user_activation = user_activation;
+        Ok(self)
     }
 }
 
@@ -49,6 +70,28 @@ impl FunctionImplementation for SchemaOnlyFunction {
 
     fn return_type(&self) -> ReturnType {
         self.return_type
+    }
+
+    fn is_native(&self) -> bool {
+        false
+    }
+
+    fn allowed_callers(&self) -> AllowedCallers {
+        self.callers
+    }
+
+    fn requires_user_activation(&self) -> bool {
+        self.user_activation
+    }
+
+    fn validate_args(&self, args: &HashMap<String, serde_json::Value>) -> Result<(), A2uiError> {
+        if let Some(validator) = &self.args_validator {
+            let value = serde_json::to_value(args)?;
+            validator.validate(&value).map_err(|error| {
+                A2uiError::Validation(format!("invalid function arguments: {error}"))
+            })?;
+        }
+        Ok(())
     }
 
     fn execute(

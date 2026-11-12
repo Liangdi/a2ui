@@ -35,6 +35,11 @@ pub trait FunctionImplementation: Send + Sync + 'static {
     /// The return type of this function.
     fn return_type(&self) -> ReturnType;
 
+    /// Version-dependent return shape without changing existing implementations.
+    fn return_type_for_protocol(&self, _current: bool) -> ReturnType {
+        self.return_type()
+    }
+
     /// Remote calls are denied unless explicitly enabled by the implementation.
     fn allowed_callers(&self) -> AllowedCallers {
         AllowedCallers::RendererOnly
@@ -44,6 +49,16 @@ pub trait FunctionImplementation: Send + Sync + 'static {
     /// No activation-capable context is currently exposed by the core.
     fn requires_user_activation(&self) -> bool {
         false
+    }
+
+    /// Whether execution is available in this renderer (schema-only declarations return false).
+    fn is_native(&self) -> bool {
+        true
+    }
+
+    /// Validate already-resolved arguments before local execution or remote routing.
+    fn validate_args(&self, _args: &HashMap<String, serde_json::Value>) -> Result<(), A2uiError> {
+        Ok(())
     }
 
     /// Execute the function with resolved arguments.

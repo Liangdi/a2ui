@@ -16,6 +16,7 @@ use crate::protocol::common_types::{
 /// - Absolute paths (starting with `/`)
 /// - Relative paths (no leading `/`, resolved against `base_path`)
 /// - Dynamic value resolution (literals, bindings, function calls)
+#[derive(Clone)]
 pub struct DataContext<'a> {
     data_model: &'a DataModel,
     base_path: String,
@@ -31,6 +32,9 @@ pub struct DataContext<'a> {
     template_index: Option<usize>,
     catalog_id: Option<&'a str>,
     agent_caller: bool,
+    catalogs: Option<&'a HashMap<String, crate::catalog::Catalog>>,
+    catalog_versions: Option<&'a HashMap<String, String>>,
+    surface_catalog_id: Option<&'a str>,
     current_protocol: bool,
     user_activated: bool,
 }
@@ -51,6 +55,9 @@ impl<'a> DataContext<'a> {
             template_index: None,
             catalog_id: None,
             agent_caller: false,
+            catalogs: None,
+            catalog_versions: None,
+            surface_catalog_id: None,
             current_protocol: false,
             user_activated: false,
         }
@@ -74,6 +81,9 @@ impl<'a> DataContext<'a> {
             template_index: None,
             catalog_id: self.catalog_id,
             agent_caller: self.agent_caller,
+            catalogs: self.catalogs,
+            catalog_versions: self.catalog_versions,
+            surface_catalog_id: self.surface_catalog_id,
             current_protocol: self.current_protocol,
             user_activated: self.user_activated,
         }
@@ -95,6 +105,26 @@ impl<'a> DataContext<'a> {
     /// Whether this context uses the released A2UI protocol.
     pub fn is_current_protocol(&self) -> bool {
         self.current_protocol
+    }
+
+    /// Enable surface-aware catalog lookup without arbitrary name fallback.
+    /// Each ordinary nested call independently uses the surface default. Template
+    /// calls made inside a native function retain that function's selected map.
+    pub fn with_catalogs(
+        mut self,
+        catalogs: &'a HashMap<String, crate::catalog::Catalog>,
+        default_catalog: Option<&'a str>,
+    ) -> Self {
+        self.catalogs = Some(catalogs);
+        self.surface_catalog_id = default_catalog.filter(|id| !id.is_empty());
+        self
+    }
+
+    /// Declared catalog protocol versions, used to exclude incompatible catalogs.
+    /// Omitted versions retain compatibility with existing native registrations.
+    pub fn with_catalog_versions(mut self, versions: &'a HashMap<String, String>) -> Self {
+        self.catalog_versions = Some(versions);
+        self
     }
 
     /// Identify the catalog whose functions are available to this context.
@@ -125,7 +155,12 @@ impl<'a> DataContext<'a> {
             };
         if forbidden {
             return Err(crate::error::A2uiError::Validation(format!(
-                "caller is not allowed to execute function: {}",
+                "function cannot be called by {}: {}",
+                if self.agent_caller {
+                    "agent"
+                } else {
+                    "renderer"
+                },
                 function.name()
             )));
         }
@@ -348,6 +383,26 @@ impl<'a> DataContext<'a> {
         func.execute(&resolved_args, self).ok()
     }
 
+    /// Strict template invocation in the currently executing function's catalog.
+    /// Template syntax cannot override catalog identity.
+    pub fn try_call_function_by_name(
+        &self,
+        name: &str,
+        args: &HashMap<String, Value>,
+    ) -> Result<Value, crate::error::A2uiError> {
+        use crate::error::A2uiError;
+        if name == "@index" {
+            return self.resolve_index(args).ok_or_else(|| A2uiError::Validation("@index function can only be evaluated inside a collection template iteration scope.".into()));
+        }
+        let function = self
+            .functions
+            .get(name)
+            .ok_or_else(|| A2uiError::InvalidFunctionCall(format!("unknown function: {name}")))?;
+        self.check_caller(function.as_ref())?;
+        function.validate_args(args)?;
+        function.execute(args, self)
+    }
+
     /// Execute a function call, retaining the historical null-on-error display API.
     fn execute_function(&self, fc: &FunctionCall) -> Value {
         self.try_execute_function(fc).unwrap_or(Value::Null)
@@ -358,19 +413,44 @@ impl<'a> DataContext<'a> {
         fc: &FunctionCall,
     ) -> Result<Value, crate::error::A2uiError> {
         use crate::error::A2uiError;
-        if let Some(catalog) = fc.catalog_id.as_deref()
+        if fc.call == "@index" {
+            return self.resolve_index(&fc.args).ok_or_else(|| A2uiError::Validation(
+                "@index function can only be evaluated inside a collection template iteration scope.".into()));
+        }
+        let mut execution_context = self.clone();
+        if let Some(catalogs) = self.catalogs {
+            let selected = if self.current_protocol {
+                fc.catalog_id.as_deref().or(self.surface_catalog_id)
+            } else {
+                self.surface_catalog_id
+            };
+            let selected = selected
+                .ok_or_else(|| A2uiError::Validation("surface has no default catalogId".into()))?;
+            let (id, catalog) = catalogs
+                .get_key_value(selected)
+                .ok_or_else(|| A2uiError::Validation(format!("Catalog not found: {selected}")))?;
+            if let Some(version) = self.catalog_versions.and_then(|versions| versions.get(id)) {
+                let compatible = if self.current_protocol {
+                    version == "1.0"
+                } else {
+                    version != "1.0"
+                };
+                if !compatible {
+                    return Err(A2uiError::Validation(format!(
+                        "Catalog not found: {selected} (incompatible protocol version)"
+                    )));
+                }
+            }
+            execution_context.functions = &catalog.functions;
+            execution_context.catalog_id = Some(id);
+        } else if let Some(catalog) = fc.catalog_id.as_deref()
             && self.catalog_id != Some(catalog)
         {
             return Err(A2uiError::Validation(format!(
                 "function catalog is unavailable in this context: {catalog}"
             )));
         }
-        if fc.call == "@index" {
-            return self
-                .resolve_index(&fc.args)
-                .ok_or_else(|| A2uiError::Validation("@index requires a template context".into()));
-        }
-        let func = self
+        let func = execution_context
             .functions
             .get(&fc.call)
             .ok_or_else(|| A2uiError::Validation(format!("unknown function: {}", fc.call)))?;
@@ -379,7 +459,7 @@ impl<'a> DataContext<'a> {
         for (key, value) in &fc.args {
             args.insert(key.clone(), self.resolve_dynamic_json(value)?);
         }
-        func.execute(&args, self)
+        func.execute(&args, &execution_context)
     }
 
     /// Evaluate a v1.0 dynamic JSON value recursively without swallowing errors.

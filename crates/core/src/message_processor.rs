@@ -3,6 +3,8 @@
 use std::collections::HashMap;
 
 mod renderer_actions;
+mod renderer_call;
+pub use renderer_call::RendererCall;
 
 use crate::catalog::Catalog;
 use crate::error::{A2uiError, Result};
@@ -26,6 +28,7 @@ pub struct MessageProcessor {
     /// Registered catalogs keyed by catalog ID.
     #[allow(dead_code)]
     catalogs: HashMap<String, Catalog>,
+    catalog_versions: HashMap<String, String>,
     /// Outgoing client-to-server messages produced during processing.
     outgoing_messages: Vec<ClientMessage>,
     agent_function_responses: Vec<FunctionResponse>,
@@ -46,6 +49,7 @@ impl MessageProcessor {
         Self {
             model: SurfaceGroupModel::new(),
             catalogs: catalog_map,
+            catalog_versions: HashMap::new(),
             outgoing_messages: Vec::new(),
             agent_function_responses: Vec::new(),
             validation: None,
@@ -343,13 +347,53 @@ impl MessageProcessor {
         let mut catalog = Catalog::new(parsed.catalog_id.clone());
         for func in &parsed.functions {
             let return_type = crate::catalog::schema_only::parse_return_type(&func.return_type);
+            let declaration = &json["functions"][&func.name];
+            use crate::catalog::function_api::AllowedCallers;
+            let callers = match declaration
+                .get("allowedCallers")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("rendererOnly")
+            {
+                "rendererOnly" => AllowedCallers::RendererOnly,
+                "agentOnly" => AllowedCallers::AgentOnly,
+                "rendererOrAgent" => AllowedCallers::RendererOrAgent,
+                other => {
+                    return Err(A2uiError::Validation(format!(
+                        "unknown allowedCallers: {other}"
+                    )));
+                }
+            };
+            let activation = match declaration.get("requiresUserActivation") {
+                None => false,
+                Some(value) => value.as_bool().ok_or_else(|| {
+                    A2uiError::Validation("requiresUserActivation must be boolean".into())
+                })?,
+            };
+            let mut args_schema = declaration
+                .pointer("/properties/args")
+                .or_else(|| declaration.get("args"))
+                .cloned()
+                .unwrap_or(serde_json::json!({"type":"object"}));
+            if let (Some(defs), Some(args)) = (json.get("$defs"), args_schema.as_object_mut()) {
+                args.entry("$defs").or_insert_with(|| defs.clone());
+            }
             let schema_func = crate::catalog::schema_only::SchemaOnlyFunction::new(
                 func.name.clone(),
                 return_type,
-            );
+            )
+            .with_policy(args_schema, callers, activation)?;
             catalog = catalog.with_function(Box::new(schema_func));
         }
 
+        if let Some(version) = json
+            .get("protocolVersion")
+            .and_then(serde_json::Value::as_str)
+        {
+            self.catalog_versions.insert(
+                parsed.catalog_id.clone(),
+                version.trim_start_matches('v').into(),
+            );
+        }
         self.catalogs.insert(parsed.catalog_id, catalog);
         Ok(())
     }
@@ -471,18 +515,11 @@ impl MessageProcessor {
         let path = data.path.as_deref().unwrap_or("/");
         let value = data.value.clone().unwrap_or(serde_json::Value::Null);
 
-        if path == "/" || path.is_empty() {
-            if value.is_null() {
-                surface
-                    .data_model
-                    .borrow_mut()
-                    .replace_all(serde_json::json!({}));
-            } else {
-                surface.data_model.borrow_mut().replace_all(value);
-            }
-        } else {
-            surface.data_model.borrow_mut().set(path, value);
-        }
+        surface
+            .data_model
+            .borrow_mut()
+            .try_set(path, value)
+            .map_err(A2uiError::InvalidPointer)?;
         Ok(())
     }
 
@@ -561,7 +598,7 @@ impl MessageProcessor {
             })
             .collect::<Result<_>>()?;
         let value = function.execute(&args, &context)?;
-        let valid = match function.return_type() {
+        let valid = match function.return_type_for_protocol(true) {
             ReturnType::String => value.is_string(),
             ReturnType::Number => value.is_number(),
             ReturnType::Boolean => value.is_boolean(),
