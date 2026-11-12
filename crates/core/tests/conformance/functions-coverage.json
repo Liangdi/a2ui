@@ -1,0 +1,8 @@
+{
+  "source": "a2ui-project/a2ui",
+  "revision": "eb1fd7f0f8e9ff78d29ab6da7e3169bc1edb0f41",
+  "suite": "conformance/core/functions.yaml",
+  "known_divergences": [],
+  "unsupported": [],
+  "executed_cases": 116
+}

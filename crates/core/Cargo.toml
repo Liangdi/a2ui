@@ -9,11 +9,17 @@ description = "Framework-agnostic base for A2UI (Agent to UI): protocol, models,
 
 [dependencies]
 serde = { workspace = true }
-serde_json = { workspace = true }
+serde_json = { workspace = true, features = ["preserve_order"] }
 thiserror = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 regex = { workspace = true }
+fancy-regex = "0.20.2"
+unicode-ident = "1.0.24"
+jsonschema = { version = "0.61.1", default-features = false }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+serde_yaml_ng = "0.10.0"

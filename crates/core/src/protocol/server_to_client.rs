@@ -22,6 +22,8 @@ pub struct A2uiMessage {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum A2uiPayload {
+    CallRendererFunction(super::rpc::CallRendererFunctionPayload),
+    AgentFunctionResponse(super::rpc::AgentFunctionResponsePayload),
     CreateSurface(CreateSurfacePayload),
     UpdateComponents(UpdateComponentsPayload),
     UpdateDataModel(UpdateDataModelPayload),
@@ -43,7 +45,10 @@ pub struct CreateSurfacePayload {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSurfaceData {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
     pub surface_id: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub catalog_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub surface_properties: Option<serde_json::Value>,
@@ -88,7 +93,11 @@ pub struct UpdateDataModelData {
     pub surface_id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "present_json_value",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub value: Option<serde_json::Value>,
 }
 
@@ -145,4 +154,11 @@ pub struct ActionResponseData {
 pub struct ActionResponseError {
     pub code: String,
     pub message: String,
+}
+
+// Preserve explicit null (deletion) separately from an absent field.
+fn present_json_value<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<serde_json::Value>, D::Error> {
+    serde_json::Value::deserialize(deserializer).map(Some)
 }

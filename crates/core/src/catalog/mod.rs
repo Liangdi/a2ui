@@ -12,3 +12,13 @@ pub use component_api::ComponentApi;
 pub use function_api::FunctionImplementation;
 pub use registry::Catalog;
 pub use schema_only::SchemaOnlyFunction;
+
+pub(crate) mod regex_subset;
+
+mod template;
+
+pub mod definition;
+pub use definition::CatalogDefinition;
+
+pub mod schema_backed;
+pub use schema_backed::SchemaBackedCatalog;

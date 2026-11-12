@@ -18,10 +18,14 @@ pub struct PendingAction {
 pub struct SurfaceModel {
     /// Unique surface identifier.
     pub id: String,
+    /// Whether this surface was created with released A2UI 1.0.
+    pub current_protocol: bool,
     /// Catalog URI this surface uses.
     pub catalog_id: String,
     /// Optional surface properties (e.g. agentDisplayName).
     pub surface_properties: Option<serde_json::Value>,
+    /// Current-protocol surface metadata (extensions).
+    pub metadata: Option<serde_json::Value>,
     /// Whether to send the full data model with actions.
     pub send_data_model: bool,
     /// The data model for this surface.
@@ -42,8 +46,10 @@ impl SurfaceModel {
     ) -> Self {
         Self {
             id,
+            current_protocol: false,
             catalog_id,
             surface_properties,
+            metadata: None,
             send_data_model,
             data_model: RefCell::new(DataModel::new()),
             components: RefCell::new(SurfaceComponentsModel::new()),

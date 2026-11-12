@@ -1,0 +1,15 @@
+{
+  "source": "a2ui-project/a2ui",
+  "revision": "eb1fd7f0f8e9ff78d29ab6da7e3169bc1edb0f41",
+  "suite": "conformance/core/agent_function_routing.yaml",
+  "unsupported": [
+    {
+      "name": "test_agent_routing_pre_v1_surface_is_not_routed",
+      "reason": "legacy v0.9 surface API not implemented"
+    },
+    {
+      "name": "test_agent_routing_non_json_argument_fails_locally",
+      "reason": "JSON-only public API cannot represent nonfinite values"
+    }
+  ]
+}

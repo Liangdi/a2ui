@@ -17,7 +17,7 @@ use crate::model::data_context::DataContext;
 // Compiled once and reused for every `email` call (Regex::new on every
 // invocation was the hot-path cost this static removes).
 static EMAIL_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^[^\s@]+@[^\s@]+\.[^\s@]+$").unwrap());
+    LazyLock::new(|| Regex::new(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$").unwrap());
 
 // ---------------------------------------------------------------------------
 // Helper
@@ -43,7 +43,18 @@ fn opt_f64(args: &HashMap<String, Value>, key: &str) -> Option<f64> {
 
 /// Extract an optional bool argument.
 fn opt_bool(args: &HashMap<String, Value>, key: &str) -> Option<bool> {
-    args.get(key).and_then(|v| v.as_bool())
+    args.get(key)
+        .map(crate::model::data_context::value_to_boolean)
+}
+
+/// Released 1.0 validators carry validity as an object; draft callers keep
+/// boolean results. The context propagates this choice through nested calls.
+fn validation_result(valid: bool, context: &DataContext) -> Value {
+    if context.is_current_protocol() {
+        serde_json::json!({"valid": valid})
+    } else {
+        Value::Bool(valid)
+    }
 }
 
 // ===========================================================================
@@ -63,10 +74,18 @@ impl FunctionImplementation for RequiredFunction {
         ReturnType::Boolean
     }
 
+    fn return_type_for_protocol(&self, current: bool) -> ReturnType {
+        if current {
+            ReturnType::Object
+        } else {
+            ReturnType::Boolean
+        }
+    }
+
     fn execute(
         &self,
         args: &HashMap<String, Value>,
-        _context: &DataContext,
+        context: &DataContext,
     ) -> Result<Value, A2uiError> {
         let val = args.get("value").cloned().unwrap_or(Value::Null);
         let present = match &val {
@@ -75,7 +94,7 @@ impl FunctionImplementation for RequiredFunction {
             Value::Array(arr) => !arr.is_empty(),
             _ => true,
         };
-        Ok(Value::Bool(present))
+        Ok(validation_result(present, context))
     }
 }
 
@@ -95,19 +114,26 @@ impl FunctionImplementation for RegexFunction {
         ReturnType::Boolean
     }
 
+    fn return_type_for_protocol(&self, current: bool) -> ReturnType {
+        if current {
+            ReturnType::Object
+        } else {
+            ReturnType::Boolean
+        }
+    }
+
     fn execute(
         &self,
         args: &HashMap<String, Value>,
-        _context: &DataContext,
+        context: &DataContext,
     ) -> Result<Value, A2uiError> {
         let value = require_str(args, "value", "regex")?;
         let pattern = require_str(args, "pattern", "regex")?;
 
-        let re = Regex::new(pattern).map_err(|e| {
-            A2uiError::InvalidFunctionCall(format!("regex: invalid pattern '{pattern}': {e}"))
-        })?;
-
-        Ok(Value::Bool(re.is_match(value)))
+        let matched = super::regex_subset::regex_test(pattern, value)
+            .map_err(A2uiError::InvalidFunctionCall)?
+            .unwrap_or(false);
+        Ok(validation_result(matched, context))
     }
 }
 
@@ -127,25 +153,41 @@ impl FunctionImplementation for LengthFunction {
         ReturnType::Boolean
     }
 
+    fn return_type_for_protocol(&self, current: bool) -> ReturnType {
+        if current {
+            ReturnType::Object
+        } else {
+            ReturnType::Boolean
+        }
+    }
+
     fn execute(
         &self,
         args: &HashMap<String, Value>,
-        _context: &DataContext,
+        context: &DataContext,
     ) -> Result<Value, A2uiError> {
-        let value = require_str(args, "value", "length")?;
-        let len = value.chars().count() as f64;
+        let len = match args.get("value").unwrap_or(&Value::Null) {
+            Value::String(value) => value.chars().count(),
+            Value::Array(value) => value.len(),
+            Value::Null => 0,
+            _ => {
+                return Err(A2uiError::InvalidFunctionCall(
+                    "length: expected string, array or null".into(),
+                ));
+            }
+        } as f64;
 
         if let Some(min) = opt_f64(args, "min")
             && len < min
         {
-            return Ok(Value::Bool(false));
+            return Ok(validation_result(false, context));
         }
         if let Some(max) = opt_f64(args, "max")
             && len > max
         {
-            return Ok(Value::Bool(false));
+            return Ok(validation_result(false, context));
         }
-        Ok(Value::Bool(true))
+        Ok(validation_result(true, context))
     }
 }
 
@@ -166,10 +208,18 @@ impl FunctionImplementation for NumericFunction {
         ReturnType::Boolean
     }
 
+    fn return_type_for_protocol(&self, current: bool) -> ReturnType {
+        if current {
+            ReturnType::Object
+        } else {
+            ReturnType::Boolean
+        }
+    }
+
     fn execute(
         &self,
         args: &HashMap<String, Value>,
-        _context: &DataContext,
+        context: &DataContext,
     ) -> Result<Value, A2uiError> {
         let val = args.get("value").cloned().unwrap_or(Value::Null);
 
@@ -180,21 +230,21 @@ impl FunctionImplementation for NumericFunction {
             _ => None,
         };
 
-        let Some(n) = num else {
-            return Ok(Value::Bool(false));
+        let Some(n) = num.filter(|n| n.is_finite()) else {
+            return Ok(validation_result(false, context));
         };
 
         if let Some(min) = opt_f64(args, "min")
             && n < min
         {
-            return Ok(Value::Bool(false));
+            return Ok(validation_result(false, context));
         }
         if let Some(max) = opt_f64(args, "max")
             && n > max
         {
-            return Ok(Value::Bool(false));
+            return Ok(validation_result(false, context));
         }
-        Ok(Value::Bool(true))
+        Ok(validation_result(true, context))
     }
 }
 
@@ -214,15 +264,23 @@ impl FunctionImplementation for EmailFunction {
         ReturnType::Boolean
     }
 
+    fn return_type_for_protocol(&self, current: bool) -> ReturnType {
+        if current {
+            ReturnType::Object
+        } else {
+            ReturnType::Boolean
+        }
+    }
+
     fn execute(
         &self,
         args: &HashMap<String, Value>,
-        _context: &DataContext,
+        context: &DataContext,
     ) -> Result<Value, A2uiError> {
         let value = require_str(args, "value", "email")?;
 
-        // `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` — backed by the module-level `EMAIL_RE`.
-        Ok(Value::Bool(EMAIL_RE.is_match(value)))
+        // `/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/` — backed by the module-level `EMAIL_RE`.
+        Ok(validation_result(EMAIL_RE.is_match(value), context))
     }
 }
 
@@ -254,7 +312,12 @@ impl FunctionImplementation for AndFunction {
                 A2uiError::InvalidFunctionCall("and: missing or non-array argument 'values'".into())
             })?;
 
-        let all_true = arr.iter().all(|v| v.as_bool().unwrap_or(false));
+        if arr.len() < 2 {
+            return Err(A2uiError::InvalidFunctionCall(
+                "and: at least two values are required".into(),
+            ));
+        }
+        let all_true = arr.iter().all(crate::model::data_context::value_to_boolean);
         Ok(Value::Bool(all_true))
     }
 }
@@ -287,7 +350,12 @@ impl FunctionImplementation for OrFunction {
                 A2uiError::InvalidFunctionCall("or: missing or non-array argument 'values'".into())
             })?;
 
-        let any_true = arr.iter().any(|v| v.as_bool().unwrap_or(false));
+        if arr.len() < 2 {
+            return Err(A2uiError::InvalidFunctionCall(
+                "or: at least two values are required".into(),
+            ));
+        }
+        let any_true = arr.iter().any(crate::model::data_context::value_to_boolean);
         Ok(Value::Bool(any_true))
     }
 }
@@ -313,9 +381,14 @@ impl FunctionImplementation for NotFunction {
         args: &HashMap<String, Value>,
         _context: &DataContext,
     ) -> Result<Value, A2uiError> {
-        let val = args.get("value").and_then(|v| v.as_bool()).ok_or_else(|| {
-            A2uiError::InvalidFunctionCall("not: missing or non-boolean argument 'value'".into())
-        })?;
+        let val = args
+            .get("value")
+            .map(crate::model::data_context::value_to_boolean)
+            .ok_or_else(|| {
+                A2uiError::InvalidFunctionCall(
+                    "not: missing or non-boolean argument 'value'".into(),
+                )
+            })?;
 
         Ok(Value::Bool(!val))
     }
@@ -349,10 +422,26 @@ impl FunctionImplementation for FormatNumberFunction {
         })?;
 
         let grouping = opt_bool(args, "grouping").unwrap_or(true);
-        let decimals = opt_f64(args, "decimals").map(|d| d as usize);
+        let decimals = bounded_decimals(args)?;
 
         let formatted = format_number_impl(val, grouping, decimals);
         Ok(Value::String(formatted))
+    }
+}
+
+/// Allocation safety bound, matching modern Intl maximum fractional precision.
+fn bounded_decimals(args: &HashMap<String, Value>) -> Result<Option<usize>, A2uiError> {
+    match args.get("decimals") {
+        None => Ok(None),
+        Some(value) => value
+            .as_f64()
+            .filter(|n| n.is_finite() && *n >= 0.0 && *n <= 100.0 && n.fract() == 0.0)
+            .map(|n| Some(n as usize))
+            .ok_or_else(|| {
+                A2uiError::InvalidFunctionCall(
+                    "decimals must be an integer between 0 and 100".into(),
+                )
+            }),
     }
 }
 
@@ -362,7 +451,15 @@ fn format_number_impl(val: f64, grouping: bool, decimals: Option<usize>) -> Stri
     let sign = if val < 0.0 { "-" } else { "" };
 
     // Integer and fractional parts.
-    let int_part = abs.trunc() as u64;
+    let int_part = match decimals {
+        Some(d) => format!("{abs:.d$}")
+            .split('.')
+            .next()
+            .unwrap()
+            .parse::<u64>()
+            .unwrap_or(u64::MAX),
+        None => abs.trunc() as u64,
+    };
 
     let int_str = if grouping {
         format_with_grouping(int_part)
@@ -455,10 +552,17 @@ impl FunctionImplementation for FormatCurrencyFunction {
         let currency = require_str(args, "currency", "formatCurrency")?;
 
         let grouping = opt_bool(args, "grouping").unwrap_or(true);
-        let decimals = opt_f64(args, "decimals").map(|d| d as usize);
+        let decimals = bounded_decimals(args)?;
 
         let formatted = format_number_impl(val, grouping, decimals);
-        Ok(Value::String(format!("{currency} {formatted}")))
+        let prefix = match currency {
+            "USD" => "$",
+            "EUR" => "€",
+            "GBP" => "£",
+            "JPY" | "CNY" => "¥",
+            _ => return Ok(Value::String(format!("{currency} {formatted}"))),
+        };
+        Ok(Value::String(format!("{prefix}{formatted}")))
     }
 }
 
@@ -487,19 +591,30 @@ impl FunctionImplementation for FormatDateFunction {
         let fmt = require_str(args, "format", "formatDate")?;
 
         // Parse as ISO 8601. Try with timezone first, then without.
-        let dt = NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S")
+        let offset = chrono::DateTime::parse_from_rfc3339(value);
+        if fmt == "ISO" {
+            return Ok(Value::String(
+                offset
+                    .map(|dt| {
+                        dt.with_timezone(&chrono::Utc)
+                            .to_rfc3339_opts(chrono::SecondsFormat::Millis, true)
+                    })
+                    .unwrap_or_default(),
+            ));
+        }
+        let dt = offset
+            .map(|dt| dt.naive_local())
+            .or_else(|_| NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S"))
             .or_else(|_| NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S%.f"))
             .or_else(|_| NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S"))
             .or_else(|_| {
                 // Try date-only
                 chrono::NaiveDate::parse_from_str(value, "%Y-%m-%d")
                     .map(|d| d.and_hms_opt(0, 0, 0).unwrap())
-            })
-            .map_err(|_| {
-                A2uiError::InvalidFunctionCall(format!(
-                    "formatDate: could not parse datetime '{value}'"
-                ))
-            })?;
+            });
+        let Ok(dt) = dt else {
+            return Ok(Value::String(String::new()));
+        };
 
         let formatted = apply_date_format(&dt, fmt);
         Ok(Value::String(formatted))
@@ -620,8 +735,14 @@ impl FunctionImplementation for FormatStringFunction {
         args: &HashMap<String, Value>,
         context: &DataContext,
     ) -> Result<Value, A2uiError> {
+        // Also protect direct native invocation from the processor/renderer.
+        let _guard = context.enter_function()?;
         let value = require_str(args, "value", "formatString")?;
-        let result = interpolate_string(value, context);
+        let result = if context.is_current_protocol() {
+            super::template::interpolate(value, context)?
+        } else {
+            interpolate_string(value, context)
+        };
         Ok(Value::String(result))
     }
 }
@@ -902,6 +1023,8 @@ impl FunctionImplementation for PluralizeFunction {
             "zero"
         } else if val == 1.0 {
             "one"
+        } else if val == 2.0 && args.contains_key("two") {
+            "two"
         } else {
             "other"
         };
@@ -934,12 +1057,27 @@ impl FunctionImplementation for OpenUrlFunction {
         ReturnType::Void
     }
 
+    fn requires_user_activation(&self) -> bool {
+        true
+    }
+
     fn execute(
         &self,
-        _args: &HashMap<String, Value>,
+        args: &HashMap<String, Value>,
         _context: &DataContext,
     ) -> Result<Value, A2uiError> {
-        // No-op in TUI environment.
+        // Validate even in headless environments; a future renderer must not
+        // inherit permissive handling of executable URL schemes.
+        let url = require_str(args, "url", "openUrl")?;
+        let scheme = url
+            .split_once(':')
+            .map(|(scheme, _)| scheme.to_ascii_lowercase());
+        if !matches!(scheme.as_deref(), Some("https" | "http" | "mailto" | "tel")) {
+            return Err(A2uiError::InvalidFunctionCall(
+                "openUrl: disallowed URL scheme".into(),
+            ));
+        }
+        // No external application is launched by the framework-agnostic core.
         Ok(Value::Null)
     }
 }
@@ -1266,7 +1404,7 @@ mod tests {
         let mut args = HashMap::new();
         args.insert("value".into(), json!(1234.56));
         args.insert("currency".into(), json!("USD"));
-        assert_eq!(f.execute(&args, &ctx).unwrap(), json!("USD 1,234.56"));
+        assert_eq!(f.execute(&args, &ctx).unwrap(), json!("$1,234.56"));
     }
 
     // ---- formatDate ----
@@ -1559,7 +1697,7 @@ mod tests {
         let ctx = empty_context();
         let f = OpenUrlFunction;
 
-        let args = HashMap::new();
+        let args = HashMap::from([("url".into(), json!("https://example.com"))]);
         assert_eq!(f.execute(&args, &ctx).unwrap(), Value::Null);
     }
 
