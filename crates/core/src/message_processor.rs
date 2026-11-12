@@ -112,6 +112,13 @@ impl MessageProcessor {
     }
 
     /// Stop a reactive subscription or pending action; late responses are ignored.
+    /// Release a host-owned subscription and its queued updates without a cancellation event.
+    /// Already-sent remote work cannot be recalled; unshared late replies are ignored.
+    pub fn release_evaluation(&mut self, id: &str) {
+        self.evaluator.forget(id);
+        self.remove_cancelled_evaluation_calls();
+    }
+
     pub fn cancel_evaluation(&mut self, id: &str) {
         self.evaluator.cancel(id);
         self.remove_cancelled_evaluation_calls();

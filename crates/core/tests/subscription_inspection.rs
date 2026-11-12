@@ -24,3 +24,19 @@ fn reading_subscription_state_does_not_consume_host_updates() {
     assert!(!p.check_status(&check).unwrap().valid);
     assert!(!p.drain_check_updates().is_empty());
 }
+
+#[test]
+fn release_discards_internal_subscription_updates() {
+    let mut p = MessageProcessor::new(vec![]);
+    p.process_message(
+        MessageProcessor::parse_message(r#"{"version":"1.0","createSurface":{"surfaceId":"s"}}"#)
+            .unwrap(),
+    )
+    .unwrap();
+    let id = p
+        .start_evaluation("s", "", json!(true), EvaluationMode::Reactive)
+        .unwrap();
+    p.release_evaluation(&id);
+    assert!(p.evaluation_status(&id).is_none());
+    assert!(p.drain_evaluation_updates().is_empty());
+}
