@@ -1,4 +1,4 @@
-use a2ui_base::catalog::CatalogDefinition;
+use a2ui_base::catalog::{CatalogDefinition, SchemaBackedCatalog};
 use serde_json::Value;
 #[test]
 fn official_current_catalog_corpus() {
@@ -48,19 +48,9 @@ fn official_current_catalog_corpus() {
         }
         if !matches!(
             action,
-            "from_json" | "round_trip" | "derive" | "validation_schema"
+            "from_json" | "round_trip" | "derive" | "validation_schema" | "to_json"
         ) {
-            skipped.push((
-                name.to_owned(),
-                "native SDK serialization not implemented",
-            ));
-            continue;
-        }
-        if case["expect"]["matchesBuiltinCatalog"] == true {
-            skipped.push((
-                name.to_owned(),
-                "native SDK built-in equivalence not established",
-            ));
+            skipped.push((name.to_owned(), "native SDK serialization not implemented"));
             continue;
         }
         let result = run(&case, raw, &version);
@@ -80,6 +70,9 @@ fn official_current_catalog_corpus() {
         failures.len(),
         skipped.len()
     );
+    for failure in &failures {
+        eprintln!("[FAIL] {failure}");
+    }
     let manifest: Value =
         serde_json::from_str(include_str!("conformance/catalog-coverage.json")).unwrap();
     let actual: Vec<Value> = skipped
@@ -98,6 +91,20 @@ fn official_current_catalog_corpus() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 fn run(case: &Value, raw: Value, version: &str) -> Result<(), String> {
+    if case["action"] == "to_json" {
+        if case["builtinCatalog"] != "basic" {
+            return Err("unsupported native catalog".into());
+        }
+        let expected: Value =
+            serde_json::from_str(include_str!("conformance/catalog-definitions/basic.json"))
+                .unwrap();
+        let native = SchemaBackedCatalog::basic().map_err(|e| e.to_string())?;
+        if native.to_json() != expected {
+            return Err("native metadata differs from published catalog".into());
+        }
+        return Ok(());
+    }
+
     let parsed =
         CatalogDefinition::from_json(raw.clone(), case["catalogId"].as_str(), Some(version))
             .and_then(|catalog| {
@@ -120,6 +127,19 @@ fn run(case: &Value, raw: Value, version: &str) -> Result<(), String> {
         return Ok(());
     }
     let parsed = parsed.map_err(|e| e.to_string())?;
+    if case["expect"]["matchesBuiltinCatalog"] == true {
+        let native = SchemaBackedCatalog::basic().map_err(|e| e.to_string())?;
+        if parsed.to_json() != native.to_json()
+            || parsed.validation_schema().map_err(|e| e.to_string())?
+                != native
+                    .definition()
+                    .validation_schema()
+                    .map_err(|e| e.to_string())?
+        {
+            return Err("loaded definition differs from native registration schema".into());
+        }
+    }
+
     if case["action"] == "validation_schema" {
         let file = case["expectFile"]
             .as_str()
@@ -182,6 +202,7 @@ fn run(case: &Value, raw: Value, version: &str) -> Result<(), String> {
     if let Some(expect) = case["expect"].as_object() {
         for (key, value) in expect {
             match key.as_str() {
+                "matchesBuiltinCatalog" => {}
                 "catalogId" => {
                     if value != parsed.catalog_id() {
                         return Err("catalog id mismatch".into());
