@@ -469,18 +469,11 @@ impl MessageProcessor {
         let path = data.path.as_deref().unwrap_or("/");
         let value = data.value.clone().unwrap_or(serde_json::Value::Null);
 
-        if path == "/" || path.is_empty() {
-            if value.is_null() {
-                surface
-                    .data_model
-                    .borrow_mut()
-                    .replace_all(serde_json::json!({}));
-            } else {
-                surface.data_model.borrow_mut().replace_all(value);
-            }
-        } else {
-            surface.data_model.borrow_mut().set(path, value);
-        }
+        surface
+            .data_model
+            .borrow_mut()
+            .try_set(path, value)
+            .map_err(A2uiError::InvalidPointer)?;
         Ok(())
     }
 

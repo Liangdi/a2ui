@@ -17,3 +17,6 @@ regex = { workspace = true }
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+serde_yaml_ng = "0.10.0"
