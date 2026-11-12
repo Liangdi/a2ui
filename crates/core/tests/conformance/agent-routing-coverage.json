@@ -1,0 +1,67 @@
+{
+  "source": "a2ui-project/a2ui",
+  "revision": "eb1fd7f0f8e9ff78d29ab6da7e3169bc1edb0f41",
+  "suite": "conformance/core/agent_function_routing.yaml",
+  "unsupported": [
+    {
+      "name": "test_agent_routing_without_outbound_listener_fails_locally",
+      "reason": "explicit outbound transport availability API missing"
+    },
+    {
+      "name": "test_agent_routing_pre_v1_surface_is_not_routed",
+      "reason": "legacy v0.9 surface API not implemented"
+    },
+    {
+      "name": "test_agent_routing_check_rule_passes",
+      "reason": "event/check subscription mode not implemented"
+    },
+    {
+      "name": "test_agent_routing_check_rule_fails",
+      "reason": "event/check subscription mode not implemented"
+    },
+    {
+      "name": "test_agent_routing_check_rule_validation_result_and_error",
+      "reason": "event/check subscription mode not implemented"
+    },
+    {
+      "name": "test_agent_routing_event_context_resolves_in_order",
+      "reason": "event/check subscription mode not implemented"
+    },
+    {
+      "name": "test_agent_routing_event_context_stops_at_first_failure",
+      "reason": "event/check subscription mode not implemented"
+    },
+    {
+      "name": "test_agent_routing_non_json_argument_fails_locally",
+      "reason": "JSON-only public API cannot represent nonfinite values"
+    },
+    {
+      "name": "test_agent_routing_cancelled_calls_report_no_error",
+      "reason": "event/check subscription mode not implemented"
+    },
+    {
+      "name": "test_agent_routing_event_action_after_delete_surface_sends_nothing",
+      "reason": "event/check subscription mode not implemented"
+    },
+    {
+      "name": "test_agent_routing_pending_check_rule_is_not_failing",
+      "reason": "event/check subscription mode not implemented"
+    },
+    {
+      "name": "test_agent_routing_event_user_message_must_be_a_string",
+      "reason": "event/check subscription mode not implemented"
+    },
+    {
+      "name": "test_agent_routing_event_null_user_message_is_absent",
+      "reason": "event/check subscription mode not implemented"
+    },
+    {
+      "name": "test_agent_routing_refused_call_in_action_is_expression_error",
+      "reason": "event/check subscription mode not implemented"
+    },
+    {
+      "name": "test_agent_routing_malformed_event_context_value",
+      "reason": "event/check subscription mode not implemented"
+    }
+  ]
+}
