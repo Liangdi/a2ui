@@ -471,7 +471,7 @@ pub(super) fn render_media_placeholder(
         "Audio" => "♪",
         _ => "◆",
     };
-    chip(glyph, &format!("{kind} · {url}"))
+    chip(glyph, &format!("Unsupported {kind} playback · {url}"))
 }
 
 // ===========================================================================
@@ -860,6 +860,7 @@ pub(super) fn render_choice_picker(
         .get_property::<DynamicString>("label")
         .map(|ds| ctx.data_context.resolve_dynamic_string(&ds))
         .unwrap_or_default();
+    let accessible_name = choice_accessible_name(crate::accessibility::label(ctx, model), &label);
     let options = read_options(model);
     let value_binding = model.get_property::<DynamicStringList>("value");
     let selected_values = value_binding
@@ -895,6 +896,7 @@ pub(super) fn render_choice_picker(
             let cb_id = serde_json::to_string(&(instance_key(ctx), &opt_value)).unwrap();
             let mut cb = Checkbox::new(SharedString::from(cb_id))
                 .checked(checked)
+                .disabled(path.is_none())
                 .label(opt_label);
             if let Some(p) = &path {
                 let path = p.clone();
@@ -916,6 +918,7 @@ pub(super) fn render_choice_picker(
             col = col.child(cb);
         }
     } else {
+        let read_only = path.is_none();
         let state = ensure_select_state(
             walk,
             &instance_key(ctx),
@@ -925,10 +928,50 @@ pub(super) fn render_choice_picker(
             window,
             cx,
         );
-        col = col.child(Select::new(&state).w_full());
+        let mut select = Select::new(&state).disabled(read_only).w_full();
+        if let Some(name) = accessible_name.clone() {
+            select = select.accessibility_label(name);
+        }
+        col = col.child(select);
     }
 
+    if is_multiple {
+        let mut attributes = crate::accessibility::resolve(ctx, model);
+        attributes.label = accessible_name;
+        return col
+            .id(SharedString::from(format!(
+                "choice-group:{}",
+                instance_key(ctx)
+            )))
+            .role(gpui_kit::Role::Group)
+            .a11y_synthetic_children(move |builder| {
+                crate::accessibility::apply_to_node(builder.parent_node(), &attributes);
+            })
+            .into_any_element();
+    }
     col.into_any_element()
+}
+
+fn choice_accessible_name(explicit: Option<String>, visible: &str) -> Option<String> {
+    explicit.or_else(|| (!visible.is_empty()).then(|| visible.to_owned()))
+}
+
+#[cfg(test)]
+mod choice_accessibility_tests {
+    use super::choice_accessible_name;
+    #[test]
+    fn explicit_names_override_visible_label_not_selected_value() {
+        assert_eq!(
+            choice_accessible_name(Some("Shipping speed".into()), "Speed"),
+            Some("Shipping speed".into())
+        );
+        assert_eq!(choice_accessible_name(None, "Speed"), Some("Speed".into()));
+        assert_eq!(choice_accessible_name(None, ""), None);
+        assert_eq!(
+            choice_accessible_name(Some("".into()), "Speed"),
+            Some("".into())
+        );
+    }
 }
 
 /// Lazily create (or fetch) the single-select [`SelectState`] for `id`,
