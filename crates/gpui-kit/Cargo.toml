@@ -34,3 +34,7 @@ required-features = ["backend"]
 [[example]]
 name = "accessibility"
 required-features = ["backend"]
+
+[[example]]
+name = "validated"
+required-features = ["backend"]

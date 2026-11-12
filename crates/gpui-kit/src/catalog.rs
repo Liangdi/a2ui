@@ -56,7 +56,9 @@ mod tests {
                 .len()
         );
         let mut strict = StrictCurrentValidator::new();
-        strict.register_catalog(subset.definition().clone(), true);
+        strict
+            .register_catalog(subset.definition().clone(), true)
+            .unwrap();
         let valid = json!({"version":"1.0","createSurface":{
             "surfaceId":"s","catalogId":NATIVE_CATALOG_ID,
             "components":[{"id":"root","component":"Text","text":"Native"}]

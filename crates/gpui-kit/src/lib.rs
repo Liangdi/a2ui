@@ -70,3 +70,6 @@ pub mod accessibility;
 
 #[cfg(feature = "backend")]
 pub mod catalog;
+
+#[cfg(feature = "backend")]
+pub use app::ValidatedGpuiApp;

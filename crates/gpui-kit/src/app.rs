@@ -1053,3 +1053,6 @@ mod tests {
         assert_eq!(app.processor().model.surfaces().count(), 1);
     }
 }
+
+mod validated;
+pub use validated::ValidatedGpuiApp;

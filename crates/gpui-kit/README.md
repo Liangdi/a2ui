@@ -22,6 +22,16 @@ Apply incoming messages with `GpuiApp::process_message` inside an entity update 
 
 The initial view retains the existing gallery chrome and displays one surface. Use a view per independent surface. Incoming updates reconcile widget state by surface/component/template scope. Unrelated messages retain input entities, local tabs and modal openings; authoritative value changes update existing widgets in place. Binding/range configuration changes rebuild only the affected widget. Removed scopes release entities and subscriptions. Loading/error replacements drop hidden widget focus rather than keeping an invisible editor active.
 
+### Validated released-1.0 embedding
+
+Prefer `ValidatedGpuiApp::new(vec![native_catalog()?], NATIVE_CATALOG_ID, cx)` for untrusted released-1.0 input. It owns a private inner view and one runtime, bootstrapped from frozen schema-backed catalogs. Send wire strings through `process_json_message`; rejected messages do not mutate the runtime. An accepted result may carry a post-commit diagnostic, which must not trigger an automatic replay. Native widget edits and incoming messages share that same runtime. `data` returns owned JSON, and no mutable processor/model/inner-entity accessor or sample loader is exposed. Transport remains host-owned; drain outgoing messages explicitly.
+
+`GpuiApp` remains the compatibility API, including its unchecked `process_message` and trusted `processor_mut` access. Those are not strict validation boundaries. The protected facade does not accept legacy draft messages. Run the minimal protected-host example with:
+
+```sh
+cargo run --manifest-path crates/gpui-kit/Cargo.toml --features backend --example validated
+```
+
 ## Negotiating the native subset
 
 `a2ui_gpui_kit::catalog::native_catalog()` returns a `SchemaBackedCatalog` with the distinct adapter-owned ID `urn:a2ui:gpui-kit:catalog:native:1`. It derives the released basic definitions, retains the real native functions, and excludes `AudioPlayer` and `Video`. Send `to_json()` to the agent as the catalog definition, use this ID in generated surfaces, and register the returned native catalog in the runtime (or supply the schema-backed value to the core validated ingress). Its schemas reject media components rather than advertising unusable players. The canonical basic catalog remains available for compatibility, with explicit media placeholders.
@@ -43,7 +53,7 @@ This subset is a supported-widget contract, not a claim of pixel-identical rende
 
 ## Verification
 
-On Apple Silicon/macOS: library, example build, 36 unit tests and Clippy passed. Native smoke testing covered initial rendering, switching to a login form, typing into both fields, activating its button, switching away and back, and confirming form state reset. A separate current-protocol native smoke check verified the textbox accessible label, the actual button name and description, hidden decorative content absent from the accessibility tree, and the disabled-to-enabled button transition after entering a valid name. Live-region announcements and textbox descriptions were not verified. Other operating systems and complete visual/component conformance have not been tested.
+On Apple Silicon/macOS: library, example build, 37 unit tests and Clippy passed. Native smoke testing covered initial rendering, switching to a login form, typing into both fields, activating its button, switching away and back, and confirming form state reset. A separate current-protocol native smoke check verified the textbox accessible label, the actual button name and description, hidden decorative content absent from the accessibility tree, and the disabled-to-enabled button transition after entering a valid name. Live-region announcements and textbox descriptions were not verified. Other operating systems and complete visual/component conformance have not been tested.
 
 
 The `accessibility` example exercises current reactive text, validation and native metadata without a network transport:
