@@ -101,7 +101,14 @@ impl MessageProcessor {
             .with_catalogs(&self.catalogs, Some(&surface.catalog_id))
             .with_catalog_versions(&self.catalog_versions);
         if !base_path.is_empty() {
-            context = context.nested(base_path.trim_start_matches('/'));
+            context = context
+                .nested(base_path.trim_start_matches('/'))
+                .with_template_index(
+                    base_path
+                        .rsplit('/')
+                        .next()
+                        .and_then(|index| index.parse().ok()),
+                );
         }
         if surface.current_protocol {
             context = context.with_current_protocol();
