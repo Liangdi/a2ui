@@ -403,6 +403,21 @@ impl MessageProcessor {
 
     /// Process a single parsed message.
     pub fn process_message(&mut self, msg: A2uiMessage) -> Result<()> {
+        match self.process_validated_ingress(msg)? {
+            Some(diagnostic) => Err(diagnostic),
+            None => Ok(()),
+        }
+    }
+
+    /// Internal commit-aware ingress for a strict validator/runtime wrapper.
+    /// An outer error precedes structural model mutation. An accepted message
+    /// can produce a post-commit mounted-subscription diagnostic; the caller
+    /// must still commit its staged validation state in that case. This method
+    /// does not replace catalog/schema validation by the strict wrapper.
+    pub(crate) fn process_validated_ingress(
+        &mut self,
+        msg: A2uiMessage,
+    ) -> Result<Option<A2uiError>> {
         if msg.version != "1.0" && msg.version != "v1.0" {
             return Err(A2uiError::Validation(format!(
                 "unsupported A2UI version: {}",
@@ -491,7 +506,7 @@ impl MessageProcessor {
         }
         let mounted_result = self.refresh_mounted();
         self.advance_evaluations();
-        mounted_result
+        Ok(mounted_result.err())
     }
 
     /// Process multiple messages sequentially.
@@ -1369,5 +1384,59 @@ mod tests {
 
         // No validation report produced.
         assert!(proc.drain_validation().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod commit_aware_ingress_tests {
+    use super::*;
+    use serde_json::json;
+    fn parsed(value: serde_json::Value) -> A2uiMessage {
+        MessageProcessor::parse_message(&value.to_string()).unwrap()
+    }
+    fn setup() -> MessageProcessor {
+        let mut processor = MessageProcessor::new(vec![Catalog::new("c")]);
+        processor.process_message(parsed(json!({"version":"1.0","createSurface":{"surfaceId":"s","catalogId":"c","dataModel":{"original":1},"components":[{"id":"root","component":"TextField","checks":[{"condition":true}]}]}}))).unwrap();
+        processor
+    }
+    #[test]
+    fn rejected_mutations_leave_existing_surface_intact() {
+        let mut p = setup();
+        assert!(p.process_validated_ingress(parsed(json!({"version":"1.0","createSurface":{"surfaceId":"s","catalogId":"c","dataModel":{"replaced":true}}}))).is_err());
+        assert!(p.process_validated_ingress(parsed(json!({"version":"1.0","updateDataModel":{"surfaceId":"s","path":"/original/child","value":true}}))).is_err());
+        assert_eq!(
+            p.model
+                .get_surface("s")
+                .unwrap()
+                .data_model
+                .borrow()
+                .as_value(),
+            &json!({"original":1})
+        );
+        assert_eq!(p.model.len(), 1);
+    }
+    #[test]
+    fn accepted_component_change_reports_postcommit_subscription_error_separately() {
+        let mut p = setup();
+        let id = p.mount_check_rule("s", "root", 0, "").unwrap();
+        let diagnostic=p.process_validated_ingress(parsed(json!({"version":"1.0","updateComponents":{"surfaceId":"s","components":[{"id":"root","component":"TextField","checks":[{"message":"missing condition"}]}]}}))).expect("model message was accepted");
+        assert!(
+            diagnostic
+                .unwrap()
+                .to_string()
+                .contains("check requires condition")
+        );
+        assert!(p.mounted_status(&id).is_none());
+        assert_eq!(
+            p.model
+                .get_surface("s")
+                .unwrap()
+                .components
+                .borrow()
+                .get("root")
+                .unwrap()
+                .get_raw("checks"),
+            Some(&json!([{"message":"missing condition"}]))
+        );
     }
 }
