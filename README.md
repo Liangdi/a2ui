@@ -4,7 +4,7 @@
 [![docs.rs](https://docs.rs/a2ui/badge.svg)](https://docs.rs/a2ui)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-[English](README_EN.md) | 中文
+[Read in English](README_EN.md) | **简体中文**
 
 [A2UI (Agent to UI) v1.0](https://github.com/a2ui-project/a2ui) 协议的 Rust 实现 —— 一个 JSON 流式 UI 协议,允许 AI Agent 动态生成并更新界面。
 

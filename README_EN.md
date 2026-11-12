@@ -1,16 +1,26 @@
-# A2UI — Rust impl of the A2UI protocol (ratatui terminal + Slint / egui / Bevy / Iced / Dioxus / GPUI desktop)
+# A2UI — Rust implementation of the A2UI protocol (ratatui terminal + Slint / egui / Bevy / Iced / Dioxus / GPUI desktop)
 
 [![crates.io](https://img.shields.io/crates/v/a2ui.svg)](https://crates.io/crates/a2ui)
 [![docs.rs](https://docs.rs/a2ui/badge.svg)](https://docs.rs/a2ui)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-English | [中文](README.md)
+**English** | [简体中文](README.md)
 
 A Rust implementation of the [A2UI (Agent to UI) v1.0](https://github.com/a2ui-project/a2ui) protocol — a JSON-based streaming UI protocol that lets AI Agents dynamically generate and update interfaces.
 
 On top of a single framework-agnostic core (`a2ui-base`), it ships **7 rendering backends**: the default terminal backend `a2ui-tui` (built on [ratatui](https://ratatui.rs/)), plus six **optional** native-desktop backends — [Slint](https://slint.dev/), [egui](https://github.com/emilk/egui), [Bevy](https://bevyengine.org), [Iced](https://github.com/iced-rs/iced), [Dioxus](https://github.com/DioxusLabs/dioxus), and [GPUI](https://gpui.rs) (Zed's GPU UI framework, via the [gpui-component](https://github.com/longbridge/gpui-component) widget set). See the [Backend Support Matrix](#backend-support-matrix) for each backend's rendering fidelity and real-input capability.
 
 The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic core) + 6 in-workspace backends (`a2ui-tui` / `a2ui-slint` / `a2ui-egui` / `a2ui-bevy` / `a2ui-iced` / `a2ui-dioxus`) + a matching `*-gallery` demo app for each + `a2ui` (an umbrella that re-exports them, keeping `use a2ui::core::...` / `use a2ui::tui::...` paths working). **The 7th backend, `a2ui-gpui`, lives in a separate workspace** due to a dependency conflict (see [GPUI backend](#gpui-desktop-backend) and [Known build limitations](#known-build-limitation-bevy--iced-cant-co-build--gpui-separate-workspace)).
+
+## Contents
+
+- [Quick start](#quick-start)
+- [Architecture](#architecture) and [backend support](#backend-support-matrix)
+- [Build limitations](#known-build-limitation-bevy--iced-cant-co-build--gpui-separate-workspace)
+- Desktop backends: [Slint](#slint-desktop-backend), [egui](#egui-desktop-backend), [Iced](#iced-desktop-backend), [Dioxus](#dioxus-desktop-backend), [GPUI](#gpui-desktop-backend)
+- [Protocol overview](#protocol-overview) and [examples](#examples)
+- [Optional features](#optional-features)
+- [Using as a library](#using-as-a-library)
 
 ## Features
 
@@ -26,7 +36,7 @@ The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic c
 - ✅ **Modular Cargo workspace architecture** (`a2ui-base` framework-agnostic / `a2ui-tui` ratatui backend / `a2ui-gallery` demo app / `a2ui` umbrella)
 - ✅ JSON Pointer data binding with reactive state management
 - ✅ Gallery App sample browser with progressive message rendering
-- ✅ **235 unit/integration tests** (core 127 + tui 61 + gallery e2e 21 + slint 14 + iced 12), including end-to-end tests with A2UI specification examples
+- ✅ **Unit and integration tests** for the core, TUI, gallery, Slint, egui, Bevy, and Iced backends, including end-to-end tests with A2UI specification examples
 
 ## Screenshots
 
@@ -210,6 +220,46 @@ Slint's standard widget library (`std-widgets.slint`) supplies native `LineEdit`
 - Trees deeper than 7 levels truncate (the bounded-depth constraint of the flattening scheme);
 - Remote `http(s)` image fetching runs synchronously on the UI thread (the `Rc`/`RefCell` state can't cross the `Send` closure required by `invoke_from_event_loop`), acceptable for the small sample-image set; `data:` URLs render as a placeholder;
 - Video / AudioPlayer are placeholders (Slint has no media-playback widgets).
+
+## egui Desktop Backend
+
+**`a2ui-egui`** renders A2UI component trees in a native desktop window using [egui](https://github.com/emilk/egui), an immediate-mode GUI framework. The workspace currently uses egui and eframe 0.35. Unlike Slint, egui supports recursive rendering directly: `walker::render_node` walks the component tree using `&mut egui::Ui`, without flattening it or generating a bounded-depth tree in `build.rs`.
+
+Interactive controls use native egui widgets. Button clicks use the shared `core::components::dispatch_event` and `apply_event_result` functions, and modals use `egui::Window` overlays.
+
+**This backend is optional.** `a2ui-egui` is a non-default workspace member and pulls in winit and glow. A plain `cargo build` only builds the ratatui stack. Build the egui backend explicitly:
+
+```bash
+cargo build -p a2ui-egui --features backend
+```
+
+The umbrella crate also re-exports it as `a2ui::egui` when the `egui` Cargo feature is enabled.
+
+### Component coverage
+
+The backend renders 16 A2UI component types. Video and AudioPlayer remain labeled placeholders because egui does not provide media playback widgets.
+
+- **Containers and content**: Text (including h1/h2/h3 sizes), Row, Column, Card, List, Divider, Modal, and Button. Buttons support primary, secondary, and borderless styles and are disabled when their `checks` fail.
+- **Interactive controls**: TextField (`text_edit_single_line`), CheckBox, Slider, ChoicePicker (a `ComboBox` for single selection or checkboxes for multiple selection), DateTimeInput, and Tabs. Changes write back to the data model. DateTimeInput uses an editable ISO-format text field with `enableDate` / `enableTime` hints rather than a calendar widget. Tabs write a bound `activeTab` to the model or track the selected tab locally when unbound.
+- **Icon**: emoji glyphs from the embedded NotoEmoji subset, registered as the `Icons` font family. Unknown names fall back to their first two characters in brackets.
+- **Image**: `a2ui-image` resolves local paths, `file://`, `http(s)`, and `data:` URLs. Decoded pixels become an `egui::ColorImage` and a cached `TextureHandle`. Loading is synchronous on the UI thread; results are cached by URL and cleared when switching samples. Failed loads show a labeled placeholder and are not retried for that sample.
+- **Placeholders**: Video and AudioPlayer.
+
+### Immediate-mode state bridge
+
+egui controls need stable mutable buffers to preserve editing state and detect changes, while A2UI values live in the data model. `EditBuffers` bridges the two with a persistent map keyed by component ID. Each frame synchronizes buffers from the model when needed, passes mutable references to the widgets, and collects changes as `PendingInteraction` values. Those changes are written back after the tree traversal releases its model borrows.
+
+### Run the Gallery (egui)
+
+`a2ui-egui-gallery` loads the same embedded A2UI samples:
+
+```bash
+cargo run -p a2ui-egui-gallery             # first sample
+cargo run -p a2ui-egui-gallery -- 3        # 1-based sample index
+cargo run -p a2ui-egui-gallery -- login    # case-insensitive name substring
+```
+
+The gallery uses the glow (OpenGL) renderer, so it needs a working OpenGL stack.
 
 ## Iced Desktop Backend
 
