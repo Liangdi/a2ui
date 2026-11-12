@@ -73,3 +73,19 @@ rejection without validator drift, owned snapshot isolation and resynchronizatio
 after trusted host graph changes. Native components outside a renderer's supported
 subset are not made renderable by this core wrapper. Hosts must negotiate a truthful
 renderer subset. The existing legacy backends are not automatically opted in.
+
+## Error wire projection
+
+`StrictValidationError.path` retains the local diagnostic location, which can be
+an internal component-graph path. `renderer_error()` returns `Option<Value>` and
+uses the honest root pointer for validation errors with a known surface.
+`renderer_error_for_message(&original_message)` can recover a surface or RPC call
+ID from one unambiguous recognized payload and retain a path only if it resolves
+in that original payload. Graph-ID paths are never presented as array indices.
+
+The official outgoing schema requires correlation even for generic errors. `None`
+therefore means a local/transport-level diagnostic, **not** an outgoing wire event;
+no surface or call ID is fabricated. Generic errors omit `path`, and reserved
+validation codes without a surface become the generic `INVALID_MESSAGE` code when
+a real RPC call ID is available. Regression tests validate emitted shapes against
+the pinned official outgoing schema for every supported error-code category.
