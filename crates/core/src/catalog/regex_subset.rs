@@ -491,7 +491,7 @@ impl Node {
         // valid bounded repetitions into an NFA when no permitted input can
         // possibly match, including when nested inside a negative lookahead.
         if self.min_width() > 4096 {
-            out.push_str("(?!)");
+            out.push_str(r"[^\x{0}-\x{10ffff}]");
             return;
         }
         match self {
