@@ -719,6 +719,8 @@ impl FunctionImplementation for FormatStringFunction {
         args: &HashMap<String, Value>,
         context: &DataContext,
     ) -> Result<Value, A2uiError> {
+        // Also protect direct native invocation from the processor/renderer.
+        let _guard = context.enter_function()?;
         let value = require_str(args, "value", "formatString")?;
         let result = if context.is_current_protocol() {
             super::template::interpolate(value, context)?
