@@ -29,10 +29,21 @@ The initial view retains the existing gallery chrome and displays one surface. U
 - Video and audio remain placeholders, and Markdown uses the existing plain-text presentation.
 - Stateful template instances use surface, component and data scope keys. Nested relative templates and button action bindings preserve their item scope. Choice labels remain separate from wire values. Template-repeated modal overlays still need scoped lifecycle work.
 - Current component dispatch supports mixed registered basic/minimal catalogs using `@catalogId` then the surface default. Unknown/custom catalogs are visibly rejected, never silently rendered as a same-named basic widget. Passive functions use the surface catalog, not a merged name map.
-- Current actions use the core resumable evaluator and validated argument defaults, caller/gesture policies and result types. Errors reach the host through protocol messages and diagnostic drains. Automatic asynchronous property/check subscriptions, native validation styling, custom component renderers and full accessibility semantics remain incomplete. Hosts can explicitly manage subscriptions through `processor_mut()`; pending values are not successful null results.
+- Current actions use the core resumable evaluator and validated argument defaults, caller/gesture policies and result types. Errors reach the host through protocol messages and diagnostic drains. Current `@checks` subscribe automatically for reachable instances: pending checks show “Checking…” without failing, failed checks show a message/border and disable buttons. Native edits recompute checks. Supported scalar properties containing `@call` (`text`, `label`, `url`, `value`, `name`, `description`, `min`, `max`, `steps`, `activeTab`) subscribe automatically with visible loading/error states; resolved values overlay rendering without changing source expressions or writable `@path` bindings. Nested option/tab-label objects, custom component renderers and full property schemas are not yet covered. Hosts can manage additional subscriptions through `processor_mut()`.
+- Subscription discovery is bounded to 512 instances/depth 64; native recursion has an independent active-path cycle/depth guard. Unsupported nodes show a diagnostic instead of recursing indefinitely. Removed template instances release their subscriptions.
+- Native AccessKit metadata supports label, description, live regions and AT-hidden containers; Button/Checkbox metadata targets their real widget nodes and Input gets an explicit accessible label. Input textbox descriptions and ChoicePicker radio-group semantics remain toolkit/API gaps. Metadata projection tests are not a substitute for native assistive-technology inspection.
 - This branch depends on the current-protocol core update; the original GPUI adapter remains unchanged.
 - The renderer is ported from `crates/gpui` under the repository's MIT license. Separate source permits Kit API evolution without changing the legacy adapter; common protocol/model code remains in `a2ui-base`.
 
 ## Verification
 
-On Apple Silicon/macOS: library, example build, 21 unit tests and Clippy passed. Native smoke testing covered initial rendering, switching to a login form, typing into both fields, activating its button, switching away and back, and confirming form state reset. Other operating systems and complete visual/component conformance have not been tested.
+On Apple Silicon/macOS: library, example build, 30 unit tests and Clippy passed. Native smoke testing covered initial rendering, switching to a login form, typing into both fields, activating its button, switching away and back, and confirming form state reset. Other operating systems and complete visual/component conformance have not been tested.
+
+
+The `accessibility` example exercises current reactive text, validation and native metadata without a network transport:
+
+```sh
+cargo run --manifest-path crates/gpui-kit/Cargo.toml --features backend --example accessibility
+```
+
+Initially the name field is invalid and Submit disabled. Entering a name updates the greeting, clears validation messages and enables Submit. The example's decorative text stays visually present but is hidden from assistive technology.

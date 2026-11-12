@@ -46,6 +46,12 @@ pub(super) fn render_node(
     window: &mut Window,
     cx: &mut Context<GpuiApp>,
 ) -> AnyElement {
+    let key = crate::reactive::instance_key(walk.surface_id, component_id, base_path);
+    let Some(_guard) = RenderGuard::enter(&walk.render_path, key) else {
+        return gpui_kit::div()
+            .child("Component cycle or nesting limit reached")
+            .into_any_element();
+    };
     let comp_model = match walk.components.get(component_id) {
         Some(m) => m,
         None => {
@@ -60,13 +66,37 @@ pub(super) fn render_node(
     {
         return gpui_kit::div().child(error).into_any_element();
     }
-    let functions = if walk.current_protocol {
-        let Some(catalog) = walk.processor.catalog(walk.catalog_id) else {
+    let reactive = walk.reactive.view(walk.surface_id, component_id, base_path);
+    if walk.current_protocol && reactive.is_none() {
+        return gpui_kit::div()
+            .child("Component subscription limit reached")
+            .into_any_element();
+    }
+    let mut overlay = comp_model.clone();
+    if let Some(view) = reactive {
+        if !view.errors.is_empty() {
             return gpui_kit::div()
-                .child("Unknown surface catalog")
+                .text_color(gpui_kit::rgb(0xf38ba8))
+                .child(view.errors.join("; "))
                 .into_any_element();
-        };
-        &catalog.functions
+        }
+        if view.pending {
+            return gpui_kit::div().child("Loading…").into_any_element();
+        }
+        overlay.properties.extend(view.resolved.clone());
+        if overlay.properties.contains_key("@checks") {
+            overlay.properties.insert(
+                "@checks".into(),
+                serde_json::json!([{"condition":view.checks_valid}]),
+            );
+        }
+    }
+    let comp_model = &overlay;
+    let functions = if walk.current_protocol {
+        walk.processor
+            .catalog(walk.catalog_id)
+            .map(|catalog| &catalog.functions)
+            .unwrap_or(walk.empty_functions)
     } else {
         walk.functions
     };
@@ -87,7 +117,7 @@ pub(super) fn render_node(
             .with_current_protocol();
     }
 
-    match comp_model.component_type.as_str() {
+    let rendered = match comp_model.component_type.as_str() {
         // Containers.
         "Column" | "List" => render_column(walk, &ctx, comp_model, window, cx),
         "Row" => render_row(walk, &ctx, comp_model, window, cx),
@@ -105,13 +135,40 @@ pub(super) fn render_node(
         "AudioPlayer" => render_media_placeholder("Audio", &ctx, comp_model),
 
         // Interactive (native GPUI Kit widgets).
-        "Button" => render_button(&ctx, comp_model, cx),
+        "Button" => render_button(walk, &ctx, comp_model, cx),
         "TextField" => render_text_field(walk, &ctx, comp_model, window, cx),
         "CheckBox" => render_checkbox(&ctx, comp_model, cx),
         "Slider" => render_slider(walk, &ctx, comp_model, window, cx),
         "ChoicePicker" => render_choice_picker(walk, &ctx, comp_model, window, cx),
 
         _ => render_unknown(walk, &ctx, comp_model, window, cx),
+    };
+    let rendered = crate::accessibility::wrap(&ctx, comp_model, rendered);
+    if let Some(view) = reactive
+        && (view.checks_pending || !view.check_messages.is_empty())
+    {
+        let mut wrapper = gpui_kit::div().flex().flex_col().gap_1().child(rendered);
+        if view.checks_pending {
+            wrapper = wrapper.child(
+                gpui_kit::div()
+                    .text_size(gpui_kit::px(12.))
+                    .child("Checking…"),
+            );
+        }
+        for message in &view.check_messages {
+            wrapper = wrapper
+                .border_1()
+                .border_color(gpui_kit::rgb(0xf38ba8))
+                .child(
+                    gpui_kit::div()
+                        .text_color(gpui_kit::rgb(0xf38ba8))
+                        .text_size(gpui_kit::px(12.))
+                        .child(message.clone()),
+                );
+        }
+        wrapper.into_any_element()
+    } else {
+        rendered
     }
 }
 
@@ -140,4 +197,42 @@ pub(crate) fn check_native_catalog(
         ));
     }
     Ok(())
+}
+
+struct RenderGuard<'a>(&'a std::cell::RefCell<Vec<String>>);
+impl<'a> RenderGuard<'a> {
+    fn enter(path: &'a std::cell::RefCell<Vec<String>>, key: String) -> Option<Self> {
+        let mut active = path.borrow_mut();
+        if active.len() >= 64 || active.contains(&key) {
+            return None;
+        }
+        active.push(key);
+        Some(Self(path))
+    }
+}
+impl Drop for RenderGuard<'_> {
+    fn drop(&mut self) {
+        self.0.borrow_mut().pop();
+    }
+}
+#[cfg(test)]
+mod recursion_tests {
+    use super::*;
+    #[test]
+    fn render_guard_rejects_cycles_and_deep_templates_and_releases_path() {
+        let path = std::cell::RefCell::new(Vec::new());
+        let root = RenderGuard::enter(&path, "root".into()).unwrap();
+        assert!(RenderGuard::enter(&path, "root".into()).is_none());
+        let mut guards = Vec::new();
+        for index in 1..64 {
+            guards.push(RenderGuard::enter(&path, format!("row/{index}")).unwrap());
+        }
+        assert!(RenderGuard::enter(&path, "too-deep".into()).is_none());
+        while let Some(guard) = guards.pop() {
+            drop(guard);
+        }
+        drop(root);
+        assert!(path.borrow().is_empty());
+        assert!(RenderGuard::enter(&path, "root".into()).is_some());
+    }
 }

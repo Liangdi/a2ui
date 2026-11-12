@@ -90,10 +90,13 @@ fn is_obscured(model: &ComponentModel) -> bool {
 /// [`subscriptions`]: Walk::subscriptions
 /// [`image_pending`]: Walk::image_pending
 pub(super) struct Walk<'a> {
+    pub render_path: RefCell<Vec<String>>,
     pub surface_id: &'a str,
     pub catalog_id: &'a str,
     pub current_protocol: bool,
     pub processor: &'a a2ui_base::message_processor::MessageProcessor,
+    pub reactive: &'a crate::reactive::ReactiveState,
+    pub empty_functions: &'a HashMap<String, Box<dyn FunctionImplementation>>,
     pub data_model: &'a DataModel,
     pub components: &'a SurfaceComponentsModel,
     pub functions: &'a HashMap<String, Box<dyn FunctionImplementation>>,
@@ -478,11 +481,30 @@ pub(super) fn render_media_placeholder(
 /// via the core pipeline (reuses `GpuiApp::handle_activate`), like the other
 /// backends' hosts. The label is the Button's single `child` (a Text).
 pub(super) fn render_button(
+    walk: &Walk,
     ctx: &ComponentContext,
     model: &ComponentModel,
     cx: &mut Context<GpuiApp>,
 ) -> AnyElement {
-    let label = resolve_child_text(ctx, model).unwrap_or_else(|| {
+    let child_view = model.child().and_then(|id| {
+        walk.reactive
+            .view(&ctx.surface_id, &id, ctx.data_context.base_path())
+    });
+    let label_pending = child_view.is_some_and(|view| view.pending);
+    let label_failed = child_view.is_some_and(|view| !view.errors.is_empty());
+    let async_label = child_view
+        .and_then(|view| view.resolved.get("text"))
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    let label = if label_pending {
+        Some("Loading…".to_owned())
+    } else if label_failed {
+        Some("Label unavailable".to_owned())
+    } else {
+        async_label
+    }
+    .or_else(|| resolve_child_text(ctx, model))
+    .unwrap_or_else(|| {
         model
             .accessibility()
             .and_then(|a| a.label)
@@ -502,16 +524,16 @@ pub(super) fn render_button(
         // call, leave the builder untouched.
         _ => btn,
     };
-    if !checks_pass {
+    if !checks_pass || label_pending || label_failed {
         btn = btn.disabled(true);
     }
     let id = ctx.component_id.clone();
     let base_path = ctx.data_context.base_path().to_string();
-    btn.on_click(cx.listener(move |this, _: &ClickEvent, _window, cx| {
+    let button = btn.on_click(cx.listener(move |this, _: &ClickEvent, _window, cx| {
         this.handle_activate(&id, &base_path);
         cx.notify();
-    }))
-    .into_any_element()
+    }));
+    crate::accessibility::interactive(button, ctx, model).into_any_element()
 }
 
 /// TextField — GPUI Kit `Input` bridged to the data model. The value is
@@ -579,7 +601,11 @@ fn render_labeled_input(
                 .child(SharedString::from(label.to_string())),
         );
     }
-    col = col.child(Input::new(&state));
+    let mut input = Input::new(&state);
+    if let Some(label) = crate::accessibility::label(ctx, model) {
+        input = input.aria_label(label);
+    }
+    col = col.child(input);
     col.into_any_element()
 }
 
@@ -668,7 +694,7 @@ pub(super) fn render_checkbox(
             cx.notify();
         }));
     }
-    cb.into_any_element()
+    crate::accessibility::interactive(cb, ctx, model).into_any_element()
 }
 
 /// Slider — GPUI Kit `Slider` bridged to the data model. The `SliderState`

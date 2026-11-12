@@ -30,3 +30,7 @@ anyhow = "1"
 [[example]]
 name = "gallery"
 required-features = ["backend"]
+
+[[example]]
+name = "accessibility"
+required-features = ["backend"]

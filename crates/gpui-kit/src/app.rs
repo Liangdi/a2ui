@@ -54,6 +54,8 @@ use crate::walker::render_node;
 /// (rebuilt each frame).
 pub struct GpuiApp {
     processor: MessageProcessor,
+    reactive: crate::reactive::ReactiveState,
+    empty_functions: HashMap<String, Box<dyn FunctionImplementation>>,
     pending_actions: Vec<ClientMessage>,
     functions: HashMap<String, Box<dyn FunctionImplementation>>,
     focus: FocusManager,
@@ -92,6 +94,8 @@ impl GpuiApp {
     ) -> Self {
         Self {
             processor: MessageProcessor::new(catalogs),
+            reactive: crate::reactive::ReactiveState::default(),
+            empty_functions: HashMap::new(),
             pending_actions: Vec::new(),
             functions,
             focus: FocusManager::new(),
@@ -197,8 +201,14 @@ impl GpuiApp {
         if path.is_empty() {
             return;
         }
-        if let Some(surface) = self.processor.model.surfaces_mut().next() {
+        let surface_id = if let Some(surface) = self.processor.model.surfaces_mut().next() {
             surface.data_model.borrow_mut().set(path, value);
+            Some(surface.id.clone())
+        } else {
+            None
+        };
+        if let Some(id) = surface_id {
+            self.processor.invalidate_evaluations(&id);
         }
     }
 
@@ -390,10 +400,13 @@ impl GpuiApp {
         let components = surface.components.borrow();
         let focused_id = self.focus.focused_id().map(str::to_string);
         let walk = Walk {
+            render_path: RefCell::new(Vec::new()),
             surface_id: &surface.id,
             catalog_id: &surface.catalog_id,
             current_protocol: surface.current_protocol,
             processor: &self.processor,
+            reactive: &self.reactive,
+            empty_functions: &self.empty_functions,
             data_model: &data_model,
             components: &components,
             functions: &self.functions,
@@ -441,10 +454,13 @@ impl GpuiApp {
             let components = surface.components.borrow();
             let focused_id = self.focus.focused_id().map(str::to_string);
             let walk = Walk {
+                render_path: RefCell::new(Vec::new()),
                 surface_id: &surface.id,
                 catalog_id: &surface.catalog_id,
                 current_protocol: surface.current_protocol,
                 processor: &self.processor,
+                reactive: &self.reactive,
+                empty_functions: &self.empty_functions,
                 data_model: &data_model,
                 components: &components,
                 functions: &self.functions,
@@ -533,6 +549,13 @@ impl GpuiApp {
     /// logic, apply the result, then resolve any local Modal state change.
     /// Ported from `crates/iced/src/app.rs::handle_activate`.
     pub(crate) fn handle_activate(&mut self, node_id: &str, base_path: &str) {
+        self.reactive.refresh(&mut self.processor);
+        if let Some(surface) = self.processor.model.surfaces().next()
+            && let Some(view) = self.reactive.view(&surface.id, node_id, base_path)
+            && !view.checks_valid
+        {
+            return;
+        }
         let current_action = self
             .processor
             .model
@@ -704,6 +727,7 @@ impl Render for GpuiApp {
         window: &mut gpui_kit::Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
+        self.reactive.refresh(&mut self.processor);
         // Deterministic overlay order: iterate modals sorted by id. Collected
         // up front so each overlay is built as a discrete sequential borrow.
         let mut modal_ids: Vec<String> = self.open_modals.iter().cloned().collect();
@@ -877,6 +901,24 @@ mod tests {
                 .is_err()
             );
         }
+    }
+
+    #[test]
+    fn native_data_edits_recompute_automatic_current_checks() {
+        let mut app = GpuiApp::new(
+            vec![a2ui_tui::catalogs::basic::build_basic_catalog()],
+            HashMap::new(),
+        );
+        app.process_message(message(json!({"version":"1.0","createSurface":{
+            "surfaceId":"s","catalogId":"https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+            "dataModel":{"name":""},"components":[{"id":"root","component":"TextField","value":{"@path":"/name"},
+            "@checks":[{"condition":{"@call":"required","args":{"value":{"@path":"/name"}}},"message":"Required"}]}]
+        }}))).unwrap();
+        app.reactive.refresh(&mut app.processor);
+        assert!(!app.reactive.view("s", "root", "").unwrap().checks_valid);
+        app.set_data_value("/name", json!("Ada"));
+        app.reactive.refresh(&mut app.processor);
+        assert!(app.reactive.view("s", "root", "").unwrap().checks_valid);
     }
 
     #[test]

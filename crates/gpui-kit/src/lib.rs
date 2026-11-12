@@ -39,6 +39,8 @@ pub mod components;
 #[cfg(feature = "backend")]
 pub mod images;
 #[cfg(feature = "backend")]
+mod reactive;
+#[cfg(feature = "backend")]
 pub mod theme;
 #[cfg(feature = "backend")]
 pub mod walker;
@@ -62,3 +64,6 @@ pub use a2ui_base::interaction::apply_event_result;
 /// accent) for the host's launch closure. Re-exported from [`theme`].
 #[cfg(feature = "backend")]
 pub use theme::customize;
+
+#[cfg(feature = "backend")]
+pub mod accessibility;
