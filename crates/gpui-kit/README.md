@@ -2,6 +2,20 @@
 
 An opt-in adapter using **GPUI Kit 0.9.1**, the current published release checked on 2026-11-12. Kit owns the matching GPUI snapshot, component and asset versions. This is independent of the existing `a2ui-gpui` 0.2.2/0.5.1 stack; it does not force its consumers to migrate.
 
+## Package and module boundaries
+
+This is the standalone Cargo package `a2ui-gpui-kit`, not an extension added to the old `a2ui-gpui` package. Its own `[workspace]` and `Cargo.lock` keep GPUI Kit’s native dependency graph separate from the legacy GPUI adapter and the repository’s main workspace. The `backend` feature is opt-in; builds without it do not pull in the native GPUI runtime. Gallery/TUI dependencies are development-only, not library runtime dependencies.
+
+The adapter PR is stacked on the current-standard core PR. It depends on that core’s schema-backed catalogs, checked ingress and resumable evaluation APIs; the adapter is not intended to compile against the older upstream core before that prerequisite lands. Package separation does not duplicate or fork the shared protocol engine.
+
+- `app.rs`: compatibility view and native widget lifecycle; `app/validated.rs`: protected embedding facade (`ValidatedGpuiApp`).
+- `walker.rs`: bounded component traversal and exact catalog dispatch; `reactive.rs`: per-instance expression/check subscriptions.
+- `components.rs`: shared rendering context, layout and basic widgets; `components/choice.rs`: choice identity, selection state, rendering and tests.
+- `catalog.rs`: separately identified schema-backed native subset (`native_catalog`, `NATIVE_CATALOG_ID`).
+- `accessibility.rs`, `images.rs`, `theme.rs`: native semantics, image support and styling respectively.
+
+The crate root continues to export `GpuiApp`, `ValidatedGpuiApp`, the shared interaction helpers and `customize`; widget-specific implementation modules remain internal. No extra public package or framework abstraction is needed for each widget.
+
 ## Build and run
 
 Rust 1.99 or later is required by the current GPUI dependency line. The backend is disabled by default and has its own lockfile/workspace so the two GPUI stacks do not unify incompatible dependencies.
