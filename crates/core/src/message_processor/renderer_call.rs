@@ -14,6 +14,36 @@ pub enum RendererCall {
 }
 
 impl MessageProcessor {
+    /// Validate a remote result against the resolved catalog's declared return type.
+    pub fn validate_renderer_return(
+        &self,
+        surface_id: &str,
+        call: &FunctionCall,
+        value: Value,
+    ) -> Result<Value> {
+        let surface = self
+            .model
+            .get_surface(surface_id)
+            .ok_or_else(|| A2uiError::SurfaceNotFound(surface_id.into()))?;
+        let id = call.catalog_id.as_deref().unwrap_or(&surface.catalog_id);
+        let catalog = self
+            .catalogs
+            .get(id)
+            .ok_or_else(|| A2uiError::CatalogNotFound(id.into()))?;
+        if let Some(function) = catalog.get_function(&call.call) {
+            if !return_matches(
+                function.return_type_for_protocol(surface.current_protocol),
+                &value,
+            ) {
+                return Err(A2uiError::TypeMismatch(format!(
+                    "{} result does not match declared return type",
+                    call.call
+                )));
+            }
+        }
+        Ok(value)
+    }
+
     /// Resolve the catalog and enforce declarations on already-resolved arguments.
     /// `user_activated` must only be true for a real host user gesture.
     pub fn prepare_renderer_call(
@@ -74,15 +104,10 @@ impl MessageProcessor {
             function.validate_args(&call.args)?;
             if function.is_native() {
                 let value = function.execute(&call.args, &context)?;
-                let valid = match function.return_type_for_protocol(surface.current_protocol) {
-                    ReturnType::Any => true,
-                    ReturnType::Void => value.is_null(),
-                    ReturnType::String => value.is_string(),
-                    ReturnType::Number => value.is_number(),
-                    ReturnType::Boolean => value.is_boolean(),
-                    ReturnType::Array => value.is_array(),
-                    ReturnType::Object => value.is_object(),
-                };
+                let valid = return_matches(
+                    function.return_type_for_protocol(surface.current_protocol),
+                    &value,
+                );
                 if !valid {
                     return Err(A2uiError::TypeMismatch(
                         "function result does not match declared return type".into(),
@@ -92,6 +117,18 @@ impl MessageProcessor {
             }
         }
         Ok(RendererCall::Remote(call))
+    }
+}
+
+fn return_matches(kind: ReturnType, value: &Value) -> bool {
+    match kind {
+        ReturnType::Any => true,
+        ReturnType::Void => value.is_null(),
+        ReturnType::String => value.is_string(),
+        ReturnType::Number => value.is_number(),
+        ReturnType::Boolean => value.is_boolean(),
+        ReturnType::Array => value.is_array(),
+        ReturnType::Object => value.is_object(),
     }
 }
 
