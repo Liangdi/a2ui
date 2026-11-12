@@ -27,6 +27,7 @@ pub enum EvaluationMode {
 pub enum EvaluationStatus {
     Ready(Value),
     Pending,
+    Cancelled,
     Error { code: String, message: String },
 }
 
@@ -34,6 +35,14 @@ pub enum EvaluationStatus {
 pub struct EvaluationUpdate {
     pub id: EvaluationId,
     pub status: EvaluationStatus,
+}
+
+/// Non-fatal expression diagnostics, such as a failed part of a formatted string.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct EvaluationDiagnostic {
+    pub id: EvaluationId,
+    pub code: String,
+    pub message: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -63,6 +72,7 @@ struct Job {
     touched: Vec<CallKey>,
     failures: HashMap<String, (CallKey, EvaluationStatus)>,
     suspended: bool,
+    diagnostics: Vec<EvaluationDiagnostic>,
     // Avoid repeating a completed native action while waiting on another arg.
     memo: HashMap<String, Value>,
 }
@@ -75,6 +85,7 @@ pub(crate) struct Evaluator {
     updates: Vec<EvaluationUpdate>,
     outgoing: Vec<CallAgentFunction>,
     cancelled_calls: Vec<String>,
+    diagnostics: Vec<EvaluationDiagnostic>,
 }
 
 impl Evaluator {
@@ -97,7 +108,7 @@ impl Evaluator {
         expression: Value,
         mode: EvaluationMode,
     ) -> Result<EvaluationId> {
-        if self.jobs.len() >= 1024 || self.updates.len() >= 4096 {
+        if self.jobs.len() >= 1024 || self.updates.len() >= 4096 || self.diagnostics.len() >= 4096 {
             return Err(A2uiError::Validation(
                 "evaluation capacity reached; cancel handles and drain updates".into(),
             ));
@@ -116,17 +127,36 @@ impl Evaluator {
                 touched: Vec::new(),
                 failures: HashMap::new(),
                 suspended: false,
+                diagnostics: Vec::new(),
                 memo: HashMap::new(),
             },
         );
         Ok(id)
     }
 
+    pub(crate) fn latest_status(&self, id: &str) -> Option<EvaluationStatus> {
+        self.jobs
+            .get(id)
+            .and_then(|job| job.status.clone())
+            .or_else(|| {
+                self.updates
+                    .iter()
+                    .find(|update| update.id == id)
+                    .map(|update| update.status.clone())
+            })
+    }
+
+    pub(crate) fn forget(&mut self, id: &str) {
+        self.jobs.remove(id);
+        self.updates.retain(|update| update.id != id);
+        self.collect_calls();
+    }
+
     pub(crate) fn cancel(&mut self, id: &str) {
         if self.jobs.remove(id).is_some() {
             self.push_update(EvaluationUpdate {
                 id: id.into(),
-                status: error("CANCELLED", "Evaluation cancelled"),
+                status: EvaluationStatus::Cancelled,
             });
         }
         self.collect_calls();
@@ -179,10 +209,10 @@ impl Evaluator {
                     value.value.clone(),
                 ) {
                     Ok(value) => EvaluationStatus::Ready(value),
-                    Err(e) => error("EXPRESSION_ERROR", &e.to_string()),
+                    Err(e) => evaluation_error(e),
                 },
                 FunctionOutcome::Failure(failure) => {
-                    error(&failure.error.code, &failure.error.message)
+                    error("EXPRESSION_ERROR", &failure.error.message)
                 }
             };
         }
@@ -199,6 +229,7 @@ impl Evaluator {
                 continue;
             }
             job.touched.clear();
+            let previous_diagnostics = std::mem::take(&mut job.diagnostics);
             let expression = job.expression.clone();
             let status = self.evaluate(processor, &mut job, &expression, "", 0);
             if job.status.as_ref() != Some(&status) {
@@ -206,6 +237,13 @@ impl Evaluator {
                     id: id.clone(),
                     status: status.clone(),
                 });
+            }
+            for diagnostic in &job.diagnostics {
+                if !previous_diagnostics.contains(diagnostic)
+                    && !self.diagnostics.contains(diagnostic)
+                {
+                    self.diagnostics.push(diagnostic.clone());
+                }
             }
             job.status = Some(status.clone());
             job.calls = std::mem::take(&mut job.touched);
@@ -231,6 +269,10 @@ impl Evaluator {
                 .values()
                 .any(|state| state.id == call.function_call_id)
         });
+    }
+
+    pub(crate) fn drain_diagnostics(&mut self) -> Vec<EvaluationDiagnostic> {
+        std::mem::take(&mut self.diagnostics)
     }
 
     pub(crate) fn drain_cancelled_calls(&mut self) -> Vec<String> {
@@ -289,7 +331,7 @@ impl Evaluator {
                     Err(e) => return error("EXPRESSION_ERROR", &e.to_string()),
                 };
                 let Some(surface) = processor.model.get_surface(&job.surface) else {
-                    return error("CANCELLED", "Surface no longer exists");
+                    return EvaluationStatus::Cancelled;
                 };
                 let path = if binding.path.starts_with('/') {
                     binding.path
@@ -328,7 +370,9 @@ impl Evaluator {
                             args.insert(name.clone(), value);
                         }
                         EvaluationStatus::Pending => pending = true,
-                        status @ EvaluationStatus::Error { .. } => failure = Some(status),
+                        status @ (EvaluationStatus::Error { .. } | EvaluationStatus::Cancelled) => {
+                            failure = Some(status)
+                        }
                     }
                 }
                 if let Some(failure) = failure {
@@ -340,7 +384,7 @@ impl Evaluator {
                 call.args = args;
                 let surface_catalog = match processor.model.get_surface(&job.surface) {
                     Some(surface) => surface.catalog_id.clone(),
-                    None => return error("CANCELLED", "Surface no longer exists"),
+                    None => return EvaluationStatus::Cancelled,
                 };
                 let catalog = call.catalog_id.clone().unwrap_or(surface_catalog);
                 let args: Map<_, _> = call
@@ -378,12 +422,24 @@ impl Evaluator {
                         return status;
                     }
                 }
-                match processor.prepare_renderer_call(
+                let errors = std::cell::RefCell::new(Vec::new());
+                let prepared = processor.prepare_renderer_call_with_errors(
                     &job.surface,
                     &job.base_path,
                     call,
                     job.mode == EvaluationMode::Action,
-                ) {
+                    &errors,
+                );
+                for failure in errors.into_inner() {
+                    if let EvaluationStatus::Error { code, message } = evaluation_error(failure) {
+                        job.diagnostics.push(EvaluationDiagnostic {
+                            id: job.id.clone(),
+                            code,
+                            message,
+                        });
+                    }
+                }
+                match prepared {
                     Ok(RendererCall::Local(value)) => EvaluationStatus::Ready(value),
                     Ok(RendererCall::Remote(call_function)) => {
                         if self.calls.len() >= 4096 {
@@ -409,7 +465,7 @@ impl Evaluator {
                         job.touched.push(key);
                         EvaluationStatus::Pending
                     }
-                    Err(e) => error("EXPRESSION_ERROR", &e.to_string()),
+                    Err(e) => evaluation_error(e),
                 }
             }
             Value::Object(object) => {
@@ -463,6 +519,9 @@ fn collect(statuses: Vec<EvaluationStatus>) -> Collected {
     {
         return Collected::Other(status.clone());
     }
+    if statuses.contains(&EvaluationStatus::Cancelled) {
+        return Collected::Other(EvaluationStatus::Cancelled);
+    }
     if statuses.contains(&EvaluationStatus::Pending) {
         return Collected::Other(EvaluationStatus::Pending);
     }
@@ -504,4 +563,13 @@ fn canonical(value: Value) -> Value {
         Value::Array(values) => Value::Array(values.into_iter().map(canonical).collect()),
         value => value,
     }
+}
+
+fn evaluation_error(error_value: A2uiError) -> EvaluationStatus {
+    let code = if matches!(error_value, A2uiError::CatalogNotFound(_)) {
+        "CATALOG_ERROR"
+    } else {
+        "EXPRESSION_ERROR"
+    };
+    error(code, &error_value.to_string())
 }

@@ -6,8 +6,11 @@ results; `EvaluationMode::Action` is a fresh imperative invocation. Only a trust
 host user gesture may start an action evaluation. This API is additive: existing
 synchronous `DataContext` consumers are unchanged.
 
-Drain `drain_evaluation_updates()` for `Ready(Value)`, `Pending`, or
-`Error { code, message }`. Updates coalesce by handle until drained. Drain the
+Drain `drain_evaluation_updates()` for `Ready(Value)`, `Pending`, `Cancelled`, or
+`Error { code, message }`. Cancellation is a lifecycle state, not an expression error. Updates coalesce by handle until drained. Non-fatal
+template diagnostics are separately available through `drain_evaluation_diagnostics()`
+and do not erase a successfully rendered partial string. Repeated identical
+diagnostics are not re-emitted on unrelated replies. Drain the
 ordinary outgoing message queue for `callAgentFunction` messages. Feed incoming
 `agentFunctionResponse` messages through `process_message`; matching responses
 resume evaluations. Unknown, cancelled, duplicate and stale replies do not alter
@@ -43,15 +46,22 @@ and 128 nested expression levels. Capacity errors are explicit.
 
 ## Deliberate prototype boundaries
 
-- No automatic subscription of renderer properties, checks, or event contexts.
-  Hosts must opt in and present pending/error states. GPUI Kit currently uses the
-  synchronous direct-action path; its async binding/check integration is not done.
+- Current `activate_component` actions use the resumable path automatically.
+  Event context entries resolve sequentially in source order, then userMessage;
+  failures stop the action. `start_check` offers passive subscriptions with pending
+  checks non-failing until settled. Hosts drain `drain_check_updates()` and choose
+  how to present validation. Automatic renderer property/check subscriptions and
+  their visual states are not wired yet.
+- Action errors appear both as outgoing protocol errors and in
+  `drain_action_errors()` for local presentation; hosts should not double-report
+  the two views of the same error.
 - No timeout, transport retry, remote cancellation protocol, or persistence across
   processor reset. Host transport owns those decisions.
 - Declared remote return types are enforced before results settle. Full return-schema
   constraints and component-level error boundaries remain to be integrated.
 - `formatString` template expansion remains in the synchronous native function;
-  nested remote calls inside template strings are not resumed by this evaluator.
+  nested remote calls inside template strings never route: their parts render empty
+  and report an expression diagnostic, matching the protocol template boundary.
 - Invalidating all expressions on a surface is conservative. Fine-grained dependency
   tracking and focus-preserving renderer reconciliation are future improvements.
 

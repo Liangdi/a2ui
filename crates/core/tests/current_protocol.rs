@@ -325,3 +325,93 @@ fn typed_processing_normalizes_draft_event_context_without_parse_message() {
         );
     }
 }
+
+#[test]
+fn incoming_rpc_applies_native_argument_defaults_before_execution() {
+    struct WithDefault;
+    impl FunctionImplementation for WithDefault {
+        fn name(&self) -> &'static str {
+            "defaults"
+        }
+        fn return_type(&self) -> ReturnType {
+            ReturnType::String
+        }
+        fn allowed_callers(&self) -> AllowedCallers {
+            AllowedCallers::RendererOrAgent
+        }
+        fn prepare_args(&self, args: &mut HashMap<String, Value>) -> Result<(), A2uiError> {
+            args.entry("value".into()).or_insert(json!("default"));
+            Ok(())
+        }
+        fn execute(
+            &self,
+            args: &HashMap<String, Value>,
+            _: &DataContext,
+        ) -> Result<Value, A2uiError> {
+            Ok(args["value"].clone())
+        }
+    }
+    let mut p = MessageProcessor::new(vec![
+        Catalog::new("test").with_function(Box::new(WithDefault)),
+    ]);
+    apply(
+        &mut p,
+        json!({"version":"1.0","callRendererFunction":{
+            "functionCallId":"defaults","callFunction":{"@call":"defaults","catalogId":"test"}
+        }}),
+    );
+    let response = serde_json::to_value(p.drain_outgoing().remove(0)).unwrap();
+    assert_eq!(response["rendererFunctionResponse"]["value"], "default");
+}
+
+#[test]
+fn legacy_rpc_preserves_legacy_function_context_and_return_type() {
+    struct Versioned;
+    impl FunctionImplementation for Versioned {
+        fn name(&self) -> &'static str {
+            "versioned"
+        }
+        fn return_type(&self) -> ReturnType {
+            ReturnType::Boolean
+        }
+        fn return_type_for_protocol(&self, current: bool) -> ReturnType {
+            if current {
+                ReturnType::Object
+            } else {
+                ReturnType::Boolean
+            }
+        }
+        fn allowed_callers(&self) -> AllowedCallers {
+            AllowedCallers::RendererOrAgent
+        }
+        fn execute(
+            &self,
+            _: &HashMap<String, Value>,
+            context: &DataContext,
+        ) -> Result<Value, A2uiError> {
+            Ok(if context.is_current_protocol() {
+                json!({"valid":true})
+            } else {
+                json!(true)
+            })
+        }
+    }
+    let mut p = MessageProcessor::new(vec![
+        Catalog::new("test").with_function(Box::new(Versioned)),
+    ]);
+    apply(
+        &mut p,
+        json!({"version":"v1.0","callFunction":{"call":"versioned","catalogId":"test"},"functionCallId":"legacy","wantResponse":true}),
+    );
+    let response = serde_json::to_value(p.drain_outgoing().remove(0)).unwrap();
+    assert_eq!(response["functionResponse"]["value"], true);
+    apply(
+        &mut p,
+        json!({"version":"1.0","callRendererFunction":{"functionCallId":"current","callFunction":{"@call":"versioned","catalogId":"test"}}}),
+    );
+    let response = serde_json::to_value(p.drain_outgoing().remove(0)).unwrap();
+    assert_eq!(
+        response["rendererFunctionResponse"]["value"],
+        json!({"valid":true})
+    );
+}

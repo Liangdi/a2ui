@@ -138,9 +138,7 @@ fn surface_deletion_cancels_pending_work_and_unsent_calls() {
         json!({"version":"1.0","deleteSurface":{"surfaceId":"s"}}),
     );
     assert!(calls(&mut p).is_empty());
-    assert!(
-        matches!(state(&mut p,&id),EvaluationStatus::Error { code, .. } if code == "CANCELLED")
-    );
+    assert!(matches!(state(&mut p, &id), EvaluationStatus::Cancelled));
 }
 
 #[test]
@@ -192,7 +190,7 @@ fn remote_errors_are_not_successful_null_results() {
     assert_eq!(
         state(&mut p, &id),
         EvaluationStatus::Error {
-            code: "DENIED".into(),
+            code: "EXPRESSION_ERROR".into(),
             message: "No".into()
         }
     );
@@ -209,7 +207,7 @@ fn data_updates_cancel_pending_actions_instead_of_mixing_old_and_new_arguments()
         json!({"version":"1.0","updateDataModel":{"surfaceId":"s","path":"/name","value":"second"}}),
     );
     assert!(calls(&mut p).is_empty());
-    assert!(matches!(state(&mut p,&id),EvaluationStatus::Error {code,..} if code == "CANCELLED"));
+    assert!(matches!(state(&mut p, &id), EvaluationStatus::Cancelled));
 }
 
 #[test]
