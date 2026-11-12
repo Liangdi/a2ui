@@ -40,8 +40,10 @@ dependencies = [
  "a2ui-image",
  "a2ui-tui",
  "anyhow",
+ "chrono",
  "gpui-kit",
  "serde_json",
+ "uuid",
 ]
 
 [[package]]

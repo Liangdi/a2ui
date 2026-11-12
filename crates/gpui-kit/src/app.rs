@@ -25,11 +25,14 @@ use std::sync::Arc;
 
 use a2ui_base::catalog::function_api::FunctionImplementation;
 use a2ui_base::components::dispatch_event;
-use a2ui_base::event::{InputEvent, InputKey};
+use a2ui_base::event::{EventResult, InputEvent, InputKey};
 use a2ui_base::focus::FocusManager;
 use a2ui_base::interaction::apply_event_result;
 use a2ui_base::message_processor::MessageProcessor;
 use a2ui_base::model::component_context::ComponentContext;
+use a2ui_base::protocol::client_to_server::{
+    ActionData, ActionPayload, ClientMessage, ClientPayload,
+};
 use a2ui_base::protocol::server_to_client::A2uiMessage;
 
 use gpui_kit::component::TitleBar;
@@ -43,7 +46,7 @@ use gpui_kit::prelude::*;
 use gpui_kit::{AnyElement, ClickEvent, Context, Entity, Image, Render, Subscription, div, px};
 use serde_json::Value;
 
-use crate::components::Walk;
+use crate::components::{ChoiceOption, Walk};
 use crate::theme;
 use crate::walker::render_node;
 
@@ -51,6 +54,7 @@ use crate::walker::render_node;
 /// (rebuilt each frame).
 pub struct GpuiApp {
     processor: MessageProcessor,
+    pending_actions: Vec<ClientMessage>,
     functions: HashMap<String, Box<dyn FunctionImplementation>>,
     focus: FocusManager,
     samples: Vec<(String, Vec<A2uiMessage>)>,
@@ -72,7 +76,8 @@ pub struct GpuiApp {
     /// Per-component-id `SliderState` for Slider.
     pub(crate) slider_states: RefCell<HashMap<String, Entity<SliderState>>>,
     /// Per-component-id `SelectState` for single-select ChoicePicker.
-    pub(crate) select_states: RefCell<HashMap<String, Entity<SelectState<SearchableVec<String>>>>>,
+    pub(crate) select_states:
+        RefCell<HashMap<String, Entity<SelectState<SearchableVec<ChoiceOption>>>>>,
     /// Keeps every lazy-create subscription alive (dropping a [`Subscription`]
     /// unsubscribes it). Cleared on sample switch alongside the state caches.
     pub(crate) subscriptions: RefCell<Vec<Subscription>>,
@@ -87,6 +92,7 @@ impl GpuiApp {
     ) -> Self {
         Self {
             processor: MessageProcessor::new(catalogs),
+            pending_actions: Vec::new(),
             functions,
             focus: FocusManager::new(),
             samples: Vec::new(),
@@ -121,7 +127,9 @@ impl GpuiApp {
     pub fn drain_outgoing_messages(
         &mut self,
     ) -> Vec<a2ui_base::protocol::client_to_server::ClientMessage> {
-        self.processor.drain_outgoing()
+        let mut messages = self.processor.drain_outgoing();
+        messages.append(&mut self.pending_actions);
+        messages
     }
 
     fn clear_widget_state(&mut self) {
@@ -147,6 +155,7 @@ impl GpuiApp {
             return;
         };
         self.processor.reset();
+        self.pending_actions.clear();
         for msg in &messages {
             let _ = self.processor.process_message(msg.clone());
         }
@@ -503,7 +512,7 @@ impl GpuiApp {
     /// A node was activated (button press): dispatch `Enter` via the shared core
     /// logic, apply the result, then resolve any local Modal state change.
     /// Ported from `crates/iced/src/app.rs::handle_activate`.
-    pub(crate) fn handle_activate(&mut self, node_id: &str) {
+    pub(crate) fn handle_activate(&mut self, node_id: &str, base_path: &str) {
         let result = {
             let surface = match self.processor.model.surfaces().next() {
                 Some(s) => s,
@@ -521,7 +530,7 @@ impl GpuiApp {
                 &data_model,
                 &components,
                 &self.functions,
-                "",
+                base_path,
                 Some(node_id.to_string()),
             );
             dispatch_event(
@@ -533,7 +542,39 @@ impl GpuiApp {
             )
         };
 
-        if let Some(result) = result {
+        if let Some(EventResult::Action {
+            event_name,
+            context,
+            want_response,
+            response_path,
+        }) = result
+        {
+            let surface_id = self.processor.model.surfaces().next().map(|s| s.id.clone());
+            if let Some(surface_id) = surface_id {
+                let action_id = want_response.then(|| uuid::Uuid::new_v4().to_string());
+                if let Some(id) = &action_id {
+                    let _ = self
+                        .processor
+                        .register_action(&surface_id, id, response_path);
+                }
+                // These are the existing draft catalog's event actions. Current
+                // A2UI agent-function actions require the separate core migration.
+                self.pending_actions.push(ClientMessage {
+                    version: "v1.0".into(),
+                    payload: ClientPayload::Action(ActionPayload {
+                        action: ActionData {
+                            name: event_name,
+                            surface_id,
+                            source_component_id: node_id.into(),
+                            timestamp: chrono::Utc::now().to_rfc3339(),
+                            context,
+                            want_response: want_response.then_some(true),
+                            action_id,
+                        },
+                    }),
+                });
+            }
+        } else if let Some(result) = result {
             let _ = apply_event_result(&mut self.processor, result);
         }
         self.apply_modal_interaction(node_id);
@@ -633,6 +674,27 @@ mod tests {
 
     fn message(value: Value) -> A2uiMessage {
         serde_json::from_value(value).unwrap()
+    }
+
+    #[test]
+    fn button_actions_preserve_template_context_and_are_drained() {
+        let mut app = app();
+        for value in [
+            json!({"version":"v1.0","createSurface":{"surfaceId":"test","catalogId":"test"}}),
+            json!({"version":"v1.0","updateDataModel":{"surfaceId":"test","path":"","value":{"rows":[{"name":"first"},{"name":"second"}]}}}),
+            json!({"version":"v1.0","updateComponents":{"surfaceId":"test","components":[{"id":"pick","component":"Button","action":{"event":{"name":"pick","context":{"name":{"path":"name"}}}}}]}}),
+        ] {
+            app.process_message(message(value)).unwrap();
+        }
+        app.handle_activate("pick", "/rows/1");
+        let messages = app.drain_outgoing_messages();
+        assert_eq!(messages.len(), 1);
+        let ClientPayload::Action(payload) = &messages[0].payload else {
+            panic!("expected action");
+        };
+        assert_eq!(payload.action.name, "pick");
+        assert_eq!(payload.action.context.get("name"), Some(&json!("second")));
+        assert!(app.drain_outgoing_messages().is_empty());
     }
 
     #[test]

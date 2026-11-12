@@ -18,18 +18,19 @@ The gallery reuses the existing TUI catalogs and embedded samples. Its TUI depen
 
 Enable the `backend` feature, initialize with `gpui_kit::init`, construct `GpuiApp::new(catalogs, functions)`, and mount it in a Kit `Root` (or use `gpui_kit::open_window`). No separate GPUI or asset dependency is needed.
 
-Apply incoming messages with `GpuiApp::process_message` inside an entity update and call `cx.notify()` after success. Drain `drain_outgoing_messages()` to send user events back through your own transport. The adapter does not open network connections for agent traffic or execute generated code.
+Apply incoming messages with `GpuiApp::process_message` inside an entity update and call `cx.notify()` after success. Drain `drain_outgoing_messages()` to send the existing draft catalog’s button event actions back through your own transport. Released A2UI 1.0 agent-function actions are a separate protocol migration item; the event queue uses the legacy `v1.0` action envelope. The adapter does not open network connections for agent traffic or execute generated code.
 
 The initial view retains the existing gallery chrome and displays one surface. Use a view per independent surface. Incoming updates invalidate local widget state so native inputs are seeded from the authoritative data model; focus-preserving incremental reconciliation is a future improvement.
 
 ## Coverage and limits
 
-- Native text inputs, buttons, checkbox, slider, choices and tabs; nested rows, columns, lists, cards and modals.
+- Native text inputs (including masked password fields), buttons, checkbox, slider, choices and tabs; nested rows, columns, lists, cards and modals.
 - Shared core interaction/data binding and image loading. GPUI Kit's current `Separator` replaces the old `Divider` API.
 - Video and audio remain placeholders, and Markdown uses the existing plain-text presentation.
+- Stateful template instances use surface, component and data scope keys. Nested relative templates and button action bindings preserve their item scope. Choice labels remain separate from wire values. Template-repeated modal overlays still need scoped lifecycle work.
 - Protocol conformance follows the shared core. This adapter does not claim to complete released A2UI 1.0 mixed-catalog rendering, automatic agent-function actions, or all accessibility semantics.
 - The renderer is ported from `crates/gpui` under the repository's MIT license. Separate source permits Kit API evolution without changing the legacy adapter; common protocol/model code remains in `a2ui-base`.
 
 ## Verification
 
-On Apple Silicon/macOS: library, example build, 12 unit tests and Clippy passed. Native smoke testing covered initial rendering, switching to a login form, typing into both fields, activating its button, switching away and back, and confirming form state reset. Other operating systems and complete visual/component conformance have not been tested.
+On Apple Silicon/macOS: library, example build, 17 unit tests and Clippy passed. Native smoke testing covered initial rendering, switching to a login form, typing into both fields, activating its button, switching away and back, and confirming form state reset. Other operating systems and complete visual/component conformance have not been tested.

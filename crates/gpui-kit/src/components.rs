@@ -28,6 +28,7 @@ use serde_json::Value;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::component::input::{Input, InputEvent, InputState};
+use gpui_kit::component::searchable_list::SearchableListItem;
 use gpui_kit::component::select::{SearchableVec, Select, SelectEvent, SelectState};
 use gpui_kit::component::separator::Separator;
 use gpui_kit::component::slider::{Slider, SliderEvent, SliderState, SliderValue};
@@ -42,6 +43,38 @@ use crate::app::GpuiApp;
 use crate::images;
 use crate::theme;
 use crate::walker::render_node;
+
+/// Keep the protocol value separate from its human-readable label.
+#[derive(Clone)]
+pub(crate) struct ChoiceOption {
+    label: String,
+    value: String,
+}
+
+impl SearchableListItem for ChoiceOption {
+    type Value = String;
+    fn title(&self) -> SharedString {
+        self.label.clone().into()
+    }
+    fn value(&self) -> &String {
+        &self.value
+    }
+}
+
+/// A component can occur once for each template item. JSON encoding makes
+/// arbitrary IDs and paths unambiguous, unlike delimiter concatenation.
+fn instance_key(ctx: &ComponentContext) -> String {
+    serde_json::to_string(&(
+        &ctx.surface_id,
+        &ctx.component_id,
+        ctx.data_context.base_path(),
+    ))
+    .unwrap()
+}
+
+fn is_obscured(model: &ComponentModel) -> bool {
+    model.get_property::<String>("variant").as_deref() == Some("obscured")
+}
 
 /// Shared read-only + `RefCell`-mutable context threaded through every render
 /// function. The read-only model refs (`data_model`, `components`, `functions`,
@@ -81,7 +114,8 @@ pub(super) struct Walk<'a> {
     pub slider_states: &'a RefCell<HashMap<String, Entity<SliderState>>>,
     /// Per-component-id `SelectState` for single-select ChoicePicker, lazily
     /// created on first render.
-    pub select_states: &'a RefCell<HashMap<String, Entity<SelectState<SearchableVec<String>>>>>,
+    pub select_states:
+        &'a RefCell<HashMap<String, Entity<SelectState<SearchableVec<ChoiceOption>>>>>,
     /// Keeps every lazy-create subscription alive for the app's lifetime
     /// (dropping a [`Subscription`] unsubscribes it).
     pub subscriptions: &'a RefCell<Vec<Subscription>>,
@@ -120,7 +154,10 @@ fn build_child_plan(model: &ComponentModel, ctx: &ComponentContext) -> Vec<(Stri
         Some(ChildList::Template { component_id, path }) => {
             if let Some(Value::Array(arr)) = ctx.data_context.get(&path) {
                 for i in 0..arr.len() {
-                    plan.push((component_id.clone(), format!("{path}/{i}")));
+                    plan.push((
+                        component_id.clone(),
+                        format!("{}/{i}", ctx.data_context.resolve_pointer(&path)),
+                    ));
                 }
             }
         }
@@ -207,13 +244,13 @@ pub(super) fn render_card(
 /// tree), so the trigger keeps its place and focus.
 pub(super) fn render_modal(
     walk: &Walk,
-    _ctx: &ComponentContext,
+    ctx: &ComponentContext,
     model: &ComponentModel,
     window: &mut gpui_kit::Window,
     cx: &mut Context<GpuiApp>,
 ) -> AnyElement {
     if let Some(trigger_id) = model.get_property::<String>("trigger") {
-        render_child(walk, &trigger_id, "", window, cx)
+        render_child(walk, &trigger_id, ctx.data_context.base_path(), window, cx)
     } else {
         div().into_any_element()
     }
@@ -242,18 +279,22 @@ pub(super) fn render_tabs(
     });
     let active = match &active_dn {
         Some(dn) => ctx.data_context.resolve_dynamic_number(dn) as usize,
-        None => walk.local_tabs.get(&ctx.component_id).copied().unwrap_or(0),
+        None => walk
+            .local_tabs
+            .get(&instance_key(ctx))
+            .copied()
+            .unwrap_or(0),
     }
     .min(tabs.len() - 1);
 
-    let mut bar = TabBar::new(SharedString::from(ctx.component_id.clone())).selected_index(active);
+    let mut bar = TabBar::new(SharedString::from(instance_key(ctx))).selected_index(active);
     for (title, _child) in tabs.iter() {
         let title_str = ctx.data_context.resolve_dynamic_string(title);
         bar = bar.child(Tab::new().label(title_str));
     }
     // Write the clicked index back: to the binding when `activeTab` is a data
     // binding, else track it locally.
-    let component_id = ctx.component_id.clone();
+    let component_id = instance_key(ctx);
     let active_path_for_click = active_path.clone();
     bar = bar.on_click(cx.listener(move |this, ix: &usize, _window, cx| {
         if let Some(path) = &active_path_for_click {
@@ -448,7 +489,7 @@ pub(super) fn render_button(
     let variant: Option<String> = model.get_property("variant");
     let checks_pass = evaluate_checks(ctx, model);
 
-    let mut btn = Button::new(SharedString::from(ctx.component_id.clone())).label(label);
+    let mut btn = Button::new(SharedString::from(instance_key(ctx))).label(label);
     btn = match variant.as_deref() {
         Some("primary") => btn.primary(),
         // The A2UI `borderless` variant maps onto GPUI Kit's transparent
@@ -462,8 +503,9 @@ pub(super) fn render_button(
         btn = btn.disabled(true);
     }
     let id = ctx.component_id.clone();
+    let base_path = ctx.data_context.base_path().to_string();
     btn.on_click(cx.listener(move |this, _: &ClickEvent, _window, cx| {
-        this.handle_activate(&id);
+        this.handle_activate(&id, &base_path);
         cx.notify();
     }))
     .into_any_element()
@@ -511,7 +553,7 @@ fn render_labeled_input(
         .as_ref()
         .map(|ds| ctx.data_context.resolve_dynamic_string(ds))
         .unwrap_or_default();
-    let id = ctx.component_id.clone();
+    let id = instance_key(ctx);
 
     let state = ensure_input_state(
         walk,
@@ -520,6 +562,7 @@ fn render_labeled_input(
         &resolved,
         placeholder,
         value_binding,
+        is_obscured(model),
         window,
         cx,
     );
@@ -549,6 +592,7 @@ fn ensure_input_state(
     resolved: &str,
     placeholder: SharedString,
     value_binding: Option<DynamicString>,
+    masked: bool,
     window: &mut gpui_kit::Window,
     cx: &mut Context<GpuiApp>,
 ) -> Entity<InputState> {
@@ -562,7 +606,9 @@ fn ensure_input_state(
     };
     let initial = resolved.to_string();
     let new_state = cx.new(|cx| {
-        let mut s = InputState::new(window, cx).placeholder(placeholder);
+        let mut s = InputState::new(window, cx)
+            .placeholder(placeholder)
+            .masked(masked);
         if !initial.is_empty() {
             s.set_value(initial.clone(), window, cx);
         }
@@ -609,7 +655,7 @@ pub(super) fn render_checkbox(
         .map(|db| ctx.data_context.resolve_dynamic_boolean(db))
         .unwrap_or(false);
 
-    let mut cb = Checkbox::new(SharedString::from(ctx.component_id.clone()))
+    let mut cb = Checkbox::new(SharedString::from(instance_key(ctx)))
         .checked(resolved)
         .label(label);
     if let Some(DynamicBoolean::Binding(b)) = &value_binding {
@@ -656,7 +702,7 @@ pub(super) fn render_slider(
     let (range_min, range_max, clamped) = resolve_slider_range_and_value(min, max, resolved_value);
     let state = ensure_slider_state(
         walk,
-        &ctx.component_id,
+        &instance_key(ctx),
         range_min,
         range_max,
         steps,
@@ -786,7 +832,7 @@ pub(super) fn render_choice_picker(
     if is_multiple {
         for (opt_label, opt_value) in options {
             let checked = selected_values.contains(&opt_value);
-            let cb_id = format!("{}::{}", ctx.component_id, opt_value);
+            let cb_id = serde_json::to_string(&(instance_key(ctx), &opt_value)).unwrap();
             let mut cb = Checkbox::new(SharedString::from(cb_id))
                 .checked(checked)
                 .label(opt_label);
@@ -812,7 +858,7 @@ pub(super) fn render_choice_picker(
     } else {
         let state = ensure_select_state(
             walk,
-            &ctx.component_id,
+            &instance_key(ctx),
             options,
             selected_values,
             path,
@@ -837,12 +883,18 @@ fn ensure_select_state(
     path: Option<String>,
     window: &mut gpui_kit::Window,
     cx: &mut Context<GpuiApp>,
-) -> Entity<SelectState<SearchableVec<String>>> {
+) -> Entity<SelectState<SearchableVec<ChoiceOption>>> {
     if let Some(existing) = walk.select_states.borrow().get(id).cloned() {
         return existing;
     }
 
-    let labels: Vec<String> = options.iter().map(|(l, _)| l.clone()).collect();
+    let items: Vec<ChoiceOption> = options
+        .iter()
+        .map(|(label, value)| ChoiceOption {
+            label: label.clone(),
+            value: value.clone(),
+        })
+        .collect();
     let selected_index = selected_values.first().and_then(|v| {
         options
             .iter()
@@ -850,25 +902,19 @@ fn ensure_select_state(
             .map(IndexPath::new)
     });
 
-    let delegate = SearchableVec::new(labels);
+    let delegate = SearchableVec::new(items);
     let new_state = cx.new(|cx| SelectState::new(delegate, selected_index, window, cx));
 
-    let mapping = options.clone();
     let sub = cx.subscribe(
         &new_state,
         move |this: &mut GpuiApp,
-              _src: Entity<SelectState<SearchableVec<String>>>,
-              ev: &SelectEvent<SearchableVec<String>>,
+              _src: Entity<SelectState<SearchableVec<ChoiceOption>>>,
+              ev: &SelectEvent<SearchableVec<ChoiceOption>>,
               cx: &mut Context<GpuiApp>| {
             if let SelectEvent::Confirm(Some(picked)) = ev
                 && let Some(path) = &path
             {
-                let val = mapping
-                    .iter()
-                    .find(|(_, v)| v == picked)
-                    .map(|(_, v)| v.clone())
-                    .unwrap_or_default();
-                this.set_data_value(path, serde_json::json!([val]));
+                this.set_data_value(path, serde_json::json!([picked]));
                 cx.notify();
             }
         },
@@ -1066,6 +1112,92 @@ fn map_icon(name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn choice_labels_do_not_replace_values() {
+        let first = ChoiceOption {
+            label: "English".into(),
+            value: "en".into(),
+        };
+        let duplicate_label = ChoiceOption {
+            label: "English".into(),
+            value: "en-GB".into(),
+        };
+        assert_eq!(first.title().as_ref(), "English");
+        assert_eq!(first.value(), "en");
+        assert_eq!(duplicate_label.value(), "en-GB");
+    }
+
+    #[test]
+    fn native_instance_keys_include_template_scope_and_surface() {
+        let data = DataModel::new();
+        let components = SurfaceComponentsModel::new();
+        let functions = HashMap::new();
+        let context = |surface: &str, base: &str| {
+            ComponentContext::new(
+                "field".into(),
+                surface.into(),
+                &data,
+                &components,
+                &functions,
+                base,
+                None,
+            )
+        };
+        assert_ne!(
+            instance_key(&context("s", "/rows/0")),
+            instance_key(&context("s", "/rows/1"))
+        );
+        assert_ne!(
+            instance_key(&context("s", "/rows/0")),
+            instance_key(&context("other", "/rows/0"))
+        );
+        assert_eq!(
+            instance_key(&context("s", "/rows/0")),
+            instance_key(&context("s", "/rows/0"))
+        );
+    }
+
+    #[test]
+    fn nested_template_paths_are_absolute() {
+        let mut data = DataModel::new();
+        data.set(
+            "/rows",
+            serde_json::json!([{"children": [{"name":"a"}, {"name":"b"}]}]),
+        );
+        let components = SurfaceComponentsModel::new();
+        let functions = HashMap::new();
+        let context = ComponentContext::new(
+            "nested".into(),
+            "s".into(),
+            &data,
+            &components,
+            &functions,
+            "/rows/0",
+            None,
+        );
+        let model = ComponentModel::from_json(&serde_json::json!({"id":"nested", "component":"Column", "children":{"componentId":"field", "path":"children"}})).unwrap();
+        assert_eq!(
+            build_child_plan(&model, &context),
+            vec![
+                ("field".into(), "/rows/0/children/0".into()),
+                ("field".into(), "/rows/0/children/1".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn obscured_variant_enables_password_masking() {
+        let password = ComponentModel::from_json(
+            &serde_json::json!({"id":"password","component":"TextField","variant":"obscured"}),
+        )
+        .unwrap();
+        let normal =
+            ComponentModel::from_json(&serde_json::json!({"id":"name","component":"TextField"}))
+                .unwrap();
+        assert!(is_obscured(&password));
+        assert!(!is_obscured(&normal));
+    }
 
     #[test]
     fn parse_tab_entry_literal_title() {
