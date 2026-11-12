@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 #[serde(rename_all = "camelCase")]
 pub struct StrictValidationError {
     pub category: String,
+    pub code: String,
     pub message: String,
     pub surface_id: Option<String>,
     pub path: String,
@@ -18,14 +19,14 @@ impl StrictValidationError {
     fn new(message: impl Into<String>, surface: Option<&str>, path: &str) -> Self {
         Self {
             category: "ValidationError".into(),
+            code: "VALIDATION_FAILED".into(),
             message: message.into(),
             surface_id: surface.map(str::to_owned),
             path: path.into(),
         }
     }
     pub fn renderer_error(&self) -> Value {
-        let mut error =
-            json!({"code":"VALIDATION_FAILED", "message":self.message, "path":self.path});
+        let mut error = json!({"code":self.code, "message":self.message, "path":self.path});
         if let Some(id) = &self.surface_id {
             error["surfaceId"] = json!(id);
         }
@@ -37,13 +38,18 @@ struct Surface {
     catalog: String,
     components: BTreeMap<String, Value>,
 }
+pub(crate) struct PreparedChange {
+    surface_id: Option<String>,
+    surface: Option<Surface>,
+    delete: bool,
+}
 /// Catalogs are host supplied, never fetched. No renderer or transport side effects.
 /// Register all used catalogs before processing; unknown catalogs fail closed.
 /// This validates structural integrity, not RPC authorization or lifecycle.
 /// Catalogs should not be replaced after surfaces have been validated.
 /// Limits: 1,024 surfaces, 10,000 components per surface/batch, 50 nested levels,
 /// 5 nested calls, 64 reference-schema levels and 100,000 traversal visits.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct StrictCurrentValidator {
     catalogs: BTreeMap<String, CatalogDefinition>,
     surfaces: BTreeMap<String, Surface>,
@@ -53,14 +59,78 @@ impl StrictCurrentValidator {
     pub fn new() -> Self {
         Self::default()
     }
-    pub fn register_catalog(&mut self, catalog: CatalogDefinition, default: bool) {
+    pub fn register_catalog(
+        &mut self,
+        catalog: CatalogDefinition,
+        default: bool,
+    ) -> crate::error::Result<()> {
+        if !self.surfaces.is_empty() {
+            return Err(crate::error::A2uiError::Validation(
+                "catalog registry is frozen while surfaces are active".into(),
+            ));
+        }
         let id = catalog.catalog_id().to_string();
         if default {
             self.default_catalog = Some(id.clone());
         }
         self.catalogs.insert(id, catalog);
+        Ok(())
+    }
+    pub(crate) fn synchronize_runtime(
+        &mut self,
+        processor: &crate::message_processor::MessageProcessor,
+    ) -> Result<(), StrictValidationError> {
+        let mut surfaces = BTreeMap::new();
+        let mut total = 0;
+        for surface in processor.model.surfaces().filter(|s| s.current_protocol) {
+            let components = surface.components.borrow();
+            total += components.len();
+            if components.len() > 10_000 || total > 100_000 || surfaces.len() >= 1_024 {
+                return Err(StrictValidationError::new(
+                    "Runtime structural capacity exceeded",
+                    Some(&surface.id),
+                    "/components",
+                ));
+            }
+            let raw = components
+                .all()
+                .iter()
+                .map(|(id, c)| {
+                    let mut value = Value::Object(c.properties.clone());
+                    value["id"] = Value::String(c.id.clone());
+                    value["component"] = Value::String(c.component_type.clone());
+                    (id.clone(), value)
+                })
+                .collect();
+            surfaces.insert(
+                surface.id.clone(),
+                Surface {
+                    catalog: surface.catalog_id.clone(),
+                    components: raw,
+                },
+            );
+        }
+        self.surfaces = surfaces;
+        Ok(())
     }
     pub fn validate_message(&mut self, message: &Value) -> Result<(), StrictValidationError> {
+        let change = self.prepare_message(message)?;
+        self.commit(change);
+        Ok(())
+    }
+    pub(crate) fn commit(&mut self, change: PreparedChange) {
+        if let Some(id) = change.surface_id {
+            if change.delete {
+                self.surfaces.remove(&id);
+            } else if let Some(surface) = change.surface {
+                self.surfaces.insert(id, surface);
+            }
+        }
+    }
+    pub(crate) fn prepare_message(
+        &self,
+        message: &Value,
+    ) -> Result<PreparedChange, StrictValidationError> {
         let err = |s: &str| StrictValidationError::new(s, None, "");
         if message["version"] != "1.0" {
             return Err(err("Expected released version 1.0"));
@@ -102,10 +172,9 @@ impl StrictCurrentValidator {
         } else if candidate.catalog.is_empty() {
             candidate.catalog = self.default_catalog.clone().unwrap_or_default();
         }
-        let catalog = self
-            .catalogs
-            .get(&candidate.catalog)
-            .ok_or_else(|| err("Unknown catalog"))?;
+        if !self.catalogs.contains_key(&candidate.catalog) {
+            return Err(err("Unknown catalog"));
+        }
         if let Some(components) = payload.get("components").and_then(Value::as_array) {
             if components.len() > 10_000 {
                 return Err(err("Component batch limit exceeded"));
@@ -117,8 +186,7 @@ impl StrictCurrentValidator {
         if kind == "updateDataModel" {
             check_depth(&payload["value"], 0, 0, surface_id, "/value", false)?;
         }
-        CurrentSchemaValidator::new(wire_catalog(catalog))
-            .and_then(|v| v.validate_incoming(message))
+        CurrentSchemaValidator::validate_envelope(message)
             .map_err(|e| StrictValidationError::new(e.to_string(), surface_id, ""))?;
         // Directive paths only: ordinary literal dictionaries named `path` are data.
         if kind == "updateDataModel" {
@@ -160,22 +228,78 @@ impl StrictCurrentValidator {
                     StrictValidationError::new("Unknown component catalog", surface_id, &path)
                 })?;
                 definition
-                    .validate_component(component)
+                    .validate_component_shape(component)
                     .map_err(|e| StrictValidationError::new(e.to_string(), surface_id, &path))?;
+                self.validate_calls(component, &candidate.catalog, surface_id, &path)?;
                 check_depth(component, 0, 0, surface_id, &path, true)?;
                 candidate.components.insert(id.into(), component.clone());
             }
             if candidate.components.len() > 10_000 {
                 return Err(err("Surface component limit exceeded"));
             }
+            let existing = surface_id
+                .and_then(|id| self.surfaces.get(id))
+                .map_or(0, |s| s.components.len());
+            let total: usize = self.surfaces.values().map(|s| s.components.len()).sum();
+            if total - existing + candidate.components.len() > 100_000 {
+                return Err(err("Aggregate component limit exceeded"));
+            }
             self.check_topology(&candidate, surface_id)?;
         }
-        if let Some(id) = surface_id {
-            if kind == "deleteSurface" {
-                self.surfaces.remove(id);
-            } else if kind == "createSurface" || kind == "updateComponents" {
-                self.surfaces.insert(id.into(), candidate);
+        Ok(PreparedChange {
+            surface_id: surface_id.map(str::to_owned),
+            surface: if kind == "createSurface" || kind == "updateComponents" {
+                Some(candidate)
+            } else {
+                None
+            },
+            delete: kind == "deleteSurface",
+        })
+    }
+
+    fn validate_calls(
+        &self,
+        value: &Value,
+        default: &str,
+        surface: Option<&str>,
+        path: &str,
+    ) -> Result<(), StrictValidationError> {
+        match value {
+            Value::Object(object) => {
+                if object.contains_key("@call") {
+                    let target = object
+                        .get("catalogId")
+                        .and_then(Value::as_str)
+                        .unwrap_or(default);
+                    let catalog = self.catalogs.get(target).ok_or_else(|| {
+                        StrictValidationError::new("Unknown function catalog", surface, path)
+                    })?;
+                    catalog
+                        .validate_function_call_shape(value)
+                        .map_err(|e| StrictValidationError::new(e.to_string(), surface, path))?;
+                    if let Some(function) = value["@call"]
+                        .as_str()
+                        .and_then(|name| catalog.functions().get(name))
+                    {
+                        if function["allowedCallers"] == "agentOnly" {
+                            return Err(StrictValidationError::new(
+                                "agentOnly function cannot be called by a renderer binding or action",
+                                surface,
+                                path,
+                            ));
+                        }
+                    }
+                }
+                for (key, child) in object {
+                    self.validate_calls(child, default, surface, &format!("{path}/{key}"))?;
+                }
             }
+            Value::Array(array) => {
+                for (index, child) in array.iter().enumerate() {
+                    self.validate_calls(child, default, surface, &format!("{path}/{index}"))?;
+                }
+            }
+            _ => {}
         }
         Ok(())
     }
@@ -193,6 +317,16 @@ impl StrictCurrentValidator {
         }
         let mut edges = BTreeMap::new();
         for (name, component) in &surface.components {
+            let component_catalog = component["@catalogId"].as_str().unwrap_or(&surface.catalog);
+            let definition = self.catalogs.get(component_catalog).ok_or_else(|| {
+                StrictValidationError::new("Unknown component catalog", id, "/components")
+            })?;
+            definition
+                .validate_component_shape(component)
+                .map_err(|e| StrictValidationError::new(e.to_string(), id, "/components"))?;
+            check_depth(component, 0, 0, id, "/components", true)?;
+            self.validate_calls(component, &surface.catalog, id, "/components")?;
+
             let catalog = self
                 .catalogs
                 .get(component["@catalogId"].as_str().unwrap_or(&surface.catalog))
@@ -241,6 +375,23 @@ impl StrictCurrentValidator {
                     .collect::<Vec<_>>(),
             );
         }
+        super::composition::validate_composition(
+            &surface.components,
+            &edges,
+            &self.catalogs,
+            &surface.catalog,
+            "root",
+        )
+        .map_err(|cause| {
+            let mut error = StrictValidationError::new(
+                cause.message,
+                id,
+                &format!("/components/{}", cause.component_id),
+            );
+            error.category = "ValidationError".into();
+            error.code = cause.code.into();
+            error
+        })?;
         let mut visited = BTreeSet::new();
         let mut active = BTreeSet::new();
         visit(
@@ -304,6 +455,7 @@ fn check_depth(
     if let Some(message) = failure {
         let mut e = StrictValidationError::new(message, surface, path);
         e.category = "RecursionError".into();
+        e.code = "RECURSION_LIMIT_EXCEEDED".into();
         return Err(e);
     }
     match value {
@@ -435,6 +587,7 @@ fn visit(
         let mut e =
             StrictValidationError::new("Global recursion limit exceeded", surface, "/components");
         e.category = "RecursionError".into();
+        e.code = "RECURSION_LIMIT_EXCEEDED".into();
         return Err(e);
     }
     if !active.insert(node.into()) {
@@ -450,43 +603,4 @@ fn visit(
     }
     active.remove(node);
     Ok(())
-}
-
-fn wire_catalog(catalog: &CatalogDefinition) -> Value {
-    let mut raw = catalog.to_json();
-    if !raw["$defs"].is_object() {
-        raw["$defs"] = json!({});
-    }
-    for (name, entries) in [
-        ("anyComponent", catalog.components()),
-        ("anyFunction", catalog.functions()),
-    ] {
-        if raw["$defs"].get(name).is_none() {
-            let group = if name == "anyComponent" {
-                "components"
-            } else {
-                "functions"
-            };
-            raw["$defs"][name] = if entries.is_empty() {
-                json!(false)
-            } else {
-                json!({"oneOf":entries.keys().map(|key|json!({"$ref":format!("#/{group}/{}", fragment(key))})).collect::<Vec<_>>()})
-            };
-        }
-    }
-    raw
-}
-
-fn fragment(key: &str) -> String {
-    key.replace('~', "~0")
-        .replace('/', "~1")
-        .bytes()
-        .map(|b| {
-            if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
-                (b as char).to_string()
-            } else {
-                format!("%{b:02X}")
-            }
-        })
-        .collect()
 }

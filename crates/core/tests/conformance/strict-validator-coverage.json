@@ -1,26 +1,7 @@
 {
   "revision": "eb1fd7f0f8e9ff78d29ab6da7e3169bc1edb0f41",
-  "passed": 30,
-  "known_divergences": [
-    {
-      "name": "test_v10_component_nesting_depth_limit_exceeded_error",
-      "actual_category": "RecursionError",
-      "actual_message": "Global recursion limit exceeded",
-      "reason": "Older fixture expects ValidationError; current depth-boundary fixtures expect RecursionError. Rejection is enforced but category differs."
-    },
-    {
-      "name": "test_v10_recursion_limit_function_call_depth_exceeded_error",
-      "actual_category": "RecursionError",
-      "actual_message": "functionCall depth",
-      "reason": "Older fixture expects ValidationError; current depth-boundary fixtures expect RecursionError. Rejection is enforced but category differs."
-    },
-    {
-      "name": "test_v10_data_model_nesting_depth_limit_exceeded_error",
-      "actual_category": "RecursionError",
-      "actual_message": "Global recursion limit exceeded",
-      "reason": "Older fixture expects ValidationError; current depth-boundary fixtures expect RecursionError. Rejection is enforced but category differs."
-    }
-  ],
+  "passed": 33,
+  "known_divergences": [],
   "included": [
     "test_v10_topology_circular_reference_error",
     "test_v10_topology_dangling_child_reference_error",
@@ -121,5 +102,6 @@
       "name": "test_v10_validate_at_checks_on_non_checkable_component_error",
       "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
     }
-  ]
+  ],
+  "category_semantics": "Pinned Python exception inheritance: ValidationError includes IntegrityError and RecursionError; IntegrityError mapping includes RecursionError."
 }
