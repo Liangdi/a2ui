@@ -258,7 +258,14 @@ impl MessageProcessor {
                 Ok(())
             }
             A2uiPayload::CreateSurface(payload) => {
-                self.handle_create_surface(&payload.create_surface)
+                self.handle_create_surface(&payload.create_surface)?;
+                if let Some(surface) = self
+                    .model
+                    .get_surface_mut(&payload.create_surface.surface_id)
+                {
+                    surface.current_protocol = msg.version == "1.0";
+                }
+                Ok(())
             }
             A2uiPayload::UpdateComponents(payload) => {
                 self.handle_update_components(&payload.update_components)
@@ -539,7 +546,8 @@ impl MessageProcessor {
         let data = surface_data.as_deref().unwrap_or(&empty);
         let context = crate::model::data_context::DataContext::new(data, &catalog.functions)
             .with_catalog_id(catalog_id)
-            .with_agent_caller();
+            .with_agent_caller()
+            .with_current_protocol();
         let args: HashMap<_, _> = call
             .call_function
             .args

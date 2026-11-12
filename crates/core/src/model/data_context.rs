@@ -31,6 +31,7 @@ pub struct DataContext<'a> {
     template_index: Option<usize>,
     catalog_id: Option<&'a str>,
     agent_caller: bool,
+    current_protocol: bool,
 }
 
 impl<'a> DataContext<'a> {
@@ -49,6 +50,7 @@ impl<'a> DataContext<'a> {
             template_index: None,
             catalog_id: None,
             agent_caller: false,
+            current_protocol: false,
         }
     }
 
@@ -70,7 +72,19 @@ impl<'a> DataContext<'a> {
             template_index: None,
             catalog_id: self.catalog_id,
             agent_caller: self.agent_caller,
+            current_protocol: self.current_protocol,
         }
+    }
+
+    /// Evaluate functions using released A2UI 1.0 semantics rather than draft behavior.
+    pub fn with_current_protocol(mut self) -> Self {
+        self.current_protocol = true;
+        self
+    }
+
+    /// Whether this context uses the released A2UI protocol.
+    pub fn is_current_protocol(&self) -> bool {
+        self.current_protocol
     }
 
     /// Identify the catalog whose functions are available to this context.

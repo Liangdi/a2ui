@@ -18,6 +18,8 @@ pub struct PendingAction {
 pub struct SurfaceModel {
     /// Unique surface identifier.
     pub id: String,
+    /// Whether this surface was created with released A2UI 1.0.
+    pub current_protocol: bool,
     /// Catalog URI this surface uses.
     pub catalog_id: String,
     /// Optional surface properties (e.g. agentDisplayName).
@@ -44,6 +46,7 @@ impl SurfaceModel {
     ) -> Self {
         Self {
             id,
+            current_protocol: false,
             catalog_id,
             surface_properties,
             metadata: None,
