@@ -32,6 +32,7 @@ pub struct MessageProcessor {
     /// Outgoing client-to-server messages produced during processing.
     outgoing_messages: Vec<ClientMessage>,
     agent_function_responses: Vec<FunctionResponse>,
+    evaluator: crate::evaluation::Evaluator,
     /// Validation config; `None` = validation fully OFF (the default, which
     /// preserves the existing graceful-degradation behavior — bad refs / dup
     /// ids / cycles are silently tolerated and components still load).
@@ -52,6 +53,7 @@ impl MessageProcessor {
             catalog_versions: HashMap::new(),
             outgoing_messages: Vec::new(),
             agent_function_responses: Vec::new(),
+            evaluator: crate::evaluation::Evaluator::default(),
             validation: None,
             pending_validation: crate::validate::ValidationReport::new(),
         }
@@ -68,7 +70,78 @@ impl MessageProcessor {
         self.model = SurfaceGroupModel::new();
         self.outgoing_messages.clear();
         self.agent_function_responses.clear();
+        self.evaluator = crate::evaluation::Evaluator::default();
         self.pending_validation = crate::validate::ValidationReport::new();
+    }
+
+    /// Start an opt-in current expression evaluation. Only pass Action for a
+    /// trusted host user gesture; incoming messages must use Reactive.
+    pub fn start_evaluation(
+        &mut self,
+        surface_id: &str,
+        base_path: &str,
+        expression: serde_json::Value,
+        mode: crate::evaluation::EvaluationMode,
+    ) -> Result<crate::evaluation::EvaluationId> {
+        if self.model.get_surface(surface_id).is_none() {
+            return Err(A2uiError::SurfaceNotFound(surface_id.into()));
+        }
+        let id = self
+            .evaluator
+            .start(surface_id, base_path, expression, mode)?;
+        self.advance_evaluations();
+        Ok(id)
+    }
+
+    /// Stop a reactive subscription or pending action; late responses are ignored.
+    pub fn cancel_evaluation(&mut self, id: &str) {
+        self.evaluator.cancel(id);
+        self.remove_cancelled_evaluation_calls();
+    }
+
+    /// Cancel surface RPCs but retain reactive subscriptions. A later surface
+    /// invalidation restarts their evaluation; stale replies remain inert.
+    pub fn cancel_surface_calls(&mut self, surface_id: &str) {
+        self.evaluator.cancel_surface_calls(surface_id);
+        self.remove_cancelled_evaluation_calls();
+    }
+
+    /// Notify the evaluator after a host changes surface data directly rather
+    /// than through `process_message`. Pending actions are cancelled safely.
+    pub fn invalidate_evaluations(&mut self, surface_id: &str) {
+        self.evaluator.invalidate_surface(surface_id, false);
+        self.advance_evaluations();
+    }
+
+    /// Consume changed evaluation states (including explicit pending/errors).
+    pub fn drain_evaluation_updates(&mut self) -> Vec<crate::evaluation::EvaluationUpdate> {
+        self.evaluator.drain()
+    }
+
+    fn remove_cancelled_evaluation_calls(&mut self) {
+        let ids = self.evaluator.drain_cancelled_calls();
+        self.outgoing_messages
+            .retain(|message| match &message.payload {
+                ClientPayload::CallAgentFunction(payload) => {
+                    !ids.contains(&payload.call_agent_function.function_call_id)
+                }
+                _ => true,
+            });
+    }
+
+    fn advance_evaluations(&mut self) {
+        let mut evaluator = std::mem::take(&mut self.evaluator);
+        let calls = evaluator.advance(self);
+        self.evaluator = evaluator;
+        self.remove_cancelled_evaluation_calls();
+        for call in calls {
+            self.queue_outgoing(ClientMessage {
+                version: "1.0".into(),
+                payload: ClientPayload::CallAgentFunction(CallAgentFunctionPayload {
+                    call_agent_function: call,
+                }),
+            });
+        }
     }
 
     /// Parse a raw JSON string into an A2uiMessage.
@@ -254,7 +327,7 @@ impl MessageProcessor {
         } else {
             msg
         };
-        match &msg.payload {
+        let result = match &msg.payload {
             A2uiPayload::CallRendererFunction(payload) => {
                 self.handle_renderer_function(&payload.call_renderer_function)
             }
@@ -284,7 +357,27 @@ impl MessageProcessor {
             }
             A2uiPayload::CallFunction(payload) => self.handle_call_function(payload),
             A2uiPayload::ActionResponse(payload) => self.handle_action_response(payload),
+        };
+        result?;
+        match &msg.payload {
+            A2uiPayload::AgentFunctionResponse(payload) => {
+                let mut evaluator = std::mem::take(&mut self.evaluator);
+                evaluator.response(self, &payload.agent_function_response);
+                self.evaluator = evaluator;
+            }
+            A2uiPayload::UpdateDataModel(payload) => self
+                .evaluator
+                .invalidate_surface(&payload.update_data_model.surface_id, false),
+            A2uiPayload::UpdateComponents(payload) => self
+                .evaluator
+                .invalidate_surface(&payload.update_components.surface_id, false),
+            A2uiPayload::DeleteSurface(payload) => self
+                .evaluator
+                .invalidate_surface(&payload.delete_surface.surface_id, true),
+            _ => {}
         }
+        self.advance_evaluations();
+        Ok(())
     }
 
     /// Process multiple messages sequentially.
@@ -583,8 +676,11 @@ impl MessageProcessor {
             None => None,
         };
         let data = surface_data.as_deref().unwrap_or(&empty);
+        let default_catalog = call.surface_id.as_deref().and_then(|id| self.model.get_surface(id)).map(|surface| surface.catalog_id.as_str());
         let context = crate::model::data_context::DataContext::new(data, &catalog.functions)
             .with_catalog_id(catalog_id)
+            .with_catalogs(&self.catalogs, default_catalog)
+            .with_catalog_versions(&self.catalog_versions)
             .with_agent_caller()
             .with_current_protocol();
         let args: HashMap<_, _> = call
@@ -597,6 +693,7 @@ impl MessageProcessor {
                     .map(|value| (key.clone(), value))
             })
             .collect::<Result<_>>()?;
+        function.validate_args(&args)?;
         let value = function.execute(&args, &context)?;
         let valid = match function.return_type_for_protocol(true) {
             ReturnType::String => value.is_string(),
