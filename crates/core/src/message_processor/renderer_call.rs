@@ -50,8 +50,31 @@ impl MessageProcessor {
         &self,
         surface_id: &str,
         base_path: &str,
+        call: FunctionCall,
+        user_activated: bool,
+    ) -> Result<RendererCall> {
+        self.prepare_renderer_call_inner(surface_id, base_path, call, user_activated, None)
+    }
+
+    /// Reactive templates can return a partial value while reporting failed parts.
+    pub fn prepare_renderer_call_with_errors(
+        &self,
+        surface_id: &str,
+        base_path: &str,
+        call: FunctionCall,
+        user_activated: bool,
+        errors: &std::cell::RefCell<Vec<A2uiError>>,
+    ) -> Result<RendererCall> {
+        self.prepare_renderer_call_inner(surface_id, base_path, call, user_activated, Some(errors))
+    }
+
+    fn prepare_renderer_call_inner(
+        &self,
+        surface_id: &str,
+        base_path: &str,
         mut call: FunctionCall,
         user_activated: bool,
+        errors: Option<&std::cell::RefCell<Vec<A2uiError>>>,
     ) -> Result<RendererCall> {
         let surface = self
             .model
@@ -86,6 +109,10 @@ impl MessageProcessor {
         if user_activated {
             context = context.with_user_activation();
         }
+        if let Some(errors) = errors {
+            context = context.with_expression_errors(errors);
+        }
+
         if call.call.starts_with('@') {
             return context.try_execute_function(&call).map(RendererCall::Local);
         }
