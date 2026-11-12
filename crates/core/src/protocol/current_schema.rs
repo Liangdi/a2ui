@@ -54,6 +54,27 @@ impl CurrentSchemaValidator {
         Ok(Self { incoming, outgoing })
     }
 
+    /// Validate only the released transport envelope and common component fields.
+    /// Callers MUST separately validate every component against its negotiated
+    /// catalog. Kept crate-private so this permissive union cannot accidentally
+    /// replace complete catalog validation at a public boundary.
+    pub(crate) fn validate_envelope(message: &Value) -> Result<()> {
+        static ENVELOPE: std::sync::LazyLock<Result<CurrentSchemaValidator>> =
+            std::sync::LazyLock::new(CurrentSchemaValidator::envelope_only);
+        ENVELOPE
+            .as_ref()
+            .map_err(|e| A2uiError::Validation(e.to_string()))?
+            .validate_incoming(message)
+    }
+    fn envelope_only() -> Result<Self> {
+        Self::new(serde_json::json!({"$defs":{
+            "anyComponent":{"type":"object","additionalProperties":true},
+            "anyFunction":{"type":"object","properties":{
+                "@call":{"type":"string"},"catalogId":{"type":"string"},"args":{"type":"object"}
+            },"required":["@call"],"additionalProperties":false}
+        }}))
+    }
+
     /// Validate a released common type without catalog-specific function signatures.
     ///
     /// This is a schema-backed boundary, not Rust-model schema generation. The

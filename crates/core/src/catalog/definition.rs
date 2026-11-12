@@ -307,6 +307,12 @@ impl CatalogDefinition {
     }
 
     pub fn validate_component(&self, value: &Value) -> Result<()> {
+        self.validate_component_shape(value)?;
+        self.validate_calls(value)
+    }
+    /// Validate the component schema only. Cross-catalog hosts must independently
+    /// validate function calls against the surface's function catalog/overrides.
+    pub fn validate_component_shape(&self, value: &Value) -> Result<()> {
         let name = value
             .get("component")
             .and_then(Value::as_str)
@@ -323,7 +329,33 @@ impl CatalogDefinition {
             .map_err(|e| invalid(&e.to_string()))?
             .validate(value)
             .map_err(|e| invalid(&e.to_string()))?;
-        self.validate_calls(value)
+        Ok(())
+    }
+    /// Validate one invocation against this negotiated catalog, without choosing
+    /// catalogs for nested calls. A registry-aware host must visit those separately.
+    pub(crate) fn validate_function_call_shape(&self, value: &Value) -> Result<()> {
+        let name = value["@call"]
+            .as_str()
+            .ok_or_else(|| invalid("function name missing"))?;
+        let reference = if name == "@index" {
+            "#/$defs/__a2uiCommon/IndexSystemFunction".to_string()
+        } else {
+            validate_identifier(name, "function")?;
+            if !self.functions.contains_key(name) {
+                return Err(invalid("function absent from catalog union"));
+            }
+            format!("#/functions/{}", escape(name))
+        };
+        let mut schema = self.resolved.clone();
+        schema["allOf"] =
+            json!([{"$ref":"#/$defs/__a2uiCommon/FunctionCommon"},{"$ref":reference}]);
+        schema["unevaluatedProperties"] = json!(false);
+        jsonschema::options()
+            .offline()
+            .build(&schema)
+            .map_err(|e| invalid(&e.to_string()))?
+            .validate(value)
+            .map_err(|e| invalid(&e.to_string()))
     }
     fn validate_calls(&self, value: &Value) -> Result<()> {
         match value {
