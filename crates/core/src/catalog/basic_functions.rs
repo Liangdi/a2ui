@@ -71,7 +71,15 @@ impl FunctionImplementation for RequiredFunction {
     }
 
     fn return_type(&self) -> ReturnType {
-        ReturnType::Any
+        ReturnType::Boolean
+    }
+
+    fn return_type_for_protocol(&self, current: bool) -> ReturnType {
+        if current {
+            ReturnType::Object
+        } else {
+            ReturnType::Boolean
+        }
     }
 
     fn execute(
@@ -103,7 +111,15 @@ impl FunctionImplementation for RegexFunction {
     }
 
     fn return_type(&self) -> ReturnType {
-        ReturnType::Any
+        ReturnType::Boolean
+    }
+
+    fn return_type_for_protocol(&self, current: bool) -> ReturnType {
+        if current {
+            ReturnType::Object
+        } else {
+            ReturnType::Boolean
+        }
     }
 
     fn execute(
@@ -114,19 +130,10 @@ impl FunctionImplementation for RegexFunction {
         let value = require_str(args, "value", "regex")?;
         let pattern = require_str(args, "pattern", "regex")?;
 
-        if pattern.chars().count() > 256 {
-            return Err(A2uiError::InvalidFunctionCall(
-                "regex: PATTERN_TOO_LONG".into(),
-            ));
-        }
-        if value.chars().count() > 4096 {
-            return Ok(validation_result(false, context));
-        }
-        let re = Regex::new(pattern).map_err(|e| {
-            A2uiError::InvalidFunctionCall(format!("regex: invalid pattern '{pattern}': {e}"))
-        })?;
-
-        Ok(validation_result(re.is_match(value), context))
+        let matched = super::regex_subset::regex_test(pattern, value)
+            .map_err(A2uiError::InvalidFunctionCall)?
+            .unwrap_or(false);
+        Ok(validation_result(matched, context))
     }
 }
 
@@ -143,7 +150,15 @@ impl FunctionImplementation for LengthFunction {
     }
 
     fn return_type(&self) -> ReturnType {
-        ReturnType::Any
+        ReturnType::Boolean
+    }
+
+    fn return_type_for_protocol(&self, current: bool) -> ReturnType {
+        if current {
+            ReturnType::Object
+        } else {
+            ReturnType::Boolean
+        }
     }
 
     fn execute(
@@ -190,7 +205,15 @@ impl FunctionImplementation for NumericFunction {
     }
 
     fn return_type(&self) -> ReturnType {
-        ReturnType::Any
+        ReturnType::Boolean
+    }
+
+    fn return_type_for_protocol(&self, current: bool) -> ReturnType {
+        if current {
+            ReturnType::Object
+        } else {
+            ReturnType::Boolean
+        }
     }
 
     fn execute(
@@ -238,7 +261,15 @@ impl FunctionImplementation for EmailFunction {
     }
 
     fn return_type(&self) -> ReturnType {
-        ReturnType::Any
+        ReturnType::Boolean
+    }
+
+    fn return_type_for_protocol(&self, current: bool) -> ReturnType {
+        if current {
+            ReturnType::Object
+        } else {
+            ReturnType::Boolean
+        }
     }
 
     fn execute(
