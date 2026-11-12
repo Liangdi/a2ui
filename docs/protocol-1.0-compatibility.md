@@ -21,20 +21,63 @@ Use `"version": "1.0"` in new payloads and the `"1.0"` capability key. Within dy
 
 Legacy `callFunction`/`actionResponse` and helpers remain available only as draft APIs. They are not emitted by the new role-based RPC path. Use explicit `call_agent_function` for current remote invocation; agent responses are exposed rather than silently written into legacy action-response state.
 
+## Verified coverage and optional strict validation
+
+The pinned official `functions.yaml` corpus now passes all **116 cases** with no
+skips. The shared `data_model.yaml` corpus passes all **52 cases** with no skips
+(the source labels these shared semantics v0.9). The portable regex implementation
+also has 160 checked-in reference vectors and was compared with the upstream
+Python reference across 9,810 cases without a mismatch. These are exact suite
+claims, not a claim that every upstream conformance suite has run.
+
+`CurrentSchemaValidator::new(catalog_json)` compiles the pinned released incoming
+and outgoing schemas against a locally supplied negotiated catalog. Use
+`parse_incoming` to validate the original wire value before typed parsing.
+External HTTP/file schema loading is disabled. This additive strict boundary does
+not change the legacy parser's compatibility behavior and does not substitute
+for state-machine/topology validation.
+
+Current native validators return structured `ValidationResult` objects; draft
+contexts keep boolean results. Passive function evaluation can use an explicit
+catalog registry and protocol-version map. Each nested call follows its own
+surface default/explicit override, while template parts stay in the selected
+function's catalog. Schema-only functions retain argument schemas, defaults,
+caller restrictions, activation requirements and declared return types.
+
+The additive [resumable evaluator](resumable-evaluation.md) preserves the existing
+synchronous API while exposing pending values explicitly. It provides shared
+reactive calls, isolated imperative invocations, response resumption, cancellation,
+stale-reply rejection and host-visible diagnostics. It remains opt-in; a backend
+must subscribe to values and display pending/errors rather than interpreting null
+as completion.
+
 ## Remaining gaps (not a full conformance claim)
 
-- Existing renderers still use their own component registries. Mixed-catalog component rendering and automatic agent-function actions require renderer-level work, not just parsing `@catalogId`.
-- Existing bundled catalog schemas, sample payloads and built-in validation function result shapes have not all been migrated to the released basic catalog. Strict schema-validation and complete official conformance-suite execution remain outstanding.
-- Inline catalog loading is a lightweight schema parser, not a full JSON Schema/UAX #31 validator. Runtime functions require native implementations; inline declarations do not grant executable behavior.
-- Accessibility metadata is parsed, but each backend must implement native screen-reader semantics. Media decoding, gesture-gated functions and platform-specific behavior are not validated by the core tests.
+- The complete official suite has not been implemented or executed. Coverage and
+  named exclusions for the function-routing corpus are checked in under
+  `crates/core/tests/conformance`; broader schema-generation, scaling, catalog
+  derivation, RPC timeout and native-adapter suites remain outstanding.
+- Automatic async property/check subscription and native UI projection require
+  backend integration. The core evaluator is not proof of every renderer's
+  behavior. See its prototype boundaries for transport and lifecycle details.
+- Mixed-catalog custom components need host-native registrations. GPUI Kit rejects
+  unsupported catalog/name pairs instead of impersonating a same-named basic
+  component. Legacy backends and bundled draft samples are not all migrated.
+- Inline catalog metadata extraction is not a complete catalog-definition/UAX #31
+  implementation. Strict wire validation is available separately with a complete
+  local catalog; runtime functions still require native implementations or an
+  authorized agent transport.
+- Accessibility metadata is parsed, but native screen-reader semantics, media
+  decoding and platform-specific gesture behavior are not conformance-verified.
 
-These limits are deliberate review items for the draft PR, not hidden compatibility guarantees.
+These limits remain explicit draft-PR review items.
 
 ### Caller and user-activation safety
 
 Current and legacy remote calls enforce native caller declarations, including
 nested argument calls. Legacy calls without a catalog ID require an unambiguous
 function name and use an empty data model rather than an unrelated surface.
-Functions requiring user activation are denied in passive renderer evaluation
-as well as remote calls. Core does not yet expose a trusted gesture context;
-renderers must not rely on these functions executing from properties or checks.
+Passive evaluation and agent calls cannot acquire user activation. Only a trusted
+host gesture may enter activation-capable action APIs. Schema-only calls are
+validated before remote routing, and failed native calls never silently fall back
+to the agent.
