@@ -472,7 +472,28 @@ impl Node {
         }
         self.children().iter().any(Self::adjacent_overlap)
     }
+    // Minimum consumed code points, ignoring zero-width assertion constraints.
+    // Saturation makes this a safe lower bound for impossible-match pruning.
+    fn min_width(&self) -> u32 {
+        match self {
+            Self::Set(_) => 1,
+            Self::Group(c) => c.min_width(),
+            Self::Concat(v) => v
+                .iter()
+                .fold(0u32, |sum, n| sum.saturating_add(n.min_width())),
+            Self::Alt(v) => v.iter().map(Self::min_width).min().unwrap_or(0),
+            Self::Repeat { child, min, .. } => child.min_width().saturating_mul(*min),
+            _ => 0,
+        }
+    }
     fn translate(&self, out: &mut String) {
+        // Inputs are capped at 4096 scalar values. This avoids expanding huge
+        // valid bounded repetitions into an NFA when no permitted input can
+        // possibly match, including when nested inside a negative lookahead.
+        if self.min_width() > 4096 {
+            out.push_str("(?!)");
+            return;
+        }
         match self {
             Self::Empty => {}
             Self::Set(r) => {
@@ -530,7 +551,15 @@ impl Node {
                 out.push_str("(?:");
                 child.translate(out);
                 out.push(')');
-                match max {
+                // A nonnullable child can consume at most this many times on
+                // any permitted input. Do not apply this to nullable children.
+                let capped_max = max.map(|max| {
+                    let width = child.min_width();
+                    4096u32
+                        .checked_div(width)
+                        .map_or(max, |bound| max.min(bound))
+                });
+                match capped_max.as_ref() {
                     Some(max) if max == min => {
                         let _ = write!(out, "{{{min}}}");
                     }
@@ -592,6 +621,32 @@ pub(super) fn regex_test(pattern: &str, value: &str) -> Result<Option<bool>, Str
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn pinned_official_reference_vectors() {
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../../tests/conformance/regex-reference.json"))
+                .unwrap();
+        for case in fixture["cases"].as_array().unwrap() {
+            let pattern = case["pattern"].as_str().unwrap();
+            let value = case["value"].as_str().unwrap();
+            let actual = regex_test(pattern, value);
+            if let Some(error) = case.get("error").and_then(serde_json::Value::as_str) {
+                assert!(
+                    actual
+                        .as_ref()
+                        .is_err_and(|e| e.split(':').next() == Some(error)),
+                    "{pattern:?}: expected {error}, got {actual:?}"
+                );
+            } else {
+                assert_eq!(
+                    actual,
+                    Ok(case["result"].as_bool()),
+                    "{pattern:?} on {value:?}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn rejects_nonportable_and_unsafe_syntax() {
         for p in [
