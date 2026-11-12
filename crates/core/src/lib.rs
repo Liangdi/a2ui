@@ -26,6 +26,7 @@
 pub mod capabilities;
 pub mod catalog;
 pub mod error;
+pub mod evaluation;
 pub mod event;
 pub mod message_processor;
 pub mod model;

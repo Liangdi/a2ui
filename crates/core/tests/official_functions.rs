@@ -288,3 +288,27 @@ fn assert_subset(expected: &Value, actual: &Value) -> Result<(), a2ui_base::erro
         )))
     }
 }
+
+#[test]
+fn template_partial_values_require_an_explicit_diagnostics_sink() {
+    let functions: HashMap<String, Box<dyn FunctionImplementation>> = build_basic_functions()
+        .into_iter()
+        .map(|f| (f.name().into(), f))
+        .collect();
+    let data = DataModel::new();
+    let strict = DataContext::new(&data, &functions).with_current_protocol();
+    let args = HashMap::from([(
+        "value".into(),
+        json!("你好 ${missing()} / ${@index()} done"),
+    )]);
+    assert!(functions["formatString"].execute(&args, &strict).is_err());
+    let errors = std::cell::RefCell::new(Vec::new());
+    let partial = DataContext::new(&data, &functions)
+        .with_current_protocol()
+        .with_expression_errors(&errors);
+    assert_eq!(
+        functions["formatString"].execute(&args, &partial).unwrap(),
+        json!("你好  /  done")
+    );
+    assert_eq!(errors.borrow().len(), 2);
+}

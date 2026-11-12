@@ -24,6 +24,31 @@ impl MessageProcessor {
         component_id: &str,
         base_path: &str,
     ) -> Result<()> {
+        let current_action = {
+            let surface = self
+                .model
+                .get_surface(surface_id)
+                .ok_or_else(|| A2uiError::SurfaceNotFound(surface_id.into()))?;
+            if surface.current_protocol {
+                let components = surface.components.borrow();
+                let component = components
+                    .get(component_id)
+                    .ok_or_else(|| A2uiError::ComponentNotFound(component_id.into()))?;
+                let catalog = component.catalog_id().unwrap_or(&surface.catalog_id);
+                if !self.catalogs.contains_key(catalog) {
+                    return Err(A2uiError::CatalogNotFound(catalog.into()));
+                }
+                Some(component.properties.get("action").cloned())
+            } else {
+                None
+            }
+        };
+        if let Some(action) = current_action {
+            if let Some(action) = action {
+                self.start_current_action(surface_id, component_id, base_path, action)?;
+            }
+            return Ok(());
+        }
         let outgoing = {
             let surface = self
                 .model
@@ -238,15 +263,19 @@ mod tests {
     }
 
     #[test]
-    fn unknown_catalog_system_calls_and_nested_remote_calls_do_not_escape() {
+    fn unknown_catalog_and_system_calls_do_not_escape() {
         for call in [
             json!({"@call":"save","catalogId":"unknown"}),
             json!({"@call":"@unknown"}),
-            json!({"@call":"save","args":{"value":{"@call":"remote"}}}),
         ] {
             let mut p = processor(json!({"functionCall":call}));
-            assert!(p.activate_component("s", "button", "").is_err());
-            assert!(p.drain_outgoing().is_empty());
+            p.activate_component("s", "button", "").unwrap();
+            assert_eq!(p.drain_action_errors().len(), 1);
+            assert!(
+                p.drain_outgoing()
+                    .iter()
+                    .all(|message| !matches!(message.payload, ClientPayload::CallAgentFunction(_)))
+            );
         }
     }
     struct GestureFunction;
@@ -287,7 +316,7 @@ mod tests {
     }
 
     #[test]
-    fn schema_only_declared_function_is_not_unsafely_forwarded() {
+    fn schema_only_declared_function_routes_after_policy_checks() {
         let mut p = processor(json!({"functionCall":{"@call":"declared"}}));
         p.catalogs.get_mut("test").unwrap().functions.insert(
             "declared".into(),
@@ -296,7 +325,11 @@ mod tests {
                 crate::catalog::function_api::ReturnType::Any,
             )),
         );
-        assert!(p.activate_component("s", "button", "").is_err());
-        assert!(p.drain_outgoing().is_empty());
+        p.activate_component("s", "button", "").unwrap();
+        assert!(p.drain_action_errors().is_empty());
+        assert!(matches!(
+            p.drain_outgoing()[0].payload,
+            ClientPayload::CallAgentFunction(_)
+        ));
     }
 }

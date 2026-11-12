@@ -50,8 +50,31 @@ impl MessageProcessor {
         &self,
         surface_id: &str,
         base_path: &str,
+        call: FunctionCall,
+        user_activated: bool,
+    ) -> Result<RendererCall> {
+        self.prepare_renderer_call_inner(surface_id, base_path, call, user_activated, None)
+    }
+
+    /// Reactive templates can return a partial value while reporting failed parts.
+    pub fn prepare_renderer_call_with_errors(
+        &self,
+        surface_id: &str,
+        base_path: &str,
+        call: FunctionCall,
+        user_activated: bool,
+        errors: &std::cell::RefCell<Vec<A2uiError>>,
+    ) -> Result<RendererCall> {
+        self.prepare_renderer_call_inner(surface_id, base_path, call, user_activated, Some(errors))
+    }
+
+    fn prepare_renderer_call_inner(
+        &self,
+        surface_id: &str,
+        base_path: &str,
         mut call: FunctionCall,
         user_activated: bool,
+        errors: Option<&std::cell::RefCell<Vec<A2uiError>>>,
     ) -> Result<RendererCall> {
         let surface = self
             .model
@@ -78,7 +101,14 @@ impl MessageProcessor {
             .with_catalogs(&self.catalogs, Some(&surface.catalog_id))
             .with_catalog_versions(&self.catalog_versions);
         if !base_path.is_empty() {
-            context = context.nested(base_path.trim_start_matches('/'));
+            context = context
+                .nested(base_path.trim_start_matches('/'))
+                .with_template_index(
+                    base_path
+                        .rsplit('/')
+                        .next()
+                        .and_then(|index| index.parse().ok()),
+                );
         }
         if surface.current_protocol {
             context = context.with_current_protocol();
@@ -86,22 +116,27 @@ impl MessageProcessor {
         if user_activated {
             context = context.with_user_activation();
         }
+        if let Some(errors) = errors {
+            context = context.with_expression_errors(errors);
+        }
+
         if call.call.starts_with('@') {
             return context.try_execute_function(&call).map(RendererCall::Local);
         }
         call.catalog_id = Some(catalog_id.clone());
         if let Some(function) = catalog.get_function(&call.call) {
             if function.allowed_callers() == AllowedCallers::AgentOnly {
-                return Err(A2uiError::InvalidFunctionCall(
-                    "agentOnly function cannot be called by renderer".into(),
-                ));
+                return Err(A2uiError::InvalidFunctionCall(format!(
+                    "agentOnly function {} cannot be called by renderer",
+                    call.call
+                )));
             }
             if function.requires_user_activation() && !user_activated {
                 return Err(A2uiError::InvalidFunctionCall(
                     "function requires user activation".into(),
                 ));
             }
-            function.validate_args(&call.args)?;
+            function.prepare_args(&mut call.args)?;
             if function.is_native() {
                 let value = function.execute(&call.args, &context)?;
                 let valid = return_matches(
@@ -187,6 +222,23 @@ mod tests {
             Ok(RendererCall::Remote(_))
         ));
     }
+    #[test]
+    fn schema_defaults_preserve_explicit_values_and_fill_nested_objects() {
+        use crate::catalog::FunctionImplementation;
+        let function = crate::catalog::SchemaOnlyFunction::new("quote".into(), ReturnType::Any)
+            .with_policy(json!({"type":"object","properties":{
+                "currency":{"type":"string","default":"USD"},
+                "options":{"type":"object","default":{},"properties":{"extendedHours":{"type":"boolean","default":false}}}
+            }}), AllowedCallers::RendererOnly, false).unwrap();
+        let mut args = std::collections::HashMap::new();
+        function.prepare_args(&mut args).unwrap();
+        assert_eq!(args["currency"], "USD");
+        assert_eq!(args["options"]["extendedHours"], false);
+        args.insert("currency".into(), json!("EUR"));
+        function.prepare_args(&mut args).unwrap();
+        assert_eq!(args["currency"], "EUR");
+    }
+
     #[test]
     fn external_schema_references_are_not_fetched() {
         let result = crate::catalog::SchemaOnlyFunction::new("remote".into(), ReturnType::Any)

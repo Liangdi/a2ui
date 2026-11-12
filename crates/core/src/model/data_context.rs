@@ -32,6 +32,7 @@ pub struct DataContext<'a> {
     template_index: Option<usize>,
     catalog_id: Option<&'a str>,
     agent_caller: bool,
+    expression_errors: Option<&'a std::cell::RefCell<Vec<crate::error::A2uiError>>>,
     catalogs: Option<&'a HashMap<String, crate::catalog::Catalog>>,
     catalog_versions: Option<&'a HashMap<String, String>>,
     surface_catalog_id: Option<&'a str>,
@@ -55,6 +56,7 @@ impl<'a> DataContext<'a> {
             template_index: None,
             catalog_id: None,
             agent_caller: false,
+            expression_errors: None,
             catalogs: None,
             catalog_versions: None,
             surface_catalog_id: None,
@@ -81,6 +83,7 @@ impl<'a> DataContext<'a> {
             template_index: None,
             catalog_id: self.catalog_id,
             agent_caller: self.agent_caller,
+            expression_errors: self.expression_errors,
             catalogs: self.catalogs,
             catalog_versions: self.catalog_versions,
             surface_catalog_id: self.surface_catalog_id,
@@ -125,6 +128,29 @@ impl<'a> DataContext<'a> {
     pub fn with_catalog_versions(mut self, versions: &'a HashMap<String, String>) -> Self {
         self.catalog_versions = Some(versions);
         self
+    }
+
+    /// Opt-in reactive-template diagnostics. With this sink, failed template
+    /// parts contribute empty text and report errors; ordinary evaluation remains strict.
+    pub fn with_expression_errors(
+        mut self,
+        errors: &'a std::cell::RefCell<Vec<crate::error::A2uiError>>,
+    ) -> Self {
+        self.expression_errors = Some(errors);
+        self
+    }
+
+    /// Report a template-part failure, or return it when strict evaluation is required.
+    pub(crate) fn report_expression_error(
+        &self,
+        error: crate::error::A2uiError,
+    ) -> Result<(), crate::error::A2uiError> {
+        if let Some(errors) = self.expression_errors {
+            errors.borrow_mut().push(error);
+            Ok(())
+        } else {
+            Err(error)
+        }
     }
 
     /// Identify the catalog whose functions are available to this context.
@@ -380,6 +406,7 @@ impl<'a> DataContext<'a> {
             let resolved = self.resolve_dynamic_json(val).ok()?;
             resolved_args.insert(key.clone(), resolved);
         }
+        func.prepare_args(&mut resolved_args).ok()?;
         func.execute(&resolved_args, self).ok()
     }
 
@@ -399,8 +426,9 @@ impl<'a> DataContext<'a> {
             .get(name)
             .ok_or_else(|| A2uiError::InvalidFunctionCall(format!("unknown function: {name}")))?;
         self.check_caller(function.as_ref())?;
-        function.validate_args(args)?;
-        function.execute(args, self)
+        let mut args = args.clone();
+        function.prepare_args(&mut args)?;
+        function.execute(&args, self)
     }
 
     /// Execute a function call, retaining the historical null-on-error display API.
@@ -459,6 +487,7 @@ impl<'a> DataContext<'a> {
         for (key, value) in &fc.args {
             args.insert(key.clone(), self.resolve_dynamic_json(value)?);
         }
+        func.prepare_args(&mut args)?;
         func.execute(&args, &execution_context)
     }
 

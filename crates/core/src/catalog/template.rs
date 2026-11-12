@@ -52,7 +52,10 @@ pub(super) fn interpolate(input: &str, context: &DataContext) -> Result<String, 
                 }
             }
             let end = end.ok_or_else(|| error("unterminated interpolation"))?;
-            out.push_str(&value_to_string(&expression(&next[..end], context, 0)?));
+            match expression(&next[..end], context, 0) {
+                Ok(value) => out.push_str(&value_to_string(&value)),
+                Err(error) => context.report_expression_error(error)?,
+            }
             rest = &next[end + 1..];
         } else {
             let c = rest.chars().next().unwrap();
