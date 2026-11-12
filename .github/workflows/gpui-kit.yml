@@ -1,0 +1,42 @@
+name: GPUI Kit adapter
+
+on:
+  pull_request:
+    paths:
+      - "crates/gpui-kit/**"
+      - "crates/core/**"
+      - "crates/image/**"
+      - "crates/tui/**"
+      - "crates/gallery/**"
+      - ".github/workflows/gpui-kit.yml"
+  push:
+    branches: [feat/gpui-kit-adapter]
+    paths:
+      - "crates/**"
+      - ".github/workflows/gpui-kit.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  native-build-and-unit-tests:
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install stable Rust and native gallery dependency
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy
+          brew install chafa
+          echo "PKG_CONFIG_PATH=$(brew --prefix)/lib/pkgconfig" >> "$GITHUB_ENV"
+      - name: Check independent core-only adapter
+        run: cargo +stable check --locked --manifest-path crates/gpui-kit/Cargo.toml --no-default-features
+      - name: Test native backend logic
+        run: cargo +stable test --locked --manifest-path crates/gpui-kit/Cargo.toml --features backend
+      - name: Build native examples
+        run: cargo +stable build --locked --manifest-path crates/gpui-kit/Cargo.toml --features backend --examples
+      - name: Lint adapter and examples
+        run: cargo +stable clippy --locked --manifest-path crates/gpui-kit/Cargo.toml --features backend --all-targets -- -D warnings
