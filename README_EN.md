@@ -28,7 +28,7 @@ The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic c
 - ✅ **Modular Cargo workspace architecture** (`a2ui-base` framework-agnostic / `a2ui-tui` ratatui backend / `a2ui-gallery` demo app / `a2ui` umbrella)
 - ✅ JSON Pointer data binding with reactive state management
 - ✅ Gallery App sample browser with progressive message rendering
-- ✅ **235 unit/integration tests** (core 127 + tui 61 + gallery e2e 21 + slint 14 + iced 12), including end-to-end tests with A2UI specification examples
+- ✅ **Unit/integration and pinned conformance tests**, including end-to-end A2UI examples. See the compatibility document above for verified suites and explicit exclusions.
 
 ## Screenshots
 

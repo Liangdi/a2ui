@@ -35,19 +35,22 @@ Additional pinned corpus results, with named exclusions checked in under
 `crates/core/tests/conformance`:
 
 - Function routing: **41/43 pass**, with two exclusions (legacy v0.9 and non-JSON values).
-- Catalog definitions: **45/73 pass**, with 28 named exclusions covering legacy APIs
-  and native SDK built-in equivalence/serialization. Both current canonical
-  validation-schema golden cases now match.
-- RPC functions: **32/33 pass**. Mounted properties/checks, structured rule results,
-  correlated surface errors and bounded action completion results are additive host
-  APIs. One case still needs native functions to mutate surface data in execution
-  order; the current immutable `DataContext` cannot support that faithfully.
+- Catalog definitions: **47/73 pass**; all 26 exclusions are legacy-version cases.
+  Current schema goldens and native registration/metadata serialization pass.
+  This does not assert visual rendering or arbitrary native argument equivalence.
+- RPC functions: **33/33 pass**, including source-backed mounted properties/checks,
+  correlated errors, action completion and ordered native surface mutations.
+  The additive [native effect API](native-data-effects.md) preserves existing
+  execution signatures and validates an atomic command batch before commit.
 - Current wire pointer and deletion suites: **7/7 each**, through the real processor.
-- Current validator: **5/49 complete schema-boundary cases**; 44 named exclusions
-  require stateful topology or richer diagnostic semantics. Common types: **11 current
-  schema-backed runtime cases** with exact JSON roundtrips, including two native
-  FunctionResponse serde cases; 11 legacy/model-schema cases excluded. This is not
-  generated-Rust-model or full validator conformance.
+- Current validator: **35 unique complete cases** across the schema-only and
+  opt-in strict structural boundaries. Three additional cases reject invalid
+  input but use RecursionError where older fixtures expect ValidationError.
+  Remaining diagnostics/integration gaps are explicit in the manifests and
+  [strict boundary documentation](strict-current-validation.md).
+- Common types: **11 current schema-backed runtime cases** with exact JSON
+  roundtrips, including two native FunctionResponse serde cases. Eleven legacy
+  or generated-model cases are excluded; generated-model conformance is not claimed.
 - All three official scaling workloads were measured with warmups and five samples.
   Processing-only growth ratios were 3.865, 3.911 and 4.132 (bound 8). Composition
   remains measured-only because parent/child constraints are unsupported. See the
@@ -85,15 +88,16 @@ as completion.
 
 - The complete official suite has not been implemented or executed. The exact
   catalog, routing and RPC exclusions above remain open; full model-derived schema generation,
-  stateful validator/composition semantics and native-adapter suites remain outstanding.
+  complete stateful validation integration/composition semantics and native-adapter
+  suites remain outstanding.
 - Backend integration is separate from core evaluation. The dependent GPUI Kit
   adapter now subscribes to supported scalar properties and checks automatically,
-  with loading/error states and disabled buttons on failed checks. Nested dynamic
-  option/tab-label structures and full property schemas remain incomplete. The new mounted core API is tested independently; native UI coverage remains separate.
+  with loading/error states and disabled buttons on failed checks. Nested option labels/tab titles are subscribed, but full custom property schemas
+  remain incomplete. The new mounted core API is tested independently; native UI coverage remains separate.
 - Mixed-catalog custom components need host-native registrations. GPUI Kit rejects
   unsupported catalog/name pairs instead of impersonating a same-named basic
   component. Legacy backends and bundled draft samples are not all migrated.
-- Catalog definition coverage does not establish full native SDK equivalence,
+- Catalog definition coverage does not establish arbitrary native function behavior,
   legacy catalog compatibility or every authored schema composition. Runtime
   functions still require native implementations or an authorized agent transport.
 - The dependent GPUI Kit native smoke test verified a textbox label, button name
@@ -129,3 +133,15 @@ current renderer RPC envelopes when a string function-call ID can be recovered.
 Execution-stage failures (including nested expression failures) return
 `EXECUTION_ERROR`; invalid top-level target authorization/schema returns
 `INVALID_FUNCTION_CALL`.
+
+## Readiness hardening
+
+Native/template evaluations share a 64-frame and 4,096-call budget. Formatting
+precision is bounded before allocation. Explicit RPC IDs cannot be reused after
+settlement or processor reset; reserved evaluator IDs use a separate namespace.
+Identity and pending/result capacity limits fail closed and are documented on the API.
+
+The strict structural boundary remains opt-in rather than automatically installed
+by every renderer. Mixed-catalog wire validation can falsely reject custom widgets;
+complete lifecycle ordering and detailed SDK diagnostic normalization remain open.
+These are readiness limits, not hidden passes.
