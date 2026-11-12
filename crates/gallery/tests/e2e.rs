@@ -235,6 +235,7 @@ fn test_e2e_basic_catalog_functions_in_context() {
 
     // --- Test formatString via DataContext.resolve_dynamic_string ---
     let format_str = DynamicString::Function(FunctionCall {
+        catalog_id: None,
         call: "formatString".to_string(),
         args: {
             let mut m = std::collections::HashMap::new();
@@ -251,6 +252,7 @@ fn test_e2e_basic_catalog_functions_in_context() {
     // --- Test required via DynamicBoolean resolution ---
     // "some text" is present => true
     let required_present = DynamicBoolean::Function(FunctionCall {
+        catalog_id: None,
         call: "required".to_string(),
         args: {
             let mut m = std::collections::HashMap::new();
@@ -262,6 +264,7 @@ fn test_e2e_basic_catalog_functions_in_context() {
 
     // empty string => false
     let required_empty = DynamicBoolean::Function(FunctionCall {
+        catalog_id: None,
         call: "required".to_string(),
         args: {
             let mut m = std::collections::HashMap::new();
@@ -273,6 +276,7 @@ fn test_e2e_basic_catalog_functions_in_context() {
 
     // --- Test email via DynamicBoolean resolution ---
     let email_valid = DynamicBoolean::Function(FunctionCall {
+        catalog_id: None,
         call: "email".to_string(),
         args: {
             let mut m = std::collections::HashMap::new();
@@ -283,6 +287,7 @@ fn test_e2e_basic_catalog_functions_in_context() {
     assert!(ctx.resolve_dynamic_boolean(&email_valid));
 
     let email_bad = DynamicBoolean::Function(FunctionCall {
+        catalog_id: None,
         call: "email".to_string(),
         args: {
             let mut m = std::collections::HashMap::new();

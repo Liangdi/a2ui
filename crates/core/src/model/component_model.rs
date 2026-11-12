@@ -64,6 +64,16 @@ impl ComponentModel {
         self.properties.get(key)
     }
 
+    /// Explicit catalog override from the current component envelope.
+    pub fn catalog_id(&self) -> Option<&str> {
+        self.properties.get("@catalogId").and_then(Value::as_str)
+    }
+
+    /// Current component extension metadata, distinct from a catalog's `metadata` property.
+    pub fn metadata(&self) -> Option<&Value> {
+        self.properties.get("@metadata")
+    }
+
     /// Get the `children` property as a ChildList.
     pub fn children(&self) -> Option<crate::protocol::common_types::ChildList> {
         self.properties
@@ -106,14 +116,16 @@ impl ComponentModel {
     /// Get the `checks` property.
     pub fn checks(&self) -> Option<Vec<crate::protocol::common_types::CheckRule>> {
         self.properties
-            .get("checks")
+            .get("@checks")
+            .or_else(|| self.properties.get("checks"))
             .and_then(|v| serde_json::from_value(v.clone()).ok())
     }
 
     /// Get the accessibility attributes for this component.
     pub fn accessibility(&self) -> Option<crate::protocol::common_types::AccessibilityAttributes> {
         self.properties
-            .get("accessibility")
+            .get("@accessibility")
+            .or_else(|| self.properties.get("accessibility"))
             .and_then(|v| serde_json::from_value(v.clone()).ok())
     }
 }

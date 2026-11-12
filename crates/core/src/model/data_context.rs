@@ -29,6 +29,8 @@ pub struct DataContext<'a> {
     /// from the item's base path, and overridable via
     /// [`with_template_index`](Self::with_template_index).
     template_index: Option<usize>,
+    catalog_id: Option<&'a str>,
+    agent_caller: bool,
 }
 
 impl<'a> DataContext<'a> {
@@ -45,6 +47,8 @@ impl<'a> DataContext<'a> {
             base_path: String::new(),
             functions,
             template_index: None,
+            catalog_id: None,
+            agent_caller: false,
         }
     }
 
@@ -64,7 +68,42 @@ impl<'a> DataContext<'a> {
             base_path: new_base,
             functions: self.functions,
             template_index: None,
+            catalog_id: self.catalog_id,
+            agent_caller: self.agent_caller,
         }
+    }
+
+    /// Identify the catalog whose functions are available to this context.
+    /// Explicit overrides to another catalog fail rather than running a same-named function.
+    pub fn with_catalog_id(mut self, catalog_id: &'a str) -> Self {
+        self.catalog_id = Some(catalog_id);
+        self
+    }
+
+    /// Apply remote-agent caller restrictions to every nested function evaluation.
+    pub fn with_agent_caller(mut self) -> Self {
+        self.agent_caller = true;
+        self
+    }
+
+    fn check_caller(
+        &self,
+        function: &dyn crate::catalog::function_api::FunctionImplementation,
+    ) -> Result<(), crate::error::A2uiError> {
+        use crate::catalog::function_api::AllowedCallers;
+        let forbidden = if self.agent_caller {
+            function.allowed_callers() == AllowedCallers::RendererOnly
+                || function.requires_user_activation()
+        } else {
+            function.allowed_callers() == AllowedCallers::AgentOnly
+        };
+        if forbidden {
+            return Err(crate::error::A2uiError::Validation(format!(
+                "caller is not allowed to execute function: {}",
+                function.name()
+            )));
+        }
+        Ok(())
     }
 
     /// Return the template index for this context, if any.
@@ -93,13 +132,12 @@ impl<'a> DataContext<'a> {
     /// "no value"). The optional `offset` argument is a `DynamicNumber`
     /// (literal / binding / function call) added to the 0-based index.
     fn resolve_index(&self, args: &HashMap<String, Value>) -> Option<Value> {
-        self.template_index.map(|idx| {
-            let offset = args
-                .get("offset")
-                .map(|v| self.resolve_arg_value(v).as_f64().unwrap_or(0.0))
-                .unwrap_or(0.0);
-            serde_json::json!(idx as f64 + offset)
-        })
+        let index = self.template_index?;
+        let offset = match args.get("offset") {
+            Some(value) => self.resolve_dynamic_json(value).ok()?.as_f64()?,
+            None => 0.0,
+        };
+        Some(serde_json::json!(index as f64 + offset))
     }
 
     /// Get the current base path.
@@ -159,11 +197,11 @@ impl<'a> DataContext<'a> {
             DynamicBoolean::Literal(b) => *b,
             DynamicBoolean::Binding(b) => self
                 .resolve_binding(&b.path)
-                .and_then(|v| v.as_bool())
+                .map(|v| value_to_boolean(&v))
                 .unwrap_or(false),
             DynamicBoolean::Function(fc) => {
                 let result = self.execute_function(fc);
-                result.as_bool().unwrap_or(false)
+                value_to_boolean(&result)
             }
         }
     }
@@ -174,13 +212,48 @@ impl<'a> DataContext<'a> {
             DynamicBooleanCondition::Literal(b) => *b,
             DynamicBooleanCondition::Binding(b) => self
                 .resolve_binding(&b.path)
-                .and_then(|v| v.as_bool())
+                .map(|v| value_to_boolean(&v))
                 .unwrap_or(false),
             DynamicBooleanCondition::Function(fc) => {
                 let result = self.execute_function(fc);
-                result.as_bool().unwrap_or(false)
+                value_to_boolean(&result)
             }
         }
+    }
+
+    /// Resolve a validation condition without discarding its structured diagnostics.
+    /// Legacy literal booleans are retained, while current wire conditions use a
+    /// binding or function. A failed result receives the rule's fallback message
+    /// and default error severity only when those fields were not supplied.
+    pub fn resolve_check_rule(
+        &self,
+        rule: &crate::protocol::common_types::CheckRule,
+    ) -> Result<crate::protocol::common_types::ValidationResult, crate::error::A2uiError> {
+        use crate::protocol::common_types::{ValidationResult, ValidationSeverity};
+        let value = match &rule.condition {
+            DynamicBooleanCondition::Literal(value) => Value::Bool(*value),
+            DynamicBooleanCondition::Binding(binding) => {
+                self.resolve_binding(&binding.path).unwrap_or(Value::Null)
+            }
+            DynamicBooleanCondition::Function(call) => self.try_execute_function(call)?,
+        };
+        let mut result = if value.get("valid").and_then(Value::as_bool).is_some() {
+            serde_json::from_value::<ValidationResult>(value)?
+        } else {
+            ValidationResult {
+                valid: value_to_boolean(&value),
+                code: None,
+                message: None,
+                severity: None,
+            }
+        };
+        if !result.valid {
+            if result.message.is_none() && !rule.message.is_empty() {
+                result.message = Some(rule.message.clone());
+            }
+            result.severity.get_or_insert(ValidationSeverity::Error);
+        }
+        Ok(result)
     }
 
     /// Resolve a DynamicValue to a serde_json::Value.
@@ -189,7 +262,25 @@ impl<'a> DataContext<'a> {
             DynamicValue::String(s) => Value::String(s.clone()),
             DynamicValue::Number(n) => serde_json::json!(*n),
             DynamicValue::Boolean(b) => Value::Bool(*b),
-            DynamicValue::Array(arr) => Value::Array(arr.clone()),
+            DynamicValue::Array(arr) => Value::Array(
+                arr.iter()
+                    .map(|value| self.resolve_arg_value(value))
+                    .collect(),
+            ),
+            DynamicValue::Object(object) => Value::Object(
+                object
+                    .iter()
+                    .map(|(key, value)| {
+                        (
+                            key.strip_prefix("@@")
+                                .map(|suffix| format!("@{suffix}"))
+                                .unwrap_or_else(|| key.clone()),
+                            self.resolve_arg_value(value),
+                        )
+                    })
+                    .collect(),
+            ),
+            DynamicValue::Null => Value::Null,
             DynamicValue::Binding(b) => self.resolve_binding(&b.path).unwrap_or(Value::Null),
             DynamicValue::Function(fc) => self.execute_function(fc),
         }
@@ -221,63 +312,92 @@ impl<'a> DataContext<'a> {
             return self.resolve_index(args);
         }
         let func = self.functions.get(name)?;
+        self.check_caller(func.as_ref()).ok()?;
         // Resolve each argument value (may contain bindings or nested calls).
         let mut resolved_args = HashMap::new();
         for (key, val) in args {
-            let resolved = self.resolve_arg_value(val);
+            let resolved = self.resolve_dynamic_json(val).ok()?;
             resolved_args.insert(key.clone(), resolved);
         }
         func.execute(&resolved_args, self).ok()
     }
 
-    /// Execute a function call.
+    /// Execute a function call, retaining the historical null-on-error display API.
     fn execute_function(&self, fc: &FunctionCall) -> Value {
-        // System function: @index — only valid inside a template iteration.
+        self.try_execute_function(fc).unwrap_or(Value::Null)
+    }
+
+    fn try_execute_function(&self, fc: &FunctionCall) -> Result<Value, crate::error::A2uiError> {
+        use crate::error::A2uiError;
+        if let Some(catalog) = fc.catalog_id.as_deref()
+            && self.catalog_id != Some(catalog)
+        {
+            return Err(A2uiError::Validation(format!(
+                "function catalog is unavailable in this context: {catalog}"
+            )));
+        }
         if fc.call == "@index" {
-            return self.resolve_index(&fc.args).unwrap_or(Value::Null);
+            return self
+                .resolve_index(&fc.args)
+                .ok_or_else(|| A2uiError::Validation("@index requires a template context".into()));
         }
-        let Some(func) = self.functions.get(&fc.call) else {
-            return Value::Null;
-        };
-
-        // Resolve each argument (they can contain DynamicValues)
-        let mut resolved_args = HashMap::new();
-        for (key, val) in &fc.args {
-            // Try to resolve as a DynamicValue if it's an object with "path" or "call"
-            let resolved = self.resolve_arg_value(val);
-            resolved_args.insert(key.clone(), resolved);
+        let func = self
+            .functions
+            .get(&fc.call)
+            .ok_or_else(|| A2uiError::Validation(format!("unknown function: {}", fc.call)))?;
+        self.check_caller(func.as_ref())?;
+        let mut args = HashMap::new();
+        for (key, value) in &fc.args {
+            args.insert(key.clone(), self.resolve_dynamic_json(value)?);
         }
+        func.execute(&args, self)
+    }
 
-        match func.execute(&resolved_args, self) {
-            Ok(v) => v,
-            Err(_) => Value::Null,
+    /// Evaluate a v1.0 dynamic JSON value recursively without swallowing errors.
+    /// Literal dictionaries containing `path` or `call` remain dictionaries.
+    /// An escaped key is unescaped once; its result is not evaluated a second time.
+    pub fn resolve_dynamic_json(&self, value: &Value) -> Result<Value, crate::error::A2uiError> {
+        // Preserve integer precision and the JSON number representation. The
+        // legacy typed Number variant uses f64, but raw v1.0 JSON need not.
+        if !value.is_object() && !value.is_array() {
+            return Ok(value.clone());
+        }
+        let dynamic: DynamicValue = serde_json::from_value(value.clone())?;
+        match dynamic {
+            DynamicValue::Array(values) => values
+                .iter()
+                .map(|value| self.resolve_dynamic_json(value))
+                .collect::<Result<Vec<_>, _>>()
+                .map(Value::Array),
+            DynamicValue::Object(object) => object
+                .iter()
+                .map(|(key, value)| {
+                    let key = key
+                        .strip_prefix("@@")
+                        .map(|suffix| format!("@{suffix}"))
+                        .unwrap_or_else(|| key.clone());
+                    self.resolve_dynamic_json(value).map(|value| (key, value))
+                })
+                .collect::<Result<serde_json::Map<_, _>, _>>()
+                .map(Value::Object),
+            DynamicValue::Function(call) => self.try_execute_function(&call),
+            other => Ok(self.resolve_dynamic_value(&other)),
         }
     }
 
-    /// Resolve an argument value that might be a DynamicValue.
-    fn resolve_arg_value(&self, val: &Value) -> Value {
-        if let Some(obj) = val.as_object() {
-            if let Some(path) = obj.get("path").and_then(|v| v.as_str()) {
-                return self.resolve_binding(path).unwrap_or(Value::Null);
-            }
-            if let Some(call) = obj.get("call").and_then(|v| v.as_str()) {
-                let args = obj
-                    .get("args")
-                    .and_then(|v| v.as_object())
-                    .map(|m| {
-                        m.iter()
-                            .map(|(k, v)| (k.clone(), self.resolve_arg_value(v)))
-                            .collect::<HashMap<_, _>>()
-                    })
-                    .unwrap_or_default();
-                let fc = FunctionCall {
-                    call: call.to_string(),
-                    args,
-                };
-                return self.execute_function(&fc);
-            }
-        }
-        val.clone()
+    fn resolve_arg_value(&self, value: &Value) -> Value {
+        self.resolve_dynamic_json(value).unwrap_or(Value::Null)
+    }
+}
+
+/// A2UI v1.0 DynamicBoolean coercion, including structured validation results.
+pub fn value_to_boolean(value: &Value) -> bool {
+    match value {
+        Value::Bool(value) => *value,
+        Value::Number(value) => value.as_f64().is_some_and(|value| value != 0.0),
+        Value::String(value) => value.eq_ignore_ascii_case("true"),
+        Value::Object(value) => value.get("valid").and_then(Value::as_bool).unwrap_or(false),
+        _ => false,
     }
 }
 
@@ -314,6 +434,7 @@ mod index_tests {
         }
         FunctionCall {
             call: "@index".to_string(),
+            catalog_id: None,
             args: map,
         }
     }
@@ -348,7 +469,7 @@ mod index_tests {
         let dm = Box::leak(Box::new(DataModel::from_value(json!({"step": 10}))));
         let fns = Box::leak(Box::new(HashMap::new()));
         let ctx = DataContext::new(dm, fns).with_template_index(Some(0));
-        let dn = DynamicNumber::Function(index_call(&[("offset", json!({"path": "/step"}))]));
+        let dn = DynamicNumber::Function(index_call(&[("offset", json!({"@path": "/step"}))]));
         assert_eq!(ctx.resolve_dynamic_number(&dn), 10.0); // 0 + step(10)
     }
 
@@ -366,5 +487,221 @@ mod index_tests {
         let ctx = ctx(Some(0));
         let dn = DynamicNumber::Function(index_call(&[("offset", json!(1))]));
         assert_eq!(ctx.resolve_dynamic_number(&dn), 1.0);
+    }
+}
+
+#[cfg(test)]
+mod v1_dynamic_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn evaluates_recursive_bindings_and_preserves_literal_directive_names() {
+        let dm = DataModel::from_value(json!({"name": "Ada"}));
+        let functions = HashMap::new();
+        let context = DataContext::new(&dm, &functions);
+        let input = json!({
+            "list": [{"@path": "/name"}, null],
+            "path": "/ordinary", "call": "ordinary",
+            "@@path": "literal", "nested": {"@@@key": true}
+        });
+        assert_eq!(
+            context.resolve_dynamic_json(&input).unwrap(),
+            json!({
+                "list": ["Ada", null], "path": "/ordinary", "call": "ordinary",
+                "@path": "literal", "nested": {"@@key": true}
+            })
+        );
+    }
+
+    #[test]
+    fn raw_values_preserve_large_integer_precision() {
+        let dm = DataModel::new();
+        let functions = HashMap::new();
+        let context = DataContext::new(&dm, &functions);
+        let value = json!({"integer": 9_007_199_254_740_993_u64});
+        assert_eq!(context.resolve_dynamic_json(&value).unwrap(), value);
+    }
+
+    #[test]
+    fn rejects_reserved_or_ambiguous_directives_at_any_depth() {
+        let dm = DataModel::new();
+        let functions = HashMap::new();
+        let context = DataContext::new(&dm, &functions);
+        for input in [
+            json!({"@unknown": true}),
+            json!([{"@path": "/x", "extra": 1}]),
+            json!({"nested": {"@path": "/x", "@call": "f"}}),
+            json!({"@call": "f", "args": {"x": {"@unknown": 1}}}),
+        ] {
+            assert!(context.resolve_dynamic_json(&input).is_err(), "{input}");
+        }
+    }
+
+    #[test]
+    fn modern_index_requires_template_context_and_resolves_offset() {
+        let dm = DataModel::from_value(json!({"offset": 3}));
+        let functions = HashMap::new();
+        let context = DataContext::new(&dm, &functions);
+        let call = json!({"@call": "@index", "args": {"offset": {"@path": "/offset"}}});
+        assert!(context.resolve_dynamic_json(&call).is_err());
+        assert_eq!(
+            context
+                .with_template_index(Some(2))
+                .resolve_dynamic_json(&call)
+                .unwrap(),
+            json!(5.0)
+        );
+    }
+
+    #[test]
+    fn rejects_unavailable_function_catalog() {
+        let dm = DataModel::new();
+        let functions = HashMap::new();
+        let context = DataContext::new(&dm, &functions).with_catalog_id("expected");
+        assert!(
+            context
+                .resolve_dynamic_json(&json!({"@call": "f", "catalogId": "other"}))
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn boolean_coercion_matches_v1_table() {
+        for value in [
+            json!(true),
+            json!("TrUe"),
+            json!(1),
+            json!(-1),
+            json!({"valid": true}),
+        ] {
+            assert!(value_to_boolean(&value), "{value}");
+        }
+        for value in [
+            json!(false),
+            json!("FALSE"),
+            json!("hello"),
+            json!(0),
+            json!(null),
+            json!([]),
+            json!({}),
+            json!({"valid": false}),
+        ] {
+            assert!(!value_to_boolean(&value), "{value}");
+        }
+        let dm = DataModel::from_value(json!({"result": {"valid": true}}));
+        let functions = HashMap::new();
+        let context = DataContext::new(&dm, &functions);
+        let binding: DynamicBoolean = serde_json::from_value(json!({"@path": "/result"})).unwrap();
+        assert!(context.resolve_dynamic_boolean(&binding));
+    }
+}
+
+#[cfg(test)]
+mod validation_result_tests {
+    use super::*;
+    use crate::protocol::common_types::{CheckRule, ValidationSeverity};
+    use serde_json::json;
+
+    #[test]
+    fn structured_checks_preserve_diagnostics_and_fill_fallbacks() {
+        let dm = DataModel::from_value(
+            json!({"error": {"valid": false, "code": "BAD", "message": "specific", "severity": "warning"}, "empty": {"valid": false}}),
+        );
+        let functions = HashMap::new();
+        let context = DataContext::new(&dm, &functions);
+        let rule: CheckRule = serde_json::from_value(
+            json!({"condition": {"@path": "/error"}, "message": "fallback"}),
+        )
+        .unwrap();
+        let result = context.resolve_check_rule(&rule).unwrap();
+        assert_eq!(result.code.as_deref(), Some("BAD"));
+        assert_eq!(result.message.as_deref(), Some("specific"));
+        assert_eq!(result.severity, Some(ValidationSeverity::Warning));
+        let rule: CheckRule = serde_json::from_value(
+            json!({"condition": {"@path": "/empty"}, "message": "fallback"}),
+        )
+        .unwrap();
+        let result = context.resolve_check_rule(&rule).unwrap();
+        assert_eq!(result.message.as_deref(), Some("fallback"));
+        assert_eq!(result.severity, Some(ValidationSeverity::Error));
+    }
+}
+
+#[cfg(test)]
+mod caller_tests {
+    use super::*;
+    use crate::catalog::function_api::{AllowedCallers, FunctionImplementation, ReturnType};
+    use crate::error::A2uiError;
+    use serde_json::json;
+
+    struct Function {
+        name: &'static str,
+        allowed: AllowedCallers,
+        activation: bool,
+    }
+    impl FunctionImplementation for Function {
+        fn name(&self) -> &'static str {
+            self.name
+        }
+        fn return_type(&self) -> ReturnType {
+            ReturnType::Any
+        }
+        fn allowed_callers(&self) -> AllowedCallers {
+            self.allowed
+        }
+        fn requires_user_activation(&self) -> bool {
+            self.activation
+        }
+        fn execute(
+            &self,
+            args: &HashMap<String, Value>,
+            _: &DataContext,
+        ) -> Result<Value, A2uiError> {
+            Ok(json!(args))
+        }
+    }
+
+    #[test]
+    fn caller_restrictions_apply_inside_nested_arguments() {
+        let dm = DataModel::new();
+        let mut functions: HashMap<String, Box<dyn FunctionImplementation>> = HashMap::new();
+        for (name, allowed, activation) in [
+            ("outer", AllowedCallers::RendererOrAgent, false),
+            ("local", AllowedCallers::RendererOnly, false),
+            ("remote", AllowedCallers::AgentOnly, false),
+            ("gesture", AllowedCallers::RendererOrAgent, true),
+        ] {
+            functions.insert(
+                name.into(),
+                Box::new(Function {
+                    name,
+                    allowed,
+                    activation,
+                }),
+            );
+        }
+        let renderer = DataContext::new(&dm, &functions);
+        assert!(
+            renderer
+                .resolve_dynamic_json(&json!({"@call": "remote"}))
+                .is_err()
+        );
+        let agent = DataContext::new(&dm, &functions).with_agent_caller();
+        for name in ["local", "gesture"] {
+            let nested = json!({"@call": "outer", "args": {"value": [{"@call": name}]}});
+            assert!(agent.resolve_dynamic_json(&nested).is_err());
+            assert!(
+                agent
+                    .nested("items/0")
+                    .resolve_dynamic_json(&nested)
+                    .is_err()
+            );
+        }
+        assert!(
+            agent
+                .resolve_dynamic_json(&json!({"@call": "remote"}))
+                .is_ok()
+        );
     }
 }

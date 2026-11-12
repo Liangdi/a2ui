@@ -39,7 +39,7 @@ pub struct ServerCapabilities {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ServerCapabilitiesEnvelope {
     /// The capabilities for protocol version 1.0.
-    #[serde(rename = "v1.0")]
+    #[serde(rename = "1.0", alias = "v1.0")]
     pub v1_0: ServerCapabilities,
 }
 
@@ -66,7 +66,7 @@ pub struct ClientCapabilities {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct ClientCapabilitiesEnvelope {
     /// The capabilities for protocol version 1.0.
-    #[serde(rename = "v1.0")]
+    #[serde(rename = "1.0", alias = "v1.0")]
     pub v1_0: ClientCapabilities,
 }
 
@@ -584,7 +584,7 @@ mod tests {
         };
         let env = ClientCapabilitiesEnvelope { v1_0: caps };
         let json = serde_json::to_value(&env).unwrap();
-        assert!(json["v1.0"]["supportedCatalogIds"].is_array());
+        assert!(json["1.0"]["supportedCatalogIds"].is_array());
     }
 
     #[test]
@@ -595,8 +595,8 @@ mod tests {
         };
         let env = ServerCapabilitiesEnvelope { v1_0: caps };
         let json = serde_json::to_value(&env).unwrap();
-        assert_eq!(json["v1.0"]["acceptsInlineCatalogs"], true);
-        assert!(json["v1.0"]["supportedCatalogIds"].is_array());
+        assert_eq!(json["1.0"]["acceptsInlineCatalogs"], true);
+        assert!(json["1.0"]["supportedCatalogIds"].is_array());
     }
 
     #[test]

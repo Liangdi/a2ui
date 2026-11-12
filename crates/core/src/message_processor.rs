@@ -11,6 +11,7 @@ use crate::protocol::client_to_server::{
     ClientMessage, ClientPayload, ErrorData, ErrorPayload, FunctionResponseData,
     FunctionResponsePayload,
 };
+use crate::protocol::rpc::*;
 use crate::protocol::server_to_client::{
     A2uiMessage, A2uiPayload, CallFunctionPayload, CreateSurfaceData, DeleteSurfaceData,
     UpdateComponentsData, UpdateDataModelData,
@@ -25,6 +26,7 @@ pub struct MessageProcessor {
     catalogs: HashMap<String, Catalog>,
     /// Outgoing client-to-server messages produced during processing.
     outgoing_messages: Vec<ClientMessage>,
+    agent_function_responses: Vec<FunctionResponse>,
     /// Validation config; `None` = validation fully OFF (the default, which
     /// preserves the existing graceful-degradation behavior — bad refs / dup
     /// ids / cycles are silently tolerated and components still load).
@@ -43,6 +45,7 @@ impl MessageProcessor {
             model: SurfaceGroupModel::new(),
             catalogs: catalog_map,
             outgoing_messages: Vec::new(),
+            agent_function_responses: Vec::new(),
             validation: None,
             pending_validation: crate::validate::ValidationReport::new(),
         }
@@ -58,13 +61,148 @@ impl MessageProcessor {
     pub fn reset(&mut self) {
         self.model = SurfaceGroupModel::new();
         self.outgoing_messages.clear();
+        self.agent_function_responses.clear();
         self.pending_validation = crate::validate::ValidationReport::new();
     }
 
     /// Parse a raw JSON string into an A2uiMessage.
     pub fn parse_message(json: &str) -> Result<A2uiMessage> {
-        let msg: A2uiMessage = serde_json::from_str(json)?;
+        let mut raw: serde_json::Value = serde_json::from_str(json)?;
+        if raw.get("version").and_then(|v| v.as_str()) == Some("1.0") {
+            Self::validate_current_envelope(&raw)?;
+        }
+        if raw.get("version").and_then(|v| v.as_str()) == Some("v1.0") {
+            // Only draft-version messages use this compatibility conversion.
+            // Current messages must preserve ordinary path/call dictionaries.
+            for pointer in [
+                "/createSurface/components",
+                "/updateComponents/components",
+                "/callFunction",
+            ] {
+                if let Some(value) = raw.pointer_mut(pointer) {
+                    Self::normalize_draft_functions(value, false);
+                }
+            }
+        }
+        let msg: A2uiMessage = serde_json::from_value(raw)?;
         Ok(msg)
+    }
+
+    fn normalize_draft_functions(value: &mut serde_json::Value, in_args: bool) {
+        match value {
+            serde_json::Value::Object(object) => {
+                let is_call = object.get("call").is_some_and(serde_json::Value::is_string);
+                if is_call {
+                    object.remove("returnType");
+                    object.remove("allowedCallers");
+                    if let Some(call) = object.remove("call") {
+                        object.insert("@call".into(), call);
+                    }
+                }
+                if in_args
+                    && object.len() == 1
+                    && object.get("path").is_some_and(serde_json::Value::is_string)
+                {
+                    if let Some(path) = object.remove("path") {
+                        object.insert("@path".into(), path);
+                    }
+                }
+                for (key, child) in object {
+                    Self::normalize_draft_functions(child, in_args || (is_call && key == "args"));
+                }
+            }
+            serde_json::Value::Array(values) => {
+                for child in values {
+                    Self::normalize_draft_functions(child, in_args);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // Validate the wire rules that would otherwise be lost by serde's optional
+    // fields / untagged envelopes. Legacy July draft messages remain accepted.
+    fn validate_current_envelope(raw: &serde_json::Value) -> Result<()> {
+        let obj = raw
+            .as_object()
+            .ok_or_else(|| A2uiError::Validation("message must be an object".into()))?;
+        let payloads = [
+            "createSurface",
+            "updateComponents",
+            "updateDataModel",
+            "deleteSurface",
+            "callRendererFunction",
+            "agentFunctionResponse",
+        ];
+        if obj.len() != 2
+            || payloads
+                .iter()
+                .filter(|key| obj.contains_key(**key))
+                .count()
+                != 1
+        {
+            return Err(A2uiError::Validation(
+                "1.0 message requires version and exactly one current payload".into(),
+            ));
+        }
+        if let Some(update) = obj.get("updateDataModel") {
+            if update.get("value").is_none() {
+                return Err(A2uiError::Validation(
+                    "updateDataModel.value is required; use null to delete".into(),
+                ));
+            }
+        }
+        if let Some(create) = obj.get("createSurface") {
+            if create.get("theme").is_some() || create.get("surfaceProperties").is_some() {
+                return Err(A2uiError::Validation(
+                    "1.0 createSurface does not accept theme or surfaceProperties".into(),
+                ));
+            }
+            if create.get("dataModel").is_some_and(|v| !v.is_object()) {
+                return Err(A2uiError::Validation(
+                    "createSurface.dataModel must be an object".into(),
+                ));
+            }
+        }
+        for key in ["createSurface", "updateComponents"] {
+            if let Some(components) = obj.get(key).and_then(|v| v.get("components")) {
+                if !components.is_array() || components.as_array().is_some_and(Vec::is_empty) {
+                    return Err(A2uiError::Validation(
+                        "components must be a nonempty array".into(),
+                    ));
+                }
+                if components
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|v| v.get("component").and_then(|v| v.as_str()) == Some("Surface"))
+                {
+                    return Err(A2uiError::Validation(
+                        "Surface is reserved and cannot be sent as a component".into(),
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Collect current-protocol responses to agent calls for the host application.
+    pub fn drain_agent_function_responses(&mut self) -> Vec<FunctionResponse> {
+        std::mem::take(&mut self.agent_function_responses)
+    }
+
+    /// Queue an explicit renderer-to-agent RPC. Transport delivery belongs to the host.
+    pub fn call_agent_function(&mut self, call: CallAgentFunction) -> Result<()> {
+        if self.model.get_surface(&call.surface_id).is_none() {
+            return Err(A2uiError::SurfaceNotFound(call.surface_id));
+        }
+        self.queue_outgoing(ClientMessage {
+            version: "1.0".into(),
+            payload: ClientPayload::CallAgentFunction(CallAgentFunctionPayload {
+                call_agent_function: call,
+            }),
+        });
+        Ok(())
     }
 
     /// Parse a JSONL stream (newline-delimited JSON objects).
@@ -78,7 +216,24 @@ impl MessageProcessor {
 
     /// Process a single parsed message.
     pub fn process_message(&mut self, msg: A2uiMessage) -> Result<()> {
+        if msg.version != "1.0" && msg.version != "v1.0" {
+            return Err(A2uiError::Validation(format!(
+                "unsupported A2UI version: {}",
+                msg.version
+            )));
+        }
+        if msg.version == "1.0" {
+            Self::validate_current_envelope(&serde_json::to_value(&msg)?)?;
+        }
         match &msg.payload {
+            A2uiPayload::CallRendererFunction(payload) => {
+                self.handle_renderer_function(&payload.call_renderer_function)
+            }
+            A2uiPayload::AgentFunctionResponse(payload) => {
+                self.agent_function_responses
+                    .push(payload.agent_function_response.clone());
+                Ok(())
+            }
             A2uiPayload::CreateSurface(payload) => {
                 self.handle_create_surface(&payload.create_surface)
             }
@@ -205,7 +360,7 @@ impl MessageProcessor {
 
         let messages: Vec<A2uiMessage> = messages_val
             .iter()
-            .filter_map(|v| serde_json::from_value(v.clone()).ok())
+            .filter_map(|v| Self::parse_message(&v.to_string()).ok())
             .collect();
 
         Ok((name, description, messages))
@@ -227,6 +382,8 @@ impl MessageProcessor {
             data.surface_properties.clone(),
             data.send_data_model,
         );
+
+        surface.metadata = data.metadata.clone();
 
         // Initialize data model if provided
         if let Some(dm) = &data.data_model {
@@ -299,6 +456,93 @@ impl MessageProcessor {
 
     fn handle_delete_surface(&mut self, data: &DeleteSurfaceData) -> Result<()> {
         self.model.delete_surface(&data.surface_id)
+    }
+
+    fn handle_renderer_function(&mut self, call: &CallRendererFunction) -> Result<()> {
+        let result = self.execute_renderer_function(call);
+        let outcome = match result {
+            Ok(value) => FunctionOutcome::Success(FunctionValue { value }),
+            Err(error) => FunctionOutcome::Failure(FunctionFailure {
+                error: FunctionError {
+                    code: "INVALID_FUNCTION_CALL".into(),
+                    message: error.to_string(),
+                },
+            }),
+        };
+        self.queue_outgoing(ClientMessage {
+            version: "1.0".into(),
+            payload: ClientPayload::RendererFunctionResponse(RendererFunctionResponsePayload {
+                renderer_function_response: FunctionResponse {
+                    function_call_id: call.function_call_id.clone(),
+                    outcome,
+                },
+            }),
+        });
+        Ok(())
+    }
+
+    fn execute_renderer_function(&self, call: &CallRendererFunction) -> Result<serde_json::Value> {
+        use crate::catalog::function_api::{AllowedCallers, ReturnType};
+        let catalog_id = call.call_function.catalog_id.as_deref().ok_or_else(|| {
+            A2uiError::Validation("callRendererFunction requires explicit catalogId".into())
+        })?;
+        let catalog = self
+            .catalogs
+            .get(catalog_id)
+            .ok_or_else(|| A2uiError::Validation(format!("unknown catalog: {catalog_id}")))?;
+        let function = catalog
+            .get_function(&call.call_function.call)
+            .ok_or_else(|| {
+                A2uiError::Validation(format!("unknown function: {}", call.call_function.call))
+            })?;
+        if function.allowed_callers() == AllowedCallers::RendererOnly
+            || function.requires_user_activation()
+        {
+            return Err(A2uiError::Validation(
+                "function is not callable by an agent".into(),
+            ));
+        }
+        let empty = DataModel::new();
+        let surface_data = match &call.surface_id {
+            Some(id) => Some(
+                self.model
+                    .get_surface(id)
+                    .ok_or_else(|| A2uiError::SurfaceNotFound(id.clone()))?
+                    .data_model
+                    .borrow(),
+            ),
+            None => None,
+        };
+        let data = surface_data.as_deref().unwrap_or(&empty);
+        let context = crate::model::data_context::DataContext::new(data, &catalog.functions)
+            .with_catalog_id(catalog_id)
+            .with_agent_caller();
+        let args: HashMap<_, _> = call
+            .call_function
+            .args
+            .iter()
+            .map(|(key, value)| {
+                context
+                    .resolve_dynamic_json(value)
+                    .map(|value| (key.clone(), value))
+            })
+            .collect::<Result<_>>()?;
+        let value = function.execute(&args, &context)?;
+        let valid = match function.return_type() {
+            ReturnType::String => value.is_string(),
+            ReturnType::Number => value.is_number(),
+            ReturnType::Boolean => value.is_boolean(),
+            ReturnType::Array => value.is_array(),
+            ReturnType::Object => value.is_object(),
+            ReturnType::Void => value.is_null(),
+            ReturnType::Any => true,
+        };
+        if !valid {
+            return Err(A2uiError::Validation(
+                "function returned a value inconsistent with its declared return type".into(),
+            ));
+        }
+        Ok(value)
     }
 
     fn handle_call_function(&mut self, payload: &CallFunctionPayload) -> Result<()> {
