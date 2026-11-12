@@ -73,6 +73,10 @@ impl CurrentSchemaValidator {
     }
 }
 
+fn schema_error(error: impl std::fmt::Display) -> A2uiError {
+    A2uiError::Validation(error.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -95,8 +99,4 @@ mod tests {
         );
         assert!(validator.validate_outgoing(&json!({"version":"1.0","rendererFunctionResponse":{"functionCallId":"x","value":null}})).is_ok());
     }
-}
-
-fn schema_error(error: impl std::fmt::Display) -> A2uiError {
-    A2uiError::Validation(error.to_string())
 }
