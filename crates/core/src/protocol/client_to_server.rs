@@ -22,6 +22,8 @@ pub struct ClientMessage {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum ClientPayload {
+    CallAgentFunction(super::rpc::CallAgentFunctionPayload),
+    RendererFunctionResponse(super::rpc::RendererFunctionResponsePayload),
     Action(ActionPayload),
     FunctionResponse(FunctionResponsePayload),
     Error(ErrorPayload),
@@ -39,6 +41,10 @@ pub struct ActionPayload {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct ActionData {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
     pub name: String,
     pub surface_id: String,
     pub source_component_id: String,
@@ -55,11 +61,13 @@ pub struct ActionData {
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct FunctionResponsePayload {
     pub function_response: FunctionResponseData,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct FunctionResponseData {
     pub function_call_id: String,
     pub call: String,
@@ -76,6 +84,7 @@ pub struct ErrorPayload {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
 pub struct ErrorData {
     pub code: String,
     pub message: String,

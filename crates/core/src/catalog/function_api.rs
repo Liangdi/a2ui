@@ -17,6 +17,16 @@ pub enum ReturnType {
     Void,
 }
 
+/// Which side may initiate a function invocation. The specification defaults
+/// functions to renderer-only, so existing implementations remain safe by default.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AllowedCallers {
+    #[default]
+    RendererOnly,
+    AgentOnly,
+    RendererOrAgent,
+}
+
 /// A function implementation that can be executed by the A2UI runtime.
 pub trait FunctionImplementation: Send + Sync + 'static {
     /// The function name as it appears in the catalog.
@@ -24,6 +34,17 @@ pub trait FunctionImplementation: Send + Sync + 'static {
 
     /// The return type of this function.
     fn return_type(&self) -> ReturnType;
+
+    /// Remote calls are denied unless explicitly enabled by the implementation.
+    fn allowed_callers(&self) -> AllowedCallers {
+        AllowedCallers::RendererOnly
+    }
+
+    /// Requires a trusted user gesture. Passive evaluation and agent calls are denied.
+    /// No activation-capable context is currently exposed by the core.
+    fn requires_user_activation(&self) -> bool {
+        false
+    }
 
     /// Execute the function with resolved arguments.
     ///

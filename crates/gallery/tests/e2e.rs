@@ -235,6 +235,7 @@ fn test_e2e_basic_catalog_functions_in_context() {
 
     // --- Test formatString via DataContext.resolve_dynamic_string ---
     let format_str = DynamicString::Function(FunctionCall {
+        catalog_id: None,
         call: "formatString".to_string(),
         args: {
             let mut m = std::collections::HashMap::new();
@@ -251,6 +252,7 @@ fn test_e2e_basic_catalog_functions_in_context() {
     // --- Test required via DynamicBoolean resolution ---
     // "some text" is present => true
     let required_present = DynamicBoolean::Function(FunctionCall {
+        catalog_id: None,
         call: "required".to_string(),
         args: {
             let mut m = std::collections::HashMap::new();
@@ -262,6 +264,7 @@ fn test_e2e_basic_catalog_functions_in_context() {
 
     // empty string => false
     let required_empty = DynamicBoolean::Function(FunctionCall {
+        catalog_id: None,
         call: "required".to_string(),
         args: {
             let mut m = std::collections::HashMap::new();
@@ -273,6 +276,7 @@ fn test_e2e_basic_catalog_functions_in_context() {
 
     // --- Test email via DynamicBoolean resolution ---
     let email_valid = DynamicBoolean::Function(FunctionCall {
+        catalog_id: None,
         call: "email".to_string(),
         args: {
             let mut m = std::collections::HashMap::new();
@@ -283,6 +287,7 @@ fn test_e2e_basic_catalog_functions_in_context() {
     assert!(ctx.resolve_dynamic_boolean(&email_valid));
 
     let email_bad = DynamicBoolean::Function(FunctionCall {
+        catalog_id: None,
         call: "email".to_string(),
         args: {
             let mut m = std::collections::HashMap::new();
@@ -337,7 +342,7 @@ fn test_e2e_basic_catalog_functions_in_context() {
 
 #[test]
 fn test_call_function_basic() {
-    // callFunction with no wantResponse → no outgoing messages
+    // Denied remote calls produce errors even without wantResponse.
     let mut proc = make_basic_processor();
 
     // Create a surface first so callFunction has a DataModel
@@ -363,8 +368,11 @@ fn test_call_function_basic() {
     proc.process_message(MessageProcessor::parse_message(&msg.to_string()).unwrap())
         .unwrap();
 
-    // No outgoing messages expected
-    assert!(proc.drain_outgoing().is_empty());
+    // Built-in functions default to renderer-only; legacy agents cannot bypass it.
+    assert!(matches!(
+        proc.drain_outgoing()[0].payload,
+        ClientPayload::Error(_)
+    ));
 }
 
 #[test]
@@ -396,14 +404,12 @@ fn test_call_function_with_want_response() {
     let outgoing = proc.drain_outgoing();
     assert_eq!(outgoing.len(), 1);
 
-    // Verify it's a functionResponse
     match &outgoing[0].payload {
-        ClientPayload::FunctionResponse(fr) => {
-            assert_eq!(fr.function_response.function_call_id, "call_2");
-            assert_eq!(fr.function_response.call, "required");
-            assert_eq!(fr.function_response.value, serde_json::json!(true));
+        ClientPayload::Error(err) => {
+            assert_eq!(err.error.code, "INVALID_FUNCTION_CALL");
+            assert_eq!(err.error.function_call_id.as_deref(), Some("call_2"));
         }
-        other => panic!("expected FunctionResponse, got {:?}", other),
+        other => panic!("expected renderer-only rejection, got {:?}", other),
     }
 }
 
@@ -598,15 +604,8 @@ fn test_call_function_with_format_string() {
     let outgoing = proc.drain_outgoing();
     assert_eq!(outgoing.len(), 1);
 
-    match &outgoing[0].payload {
-        ClientPayload::FunctionResponse(fr) => {
-            assert_eq!(
-                fr.function_response.value,
-                serde_json::json!("Hello, Alice!")
-            );
-        }
-        other => panic!("expected FunctionResponse, got {:?}", other),
-    }
+    // No legacy RPC may execute a renderer-only function or borrow arbitrary surface data.
+    assert!(matches!(outgoing[0].payload, ClientPayload::Error(_)));
 }
 
 #[test]
@@ -737,7 +736,7 @@ fn test_inline_schema_only_function_rejects_execution() {
         ClientPayload::Error(err) => {
             assert_eq!(err.error.code, "INVALID_FUNCTION_CALL");
             assert!(
-                err.error.message.contains("no native implementation"),
+                err.error.message.contains("not callable by an agent"),
                 "unexpected error message: {}",
                 err.error.message
             );

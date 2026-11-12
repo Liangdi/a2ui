@@ -43,7 +43,8 @@ fn opt_f64(args: &HashMap<String, Value>, key: &str) -> Option<f64> {
 
 /// Extract an optional bool argument.
 fn opt_bool(args: &HashMap<String, Value>, key: &str) -> Option<bool> {
-    args.get(key).and_then(|v| v.as_bool())
+    args.get(key)
+        .map(crate::model::data_context::value_to_boolean)
 }
 
 // ===========================================================================
@@ -254,7 +255,7 @@ impl FunctionImplementation for AndFunction {
                 A2uiError::InvalidFunctionCall("and: missing or non-array argument 'values'".into())
             })?;
 
-        let all_true = arr.iter().all(|v| v.as_bool().unwrap_or(false));
+        let all_true = arr.iter().all(crate::model::data_context::value_to_boolean);
         Ok(Value::Bool(all_true))
     }
 }
@@ -287,7 +288,7 @@ impl FunctionImplementation for OrFunction {
                 A2uiError::InvalidFunctionCall("or: missing or non-array argument 'values'".into())
             })?;
 
-        let any_true = arr.iter().any(|v| v.as_bool().unwrap_or(false));
+        let any_true = arr.iter().any(crate::model::data_context::value_to_boolean);
         Ok(Value::Bool(any_true))
     }
 }
@@ -313,9 +314,14 @@ impl FunctionImplementation for NotFunction {
         args: &HashMap<String, Value>,
         _context: &DataContext,
     ) -> Result<Value, A2uiError> {
-        let val = args.get("value").and_then(|v| v.as_bool()).ok_or_else(|| {
-            A2uiError::InvalidFunctionCall("not: missing or non-boolean argument 'value'".into())
-        })?;
+        let val = args
+            .get("value")
+            .map(crate::model::data_context::value_to_boolean)
+            .ok_or_else(|| {
+                A2uiError::InvalidFunctionCall(
+                    "not: missing or non-boolean argument 'value'".into(),
+                )
+            })?;
 
         Ok(Value::Bool(!val))
     }

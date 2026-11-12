@@ -22,6 +22,8 @@ pub struct SurfaceModel {
     pub catalog_id: String,
     /// Optional surface properties (e.g. agentDisplayName).
     pub surface_properties: Option<serde_json::Value>,
+    /// Current-protocol surface metadata (extensions).
+    pub metadata: Option<serde_json::Value>,
     /// Whether to send the full data model with actions.
     pub send_data_model: bool,
     /// The data model for this surface.
@@ -44,6 +46,7 @@ impl SurfaceModel {
             id,
             catalog_id,
             surface_properties,
+            metadata: None,
             send_data_model,
             data_model: RefCell::new(DataModel::new()),
             components: RefCell::new(SurfaceComponentsModel::new()),
