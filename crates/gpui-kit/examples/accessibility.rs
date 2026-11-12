@@ -9,6 +9,7 @@ use serde_json::json;
 use std::collections::HashMap;
 
 fn main() {
+    let stream_updates = std::env::args().any(|arg| arg == "--stream-updates");
     let message = MessageProcessor::parse_message(&json!({
         "version":"1.0","createSurface":{
             "surfaceId":"smoke","catalogId":"https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
@@ -51,6 +52,29 @@ fn main() {
                     app.set_samples(vec![("Native smoke".into(), vec![message])], 0);
                     app
                 });
+                if stream_updates {
+                    let weak = view.downgrade();
+                    cx.spawn(async move |cx| {
+                        for tick in 1..=120 {
+                            cx.background_executor()
+                                .timer(std::time::Duration::from_secs(1))
+                                .await;
+                            weak.update(cx, |app, cx| {
+                                let message = MessageProcessor::parse_message(
+                                    &json!({"version":"1.0","updateDataModel":{
+                                        "surfaceId":"smoke","path":"/heartbeat","value":tick
+                                    }})
+                                    .to_string(),
+                                )
+                                .expect("static heartbeat message");
+                                app.process_message(message).expect("smoke surface exists");
+                                cx.notify();
+                            })?;
+                        }
+                        Ok::<_, anyhow::Error>(())
+                    })
+                    .detach();
+                }
                 cx.new(|cx| Root::new(view, window, cx))
             })?;
             Ok::<_, anyhow::Error>(())

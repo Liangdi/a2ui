@@ -82,7 +82,8 @@ pub struct GpuiApp {
         RefCell<HashMap<String, Entity<SelectState<SearchableVec<ChoiceOption>>>>>,
     /// Keeps every lazy-create subscription alive (dropping a [`Subscription`]
     /// unsubscribes it). Cleared on sample switch alongside the state caches.
-    pub(crate) subscriptions: RefCell<Vec<Subscription>>,
+    pub(crate) subscriptions: RefCell<HashMap<String, Subscription>>,
+    pub(crate) state_configs: RefCell<HashMap<String, Value>>,
 }
 
 impl GpuiApp {
@@ -108,7 +109,8 @@ impl GpuiApp {
             text_states: RefCell::new(HashMap::new()),
             slider_states: RefCell::new(HashMap::new()),
             select_states: RefCell::new(HashMap::new()),
-            subscriptions: RefCell::new(Vec::new()),
+            subscriptions: RefCell::new(HashMap::new()),
+            state_configs: RefCell::new(HashMap::new()),
         }
     }
 
@@ -118,7 +120,7 @@ impl GpuiApp {
     /// embedding independent surfaces.
     pub fn process_message(&mut self, message: A2uiMessage) -> a2ui_base::error::Result<()> {
         self.processor.process_message(message)?;
-        self.clear_widget_state();
+        self.prune_widget_state();
         Ok(())
     }
 
@@ -150,6 +152,51 @@ impl GpuiApp {
         self.slider_states.borrow_mut().clear();
         self.select_states.borrow_mut().clear();
         self.subscriptions.borrow_mut().clear();
+        self.state_configs.borrow_mut().clear();
+    }
+
+    fn prune_widget_state(&mut self) {
+        self.text_states
+            .borrow_mut()
+            .retain(|id, _| valid_instance(&self.processor, id, &["TextField", "DateTimeInput"]));
+        self.slider_states
+            .borrow_mut()
+            .retain(|id, _| valid_instance(&self.processor, id, &["Slider"]));
+        self.select_states
+            .borrow_mut()
+            .retain(|id, _| valid_instance(&self.processor, id, &["ChoicePicker"]));
+        self.local_tabs
+            .retain(|id, _| valid_instance(&self.processor, id, &["Tabs"]));
+        let live: HashSet<String> = self
+            .text_states
+            .borrow()
+            .keys()
+            .map(|id| format!("input:{id}"))
+            .chain(
+                self.slider_states
+                    .borrow()
+                    .keys()
+                    .map(|id| format!("slider:{id}")),
+            )
+            .chain(
+                self.select_states
+                    .borrow()
+                    .keys()
+                    .map(|id| format!("select:{id}")),
+            )
+            .collect();
+        self.subscriptions
+            .borrow_mut()
+            .retain(|id, _| live.contains(id));
+        self.state_configs.borrow_mut().retain(|id, _| {
+            live.contains(id)
+                || id
+                    .strip_prefix("items:")
+                    .or_else(|| id.strip_prefix("value:"))
+                    .is_some_and(|id| live.contains(id))
+        });
+        self.open_modals
+            .retain(|id| valid_instance(&self.processor, id, &["Modal"]));
     }
 
     /// Populate the sample browser with `(name, messages)` pairs and load the
@@ -182,16 +229,9 @@ impl GpuiApp {
             let components = surface.components.borrow();
             self.focus.rebuild_from_components(&components);
         }
-        self.open_modals.clear();
-        // Drop the previous sample's decoded images + widget state so caches
-        // don't grow unbounded / leak across many sample switches.
         self.image_cache.clear();
         self.image_pending.borrow_mut().clear();
-        self.local_tabs.clear();
-        self.text_states.borrow_mut().clear();
-        self.slider_states.borrow_mut().clear();
-        self.select_states.borrow_mut().clear();
-        self.subscriptions.borrow_mut().clear();
+        self.clear_widget_state();
         self.selected_sample = idx;
     }
 
@@ -418,6 +458,7 @@ impl GpuiApp {
             slider_states: &self.slider_states,
             select_states: &self.select_states,
             subscriptions: &self.subscriptions,
+            state_configs: &self.state_configs,
         };
         render_node(root_id, "", &walk, window, cx)
     }
@@ -432,12 +473,14 @@ impl GpuiApp {
         window: &mut gpui_kit::Window,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let surface = self.processor.model.surfaces().next()?;
+        let (surface_id, component_id, base_path): (String, String, String) =
+            serde_json::from_str(modal_id).ok()?;
+        let surface = self.processor.model.get_surface(&surface_id)?;
 
         // Resolve the modal's content id + optional title in one borrow.
         let (content_id, title): (Option<String>, String) = {
             let components = surface.components.borrow();
-            let m = components.get(modal_id)?;
+            let m = components.get(&component_id)?;
             if m.component_type != "Modal" {
                 return None;
             }
@@ -472,8 +515,9 @@ impl GpuiApp {
                 slider_states: &self.slider_states,
                 select_states: &self.select_states,
                 subscriptions: &self.subscriptions,
+                state_configs: &self.state_configs,
             };
-            render_node(&content_id, "", &walk, window, cx)
+            render_node(&content_id, &base_path, &walk, window, cx)
         };
 
         // ── Panel chrome ───────────────────────────────────────────────────
@@ -600,7 +644,7 @@ impl GpuiApp {
                     ),
                 });
             }
-            self.apply_modal_interaction(node_id);
+            self.apply_modal_interaction(node_id, base_path);
             return;
         }
 
@@ -679,46 +723,63 @@ impl GpuiApp {
         } else if let Some(result) = result {
             let _ = apply_event_result(&mut self.processor, result);
         }
-        self.apply_modal_interaction(node_id);
+        self.apply_modal_interaction(node_id, base_path);
     }
 
     /// Resolve a node activation into a local Modal state change. Activating a
     /// component that is some Modal's `trigger` opens that Modal; activating a
     /// Modal node directly toggles it closed. Ported from the iced/egui hosts.
-    fn apply_modal_interaction(&mut self, node_id: &str) {
-        let modal_id = {
-            let Some(surface) = self.processor.model.surfaces().next() else {
-                return;
-            };
-            let components = surface.components.borrow();
-            let is_modal = components
-                .get(node_id)
-                .map(|m| m.component_type == "Modal")
-                .unwrap_or(false);
-            if is_modal {
-                if self.open_modals.insert(node_id.to_string()) {
-                    return; // was closed → now open
-                }
-                Some(node_id.to_string()) // was open → close
-            } else {
-                components.all().iter().find_map(|(id, m)| {
-                    (m.component_type == "Modal"
-                        && m.get_property::<String>("trigger").as_deref() == Some(node_id))
-                    .then(|| id.clone())
+    fn apply_modal_interaction(&mut self, node_id: &str, base_path: &str) {
+        let Some(surface) = self.processor.model.surfaces().next() else {
+            return;
+        };
+        let components = surface.components.borrow();
+        let is_modal = components
+            .get(node_id)
+            .is_some_and(|model| model.component_type == "Modal");
+        let modal = if is_modal {
+            Some(node_id.to_owned())
+        } else {
+            let mut matches = components
+                .all()
+                .iter()
+                .filter(|(_, model)| {
+                    model.component_type == "Modal"
+                        && model.get_property::<String>("trigger").as_deref() == Some(node_id)
                 })
+                .map(|(id, _)| id.clone());
+            let first = matches.next();
+            if matches.next().is_some() {
+                None
+            } else {
+                first
             }
         };
-
-        match modal_id {
-            Some(id) if id == node_id => {
-                self.open_modals.remove(&id);
+        if let Some(modal) = modal {
+            let key = crate::reactive::instance_key(&surface.id, &modal, base_path);
+            if is_modal && self.open_modals.contains(&key) {
+                self.open_modals.remove(&key);
+            } else {
+                self.open_modals.insert(key);
             }
-            Some(id) => {
-                self.open_modals.insert(id);
-            }
-            None => {}
         }
     }
+}
+
+fn valid_instance(processor: &MessageProcessor, key: &str, kinds: &[&str]) -> bool {
+    let Ok((surface, component, base)) = serde_json::from_str::<(String, String, String)>(key)
+    else {
+        return false;
+    };
+    let Some(surface) = processor.model.get_surface(&surface) else {
+        return false;
+    };
+    let valid = surface
+        .components
+        .borrow()
+        .get(&component)
+        .is_some_and(|component| kinds.contains(&component.component_type.as_str()));
+    valid && (base.is_empty() || surface.data_model.borrow().get(&base).is_some())
 }
 
 impl Render for GpuiApp {
@@ -947,6 +1008,38 @@ mod tests {
         .unwrap();
         assert!(app.local_tabs.is_empty());
         assert!(app.open_modals.is_empty());
+    }
+
+    #[test]
+    fn unrelated_updates_preserve_local_tabs_and_scoped_modals() {
+        let mut app = app();
+        app.process_message(message(
+            json!({"version":"v1.0","createSurface":{"surfaceId":"s","catalogId":"test"}}),
+        ))
+        .unwrap();
+        app.process_message(message(json!({"version":"v1.0","updateDataModel":{"surfaceId":"s","path":"","value":{"rows":[{},{}]}}}))).unwrap();
+        app.process_message(message(json!({"version":"v1.0","updateComponents":{"surfaceId":"s","components":[
+            {"id":"tabs","component":"Tabs"},{"id":"dialog","component":"Modal","trigger":"open","content":"body"},
+            {"id":"open","component":"Button"},{"id":"body","component":"Text","text":{"path":"name"}}
+        ]}}))).unwrap();
+        let tabs = crate::reactive::instance_key("s", "tabs", "");
+        app.local_tabs.insert(tabs.clone(), 2);
+        app.apply_modal_interaction("open", "/rows/0");
+        app.apply_modal_interaction("open", "/rows/1");
+        let first = crate::reactive::instance_key("s", "dialog", "/rows/0");
+        let second = crate::reactive::instance_key("s", "dialog", "/rows/1");
+        assert_eq!(app.open_modals.len(), 2);
+        app.process_message(message(json!({"version":"v1.0","updateDataModel":{"surfaceId":"s","path":"/unrelated","value":42}}))).unwrap();
+        assert_eq!(app.local_tabs.get(&tabs), Some(&2));
+        assert!(app.open_modals.contains(&first) && app.open_modals.contains(&second));
+        app.apply_modal_interaction("dialog", "/rows/0");
+        assert!(!app.open_modals.contains(&first) && app.open_modals.contains(&second));
+        app.process_message(message(
+            json!({"version":"v1.0","updateDataModel":{"surfaceId":"s","path":"/rows","value":[]}}),
+        ))
+        .unwrap();
+        assert!(app.open_modals.is_empty());
+        assert_eq!(app.local_tabs.get(&tabs), Some(&2));
     }
 
     #[test]

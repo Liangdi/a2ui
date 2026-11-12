@@ -124,7 +124,8 @@ pub(super) struct Walk<'a> {
         &'a RefCell<HashMap<String, Entity<SelectState<SearchableVec<ChoiceOption>>>>>,
     /// Keeps every lazy-create subscription alive for the app's lifetime
     /// (dropping a [`Subscription`] unsubscribes it).
-    pub subscriptions: &'a RefCell<Vec<Subscription>>,
+    pub subscriptions: &'a RefCell<HashMap<String, Subscription>>,
+    pub state_configs: &'a RefCell<HashMap<String, Value>>,
 }
 
 /// Re-enter the walker for one child at `base_path`, returning its element.
@@ -625,14 +626,29 @@ fn ensure_input_state(
     window: &mut gpui_kit::Window,
     cx: &mut Context<GpuiApp>,
 ) -> Entity<InputState> {
-    if let Some(existing) = walk.text_states.borrow().get(id).cloned() {
-        return existing;
-    }
-
     let binding_path: Option<String> = match &value_binding {
         Some(DynamicString::Binding(b)) => Some(ctx.data_context.resolve_pointer(&b.path)),
         _ => None,
     };
+    let config_key = format!("input:{id}");
+    let changed = update_config(
+        walk.state_configs,
+        &config_key,
+        serde_json::json!([binding_path, masked, placeholder.as_ref()]),
+    );
+    let value_changed = update_config(
+        walk.state_configs,
+        &format!("value:{config_key}"),
+        serde_json::json!(resolved),
+    );
+    if !changed && let Some(existing) = walk.text_states.borrow().get(id).cloned() {
+        if value_changed && existing.read(cx).value().as_ref() != resolved {
+            existing.update(cx, |state, cx| {
+                state.set_value(resolved.to_owned(), window, cx)
+            });
+        }
+        return existing;
+    }
     let initial = resolved.to_string();
     let new_state = cx.new(|cx| {
         let mut s = InputState::new(window, cx)
@@ -660,7 +676,7 @@ fn ensure_input_state(
             }
         },
     );
-    walk.subscriptions.borrow_mut().push(sub);
+    walk.subscriptions.borrow_mut().insert(config_key, sub);
     walk.text_states
         .borrow_mut()
         .insert(id.to_string(), new_state.clone());
@@ -704,7 +720,7 @@ pub(super) fn render_slider(
     walk: &Walk,
     ctx: &ComponentContext,
     model: &ComponentModel,
-    _window: &mut gpui_kit::Window,
+    window: &mut gpui_kit::Window,
     cx: &mut Context<GpuiApp>,
 ) -> AnyElement {
     let value_binding = model.get_property::<DynamicNumber>("value");
@@ -738,6 +754,7 @@ pub(super) fn render_slider(
         clamped,
         value_binding,
         ctx,
+        window,
         cx,
     );
 
@@ -766,18 +783,32 @@ fn ensure_slider_state(
     value: f32,
     value_binding: Option<DynamicNumber>,
     ctx: &ComponentContext,
+    window: &mut gpui_kit::Window,
     cx: &mut Context<GpuiApp>,
 ) -> Entity<SliderState> {
-    if let Some(existing) = walk.slider_states.borrow().get(id).cloned() {
-        return existing;
-    }
-
     let binding_path: Option<String> = match &value_binding {
         Some(DynamicNumber::Binding(b)) => Some(ctx.data_context.resolve_pointer(&b.path)),
         _ => None,
     };
 
     let step_opt = steps.filter(|&s| s > 0.0).map(|s| s as f32);
+    let config_key = format!("slider:{id}");
+    let changed = update_config(
+        walk.state_configs,
+        &config_key,
+        serde_json::json!([binding_path, min, max, step_opt]),
+    );
+    let value_changed = update_config(
+        walk.state_configs,
+        &format!("value:{config_key}"),
+        serde_json::json!(value),
+    );
+    if !changed && let Some(existing) = walk.slider_states.borrow().get(id).cloned() {
+        if value_changed && existing.read(cx).value() != SliderValue::Single(value) {
+            existing.update(cx, |state, cx| state.set_value(value, window, cx));
+        }
+        return existing;
+    }
     let new_state = cx.new(|_cx| {
         let base = SliderState::new().min(min).max(max);
         let base = if let Some(step) = step_opt {
@@ -802,7 +833,7 @@ fn ensure_slider_state(
             }
         },
     );
-    walk.subscriptions.borrow_mut().push(sub);
+    walk.subscriptions.borrow_mut().insert(config_key, sub);
     walk.slider_states
         .borrow_mut()
         .insert(id.to_string(), new_state.clone());
@@ -913,10 +944,6 @@ fn ensure_select_state(
     window: &mut gpui_kit::Window,
     cx: &mut Context<GpuiApp>,
 ) -> Entity<SelectState<SearchableVec<ChoiceOption>>> {
-    if let Some(existing) = walk.select_states.borrow().get(id).cloned() {
-        return existing;
-    }
-
     let items: Vec<ChoiceOption> = options
         .iter()
         .map(|(label, value)| ChoiceOption {
@@ -931,6 +958,29 @@ fn ensure_select_state(
             .map(IndexPath::new)
     });
 
+    let config_key = format!("select:{id}");
+    let changed = update_config(walk.state_configs, &config_key, serde_json::json!(path));
+    let items_changed = update_config(
+        walk.state_configs,
+        &format!("items:{config_key}"),
+        serde_json::json!(options),
+    );
+    let value_changed = update_config(
+        walk.state_configs,
+        &format!("value:{config_key}"),
+        serde_json::json!(selected_values),
+    );
+    if !changed && let Some(existing) = walk.select_states.borrow().get(id).cloned() {
+        if items_changed || value_changed {
+            existing.update(cx, |state, cx| {
+                if items_changed {
+                    state.set_items(SearchableVec::new(items), window, cx);
+                }
+                state.set_selected_index(selected_index, window, cx);
+            });
+        }
+        return existing;
+    }
     let delegate = SearchableVec::new(items);
     let new_state = cx.new(|cx| SelectState::new(delegate, selected_index, window, cx));
 
@@ -948,11 +998,21 @@ fn ensure_select_state(
             }
         },
     );
-    walk.subscriptions.borrow_mut().push(sub);
+    walk.subscriptions.borrow_mut().insert(config_key, sub);
     walk.select_states
         .borrow_mut()
         .insert(id.to_string(), new_state.clone());
     new_state
+}
+
+fn update_config(configs: &RefCell<HashMap<String, Value>>, key: &str, value: Value) -> bool {
+    let mut configs = configs.borrow_mut();
+    if configs.get(key) == Some(&value) {
+        false
+    } else {
+        configs.insert(key.into(), value);
+        true
+    }
 }
 
 /// Unknown / not-yet-implemented kind — show the kind name + recurse children.
@@ -1268,5 +1328,49 @@ mod tests {
     fn content_fit_mapping() {
         assert!(matches!(map_content_fit(Some("cover")), ObjectFit::Cover));
         assert!(matches!(map_content_fit(None), ObjectFit::Contain));
+    }
+    #[test]
+    fn state_config_changes_are_scoped_and_values_do_not_reset_unrelated_controls() {
+        let configs = RefCell::new(HashMap::new());
+        assert!(update_config(
+            &configs,
+            "input:one",
+            serde_json::json!(["/name", false])
+        ));
+        assert!(update_config(
+            &configs,
+            "value:input:one",
+            serde_json::json!("Ada")
+        ));
+        assert!(update_config(
+            &configs,
+            "input:two",
+            serde_json::json!(["/other", true])
+        ));
+        assert!(!update_config(
+            &configs,
+            "input:one",
+            serde_json::json!(["/name", false])
+        ));
+        assert!(!update_config(
+            &configs,
+            "value:input:one",
+            serde_json::json!("Ada")
+        ));
+        assert!(update_config(
+            &configs,
+            "value:input:one",
+            serde_json::json!("Grace")
+        ));
+        assert!(!update_config(
+            &configs,
+            "input:two",
+            serde_json::json!(["/other", true])
+        ));
+        assert!(update_config(
+            &configs,
+            "input:one",
+            serde_json::json!(["/replacement", false])
+        ));
     }
 }

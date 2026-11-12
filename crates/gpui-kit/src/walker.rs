@@ -75,12 +75,20 @@ pub(super) fn render_node(
     let mut overlay = comp_model.clone();
     if let Some(view) = reactive {
         if !view.errors.is_empty() {
+            evict_hidden_widget(
+                walk,
+                &crate::reactive::instance_key(walk.surface_id, component_id, base_path),
+            );
             return gpui_kit::div()
                 .text_color(gpui_kit::rgb(0xf38ba8))
                 .child(view.errors.join("; "))
                 .into_any_element();
         }
         if view.pending {
+            evict_hidden_widget(
+                walk,
+                &crate::reactive::instance_key(walk.surface_id, component_id, base_path),
+            );
             return gpui_kit::div().child("Loading…").into_any_element();
         }
         overlay.properties.extend(view.resolved.clone());
@@ -197,6 +205,22 @@ pub(crate) fn check_native_catalog(
         ));
     }
     Ok(())
+}
+
+// A replaced loading/error placeholder must not keep an invisible text editor
+// focused or an obsolete write-back subscription alive.
+fn evict_hidden_widget(walk: &Walk, id: &str) {
+    walk.text_states.borrow_mut().remove(id);
+    walk.slider_states.borrow_mut().remove(id);
+    walk.select_states.borrow_mut().remove(id);
+    for kind in ["input", "slider", "select"] {
+        let key = format!("{kind}:{id}");
+        walk.subscriptions.borrow_mut().remove(&key);
+        let mut configs = walk.state_configs.borrow_mut();
+        configs.remove(&key);
+        configs.remove(&format!("value:{key}"));
+        configs.remove(&format!("items:{key}"));
+    }
 }
 
 struct RenderGuard<'a>(&'a std::cell::RefCell<Vec<String>>);
