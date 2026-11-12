@@ -293,3 +293,35 @@ fn legacy_event_context_paths_bind_in_template_scope_only_for_draft_messages() {
         }
     }
 }
+
+#[test]
+fn typed_processing_normalizes_draft_event_context_without_parse_message() {
+    for version in ["v1.0", "1.0"] {
+        let mut proc = processor(AllowedCallers::RendererOnly, false);
+        let message = serde_json::from_value(json!({"version":version,"createSurface":{
+            "surfaceId":"s","dataModel":{"rows":[{"name":"first"},{"name":"second"}]},
+            "components":[{"id":"root","component":"Button","action":{"event":{
+                "name":"choose","context":{"name":{"path":"name"}}
+            }}}]
+        }}))
+        .unwrap();
+        proc.process_message(message).unwrap();
+        let surface = proc.model.get_surface("s").unwrap();
+        let components = surface.components.borrow();
+        let button = components.get("root").unwrap();
+        let data = surface.data_model.borrow();
+        let functions = HashMap::new();
+        let context = DataContext::new(&data, &functions).nested("rows/1");
+        let result = context
+            .resolve_dynamic_json(&button.properties["action"]["event"]["context"])
+            .unwrap();
+        assert_eq!(
+            result,
+            if version == "v1.0" {
+                json!({"name":"second"})
+            } else {
+                json!({"name":{"path":"name"}})
+            }
+        );
+    }
+}

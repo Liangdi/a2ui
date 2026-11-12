@@ -104,7 +104,10 @@ impl MessageProcessor {
     fn normalize_draft_functions(value: &mut serde_json::Value, in_args: bool) {
         match value {
             serde_json::Value::Object(object) => {
-                let is_call = object.get("call").is_some_and(serde_json::Value::is_string);
+                let is_call = object
+                    .get("call")
+                    .or_else(|| object.get("@call"))
+                    .is_some_and(serde_json::Value::is_string);
                 if is_call {
                     object.remove("returnType");
                     object.remove("allowedCallers");
@@ -238,6 +241,13 @@ impl MessageProcessor {
         if msg.version == "1.0" {
             Self::validate_current_envelope(&serde_json::to_value(&msg)?)?;
         }
+        // Hosts may deserialize or construct typed messages directly. Apply the
+        // same idempotent draft conversion at the processing boundary too.
+        let msg = if msg.version == "v1.0" {
+            Self::parse_message(&serde_json::to_string(&msg)?)?
+        } else {
+            msg
+        };
         match &msg.payload {
             A2uiPayload::CallRendererFunction(payload) => {
                 self.handle_renderer_function(&payload.call_renderer_function)
