@@ -13,9 +13,10 @@ fn main() {
     let message = MessageProcessor::parse_message(&json!({
         "version":"1.0","createSurface":{
             "surfaceId":"smoke","catalogId":"https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
-            "dataModel":{"name":""},"components":[
-                {"id":"root","component":"Column","children":["heading","name","status","decorative","submit"]},
+            "dataModel":{"name":"","heartbeat":0},"components":[
+                {"id":"root","component":"Column","children":["heading","heartbeat","name","status","decorative","submit"]},
                 {"id":"heading","component":"Text","text":"Native validation and accessibility","variant":"h2"},
+                {"id":"heartbeat","component":"Text","text":{"@call":"formatString","args":{"value":"Incoming update ${/heartbeat}"}}},
                 {"id":"name","component":"TextField","label":"Name","value":{"@path":"/name"},
                  "@accessibility":{"label":"Profile name"},
                  "@checks":[{"condition":{"@call":"required","args":{"value":{"@path":"/name"}}},"message":"Enter a name"}]},

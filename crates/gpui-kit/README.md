@@ -49,3 +49,5 @@ cargo run --manifest-path crates/gpui-kit/Cargo.toml --features backend --exampl
 Initially the name field is invalid and Submit disabled. Entering a name updates the greeting, clears validation messages and enables Submit. The example's decorative text stays visually present but is hidden from assistive technology.
 
 Pass `--stream-updates` to the accessibility example to inject unrelated model updates once a second for two minutes. Typing, selection and input focus should survive these messages; this mode does not connect to an external service.
+
+A native streaming smoke run with the final integrated core observed the incoming-update counter advance from 11 to 18 while a middle-of-string caret was retained: typing `X` changed `Ada` to `AdXa`, and the visible greeting changed to `Hello AdXa`. The counter in the example makes ongoing updates observable. This checks input focus/caret retention, not full modal or screen-reader conformance.
