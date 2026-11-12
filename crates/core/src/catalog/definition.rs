@@ -400,7 +400,31 @@ fn invalid(message: &str) -> A2uiError {
     A2uiError::Validation(message.into())
 }
 fn escape(name: &str) -> String {
-    name.replace('~', "~0").replace('/', "~1")
+    name.replace('~', "~0")
+        .replace('/', "~1")
+        .bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
+                (b as char).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
+        .collect()
+}
+pub(crate) fn decode_fragment(fragment: &str) -> Option<String> {
+    let mut bytes = fragment.bytes();
+    let mut output = Vec::new();
+    while let Some(byte) = bytes.next() {
+        if byte == b'%' {
+            let a = (bytes.next()? as char).to_digit(16)?;
+            let b = (bytes.next()? as char).to_digit(16)?;
+            output.push((a * 16 + b) as u8);
+        } else {
+            output.push(byte);
+        }
+    }
+    String::from_utf8(output).ok()
 }
 fn validate_document(raw: &Value) -> Result<()> {
     for section in ["components", "functions"] {
@@ -491,7 +515,8 @@ fn selected(raw: &Value, section: &str, union: &str) -> Result<BTreeMap<String, 
             .get("$ref")
             .and_then(Value::as_str)
             .ok_or_else(|| invalid("catalog union entry must be reference"))?;
-        let name = path
+        let decoded = decode_fragment(path).ok_or_else(|| invalid("Invalid URI fragment"))?;
+        let name = decoded
             .strip_prefix(&format!("#/{section}/"))
             .ok_or_else(|| invalid("catalog union reference points outside section"))?
             .replace("~1", "/")
@@ -554,7 +579,11 @@ fn ensure_local_refs(root: &Value, value: &Value) -> Result<()> {
     match value {
         Value::Object(object) => {
             if let Some(reference) = object.get("$ref").and_then(Value::as_str) {
-                if !reference.starts_with('#') || root.pointer(&reference[1..]).is_none() {
+                if !reference.starts_with('#')
+                    || decode_fragment(&reference[1..])
+                        .and_then(|p| root.pointer(&p))
+                        .is_none()
+                {
                     return Err(invalid("Unresolved local $ref"));
                 }
             }

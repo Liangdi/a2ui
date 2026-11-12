@@ -1,0 +1,125 @@
+{
+  "revision": "eb1fd7f0f8e9ff78d29ab6da7e3169bc1edb0f41",
+  "passed": 30,
+  "known_divergences": [
+    {
+      "name": "test_v10_component_nesting_depth_limit_exceeded_error",
+      "actual_category": "RecursionError",
+      "actual_message": "Global recursion limit exceeded",
+      "reason": "Older fixture expects ValidationError; current depth-boundary fixtures expect RecursionError. Rejection is enforced but category differs."
+    },
+    {
+      "name": "test_v10_recursion_limit_function_call_depth_exceeded_error",
+      "actual_category": "RecursionError",
+      "actual_message": "functionCall depth",
+      "reason": "Older fixture expects ValidationError; current depth-boundary fixtures expect RecursionError. Rejection is enforced but category differs."
+    },
+    {
+      "name": "test_v10_data_model_nesting_depth_limit_exceeded_error",
+      "actual_category": "RecursionError",
+      "actual_message": "Global recursion limit exceeded",
+      "reason": "Older fixture expects ValidationError; current depth-boundary fixtures expect RecursionError. Rejection is enforced but category differs."
+    }
+  ],
+  "included": [
+    "test_v10_topology_circular_reference_error",
+    "test_v10_topology_dangling_child_reference_error",
+    "test_v10_topology_self_reference_error",
+    "test_v10_topology_orphaned_component_error",
+    "test_v10_topology_missing_root_component_error",
+    "test_v10_topology_template_child_reachable",
+    "test_v10_topology_template_dangling_reference_error",
+    "test_v10_invalid_binding_path_error",
+    "test_v10_component_nesting_depth_limit_exceeded_error",
+    "test_v10_component_nesting_depth_within_limit",
+    "test_v10_multi_surface_independent_roots",
+    "test_v10_multi_surface_missing_root_error",
+    "test_v10_incremental_update_without_root",
+    "test_v10_incremental_update_self_reference_error",
+    "test_v10_incremental_update_circular_reference_error",
+    "test_v10_incremental_update_duplicate_component_id_error",
+    "test_v10_recursion_limit_function_call_depth_exceeded_error",
+    "test_v10_data_model_nesting_depth_limit_exceeded_error",
+    "test_v10_topology_structured_array_item_dangling_child_error",
+    "test_v10_topology_plain_string_property_not_treated_as_child_ref",
+    "test_v10_topology_component_id_array_dangling_reference_error",
+    "test_v10_topology_component_id_array_child_reachable",
+    "test_v10_topology_component_id_array_partial_dangling_reference_error",
+    "test_v10_topology_component_id_array_circular_reference_error",
+    "test_v10_child_list_template_missing_path_error",
+    "test_v10_update_data_model_invalid_path_error",
+    "test_v10_incremental_update_same_component_id_across_messages",
+    "test_v10_component_nesting_depth_at_limit",
+    "test_v10_component_nesting_depth_one_past_limit_error",
+    "test_v10_recursion_limit_function_call_depth_at_limit",
+    "test_v10_recursion_limit_function_call_depth_one_past_limit_error",
+    "test_v10_uax31_astral_plane_identifier_accepted",
+    "test_v10_invalid_json_pointer_path_error"
+  ],
+  "excluded": [
+    {
+      "name": "test_validator_1_0",
+      "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
+    },
+    {
+      "name": "test_custom_catalog_1_0",
+      "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
+    },
+    {
+      "name": "test_v10_unknown_component_type",
+      "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
+    },
+    {
+      "name": "test_v10_unknown_component_property",
+      "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
+    },
+    {
+      "name": "test_v10_unknown_nested_function",
+      "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
+    },
+    {
+      "name": "test_v10_multiple_action_envelope_error",
+      "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
+    },
+    {
+      "name": "test_v10_uax31_invalid_identifier_error",
+      "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
+    },
+    {
+      "name": "test_v10_function_argument_schema_mismatch_error",
+      "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
+    },
+    {
+      "name": "test_v10_uax31_astral_non_identifier_component_type_error",
+      "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
+    },
+    {
+      "name": "test_v10_agent_only_function_in_binding_error",
+      "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
+    },
+    {
+      "name": "test_v10_agent_only_function_in_action_error",
+      "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
+    },
+    {
+      "name": "test_v10_agent_only_function_cross_catalog_and_nested_error",
+      "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
+    },
+    {
+      "name": "test_v10_validate_at_prefixed_component_envelope_mixins",
+      "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
+    },
+    {
+      "name": "test_v10_validate_component_metadata_invalid_extension_key_error",
+      "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
+    },
+    {
+      "name": "test_v10_validate_component_envelope_conflict_at_and_bare_error",
+      "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
+    },
+    {
+      "name": "test_v10_validate_at_checks_on_non_checkable_component_error",
+      "reason": "Detailed SDK envelope/component error normalization or caller-policy validation not yet implemented by this opt-in boundary; five schema-only cases are independently covered in official_schema."
+    }
+  ]
+}
