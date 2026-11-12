@@ -1,0 +1,181 @@
+{
+  "source": "a2ui-project/a2ui",
+  "revision": "eb1fd7f0f8e9ff78d29ab6da7e3169bc1edb0f41",
+  "suite": "conformance/core/functions.yaml",
+  "known_divergences": [
+    {
+      "name": "test_evaluate_function_regex_v10_digit_class_ascii_only",
+      "reason": "Regex dialect and static safety validation differ from A2UI; Rust regex uses bounded-time matching but has different syntax and Unicode classes.",
+      "observed": "Ok(Object {\"valid\": Bool(true)})"
+    },
+    {
+      "name": "test_evaluate_function_regex_v10_word_class_ascii_only",
+      "reason": "Regex dialect and static safety validation differ from A2UI; Rust regex uses bounded-time matching but has different syntax and Unicode classes.",
+      "observed": "Ok(Object {\"valid\": Bool(true)})"
+    },
+    {
+      "name": "test_evaluate_function_regex_v10_word_boundary_ascii_only",
+      "reason": "Regex dialect and static safety validation differ from A2UI; Rust regex uses bounded-time matching but has different syntax and Unicode classes.",
+      "observed": "Ok(Object {\"valid\": Bool(true)})"
+    },
+    {
+      "name": "test_evaluate_function_regex_v10_rejects_backreference",
+      "reason": "Regex dialect and static safety validation differ from A2UI; Rust regex uses bounded-time matching but has different syntax and Unicode classes.",
+      "observed": "Err(InvalidFunctionCall(\"regex: invalid pattern '(a)\\\\1': regex parse error:\\n    (a)\\\\1\\n       ^^\\nerror: backreferences are not supported\"))"
+    },
+    {
+      "name": "test_evaluate_function_regex_v10_rejects_lookbehind",
+      "reason": "Regex dialect and static safety validation differ from A2UI; Rust regex uses bounded-time matching but has different syntax and Unicode classes.",
+      "observed": "Err(InvalidFunctionCall(\"regex: invalid pattern '(?<=a)b': regex parse error:\\n    (?<=a)b\\n    ^^^^\\nerror: look-around, including look-ahead and look-behind, is not supported\"))"
+    },
+    {
+      "name": "test_evaluate_function_regex_v10_rejects_named_group",
+      "reason": "Regex dialect and static safety validation differ from A2UI; Rust regex uses bounded-time matching but has different syntax and Unicode classes.",
+      "observed": "Ok(Object {\"valid\": Bool(true)})"
+    },
+    {
+      "name": "test_evaluate_function_regex_v10_rejects_inline_flag",
+      "reason": "Regex dialect and static safety validation differ from A2UI; Rust regex uses bounded-time matching but has different syntax and Unicode classes.",
+      "observed": "Ok(Object {\"valid\": Bool(true)})"
+    },
+    {
+      "name": "test_evaluate_function_regex_v10_rejects_unicode_property",
+      "reason": "Regex dialect and static safety validation differ from A2UI; Rust regex uses bounded-time matching but has different syntax and Unicode classes.",
+      "observed": "Ok(Object {\"valid\": Bool(true)})"
+    },
+    {
+      "name": "test_evaluate_function_regex_v10_rejects_nested_quantifier_plus",
+      "reason": "Regex dialect and static safety validation differ from A2UI; Rust regex uses bounded-time matching but has different syntax and Unicode classes.",
+      "observed": "Ok(Object {\"valid\": Bool(true)})"
+    },
+    {
+      "name": "test_evaluate_function_regex_v10_rejects_nested_quantifier_bounded_outer",
+      "reason": "Regex dialect and static safety validation differ from A2UI; Rust regex uses bounded-time matching but has different syntax and Unicode classes.",
+      "observed": "Ok(Object {\"valid\": Bool(true)})"
+    },
+    {
+      "name": "test_evaluate_function_regex_v10_rejects_overlapping_alternation_prefix",
+      "reason": "Regex dialect and static safety validation differ from A2UI; Rust regex uses bounded-time matching but has different syntax and Unicode classes.",
+      "observed": "Ok(Object {\"valid\": Bool(true)})"
+    },
+    {
+      "name": "test_evaluate_function_regex_v10_rejects_overlapping_alternation_class",
+      "reason": "Regex dialect and static safety validation differ from A2UI; Rust regex uses bounded-time matching but has different syntax and Unicode classes.",
+      "observed": "Ok(Object {\"valid\": Bool(true)})"
+    },
+    {
+      "name": "test_evaluate_function_regex_v10_rejects_adjacent_overlap_direct",
+      "reason": "Regex dialect and static safety validation differ from A2UI; Rust regex uses bounded-time matching but has different syntax and Unicode classes.",
+      "observed": "Ok(Object {\"valid\": Bool(true)})"
+    },
+    {
+      "name": "test_evaluate_function_regex_v10_rejects_adjacent_overlap_across_nullable",
+      "reason": "Regex dialect and static safety validation differ from A2UI; Rust regex uses bounded-time matching but has different syntax and Unicode classes.",
+      "observed": "Ok(Object {\"valid\": Bool(true)})"
+    },
+    {
+      "name": "test_evaluate_function_regex_v10_accepts_lookahead_password_like",
+      "reason": "Regex dialect and static safety validation differ from A2UI; Rust regex uses bounded-time matching but has different syntax and Unicode classes.",
+      "observed": "Err(InvalidFunctionCall(\"regex: invalid pattern '^(?=.*\\\\d).{8,}$': regex parse error:\\n    ^(?=.*\\\\d).{8,}$\\n     ^^^\\nerror: look-around, including look-ahead and look-behind, is not supported\"))"
+    },
+    {
+      "name": "test_evaluate_function_regex_v09_rejects_nested_quantifier",
+      "reason": "Regex dialect and static safety validation differ from A2UI; Rust regex uses bounded-time matching but has different syntax and Unicode classes.",
+      "observed": "Ok(Bool(true))"
+    }
+  ],
+  "unsupported": [
+    {
+      "name": "test_function_format_date_tr35_tokens",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_function_format_currency_locale_and_symbol",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_function_pluralize_categories",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_function_logical_and_or_not",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_function_invalid_argument_schema_error",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_runs_in_named_catalog",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_runs_in_named_catalog_on_surface_without_default",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_runs_in_surface_default",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_without_catalog_id_on_surface_without_default_errors",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_unknown_catalog_id_errors",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_catalog_of_other_protocol_version_errors",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_nested_call_does_not_inherit_catalog",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_format_string_template_call_inherits_catalog_without_default",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_format_string_template_call_inherits_named_catalog_over_default",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_format_string_template_call_inherits_catalog_nested",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_format_string_template_call_missing_in_inherited_catalog_errors",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_format_string_index_stays_catalogless_without_default",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v09_ignores_call_catalog_id",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_validation_result_coerced_in_format_number_grouping",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_validation_result_coerced_in_format_number_grouping_valid",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_validation_result_coerced_in_not_operand_on_surface",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_validation_result_coerced_in_and_operands_on_surface",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    },
+    {
+      "name": "test_evaluate_function_v10_agent_only_function_errors",
+      "reason": "Requires surface/catalog resolution or renderer validation harness; this harness executes standalone native functions only."
+    }
+  ]
+}
