@@ -90,6 +90,43 @@ impl ReactiveState {
                     Err(error) => view.errors.push(error),
                 }
             }
+            // Resolve only display fields inside option/tab objects. Values and
+            // child IDs are protocol identifiers, never expressions to execute.
+            for (collection, field) in [("options", "label"), ("tabs", "title")] {
+                let Some(items) = model.properties.get(collection).and_then(Value::as_array) else {
+                    continue;
+                };
+                let mut overlay = items.clone();
+                let mut changed = false;
+                for (index, item) in items.iter().enumerate() {
+                    let Some(expression) = item.get(field).filter(|value| {
+                        value.get("@call").is_some() || value.get("@path").is_some()
+                    }) else {
+                        continue;
+                    };
+                    changed = true;
+                    let sub_key = json!([key, collection, index, field]).to_string();
+                    needed.insert(sub_key.clone());
+                    match self.ensure(processor, &sub_key, &surface, &base, expression, false) {
+                        Ok(id) => match processor.evaluation_status(&id) {
+                            Some(EvaluationStatus::Ready(value)) => {
+                                overlay[index][field] = Value::String(
+                                    a2ui_base::model::data_context::value_to_string(&value),
+                                );
+                            }
+                            Some(EvaluationStatus::Error { message, .. }) => view
+                                .errors
+                                .push(format!("{collection}[{index}].{field}: {message}")),
+                            _ => view.pending = true,
+                        },
+                        Err(error) => view.errors.push(error),
+                    }
+                }
+                if changed {
+                    view.resolved
+                        .insert(collection.into(), Value::Array(overlay));
+                }
+            }
             if let Some(checks) = model.properties.get("@checks").and_then(Value::as_array) {
                 for (index, rule) in checks.iter().enumerate() {
                     let Some(condition) = rule.get("condition") else {
@@ -461,5 +498,41 @@ mod tests {
             coerce_output(&model, "text", json!({"@path":"/secret"})),
             json!("{\"@path\":\"/secret\"}")
         );
+    }
+    #[test]
+    fn nested_option_labels_and_tab_titles_resolve_without_executing_identifiers() {
+        let mut p = processor(
+            json!([
+                {"id":"root","component":"Column","children":["choice","tabs"]},
+                {"id":"choice","component":"ChoicePicker","options":[{"label":{"@call":"displayLabel"},"value":"@call:literal"}],"value":{"@path":"/selection"}},
+                {"id":"tabs","component":"Tabs","tabs":[{"title":{"@path":"/title"},"child":"tabBody"}]},
+                {"id":"tabBody","component":"Text","text":"Body"}
+            ]),
+            json!({"title":"Details","selection":[]}),
+        );
+        let mut state = ReactiveState::default();
+        state.refresh(&mut p);
+        let request = calls(&mut p);
+        assert_eq!(request.len(), 1);
+        assert!(state.view("s", "choice", "").unwrap().pending);
+        answer(&mut p, &request[0], json!("Friendly label"));
+        state.refresh(&mut p);
+        let choice = state.view("s", "choice", "").unwrap();
+        assert_eq!(choice.resolved["options"][0]["label"], "Friendly label");
+        assert_eq!(choice.resolved["options"][0]["value"], "@call:literal");
+        assert_eq!(
+            state.view("s", "tabs", "").unwrap().resolved["tabs"][0]["title"],
+            "Details"
+        );
+        send(
+            &mut p,
+            json!({"version":"1.0","updateDataModel":{"surfaceId":"s","path":"/title","value":"Updated"}}),
+        );
+        state.refresh(&mut p);
+        assert_eq!(
+            state.view("s", "tabs", "").unwrap().resolved["tabs"][0]["title"],
+            "Updated"
+        );
+        assert!(calls(&mut p).is_empty());
     }
 }
