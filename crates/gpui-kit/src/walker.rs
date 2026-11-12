@@ -55,15 +55,37 @@ pub(super) fn render_node(
         }
     };
 
-    let ctx = ComponentContext::new(
+    if walk.current_protocol
+        && let Err(error) = check_native_catalog(walk.processor, walk.catalog_id, comp_model)
+    {
+        return gpui_kit::div().child(error).into_any_element();
+    }
+    let functions = if walk.current_protocol {
+        let Some(catalog) = walk.processor.catalog(walk.catalog_id) else {
+            return gpui_kit::div()
+                .child("Unknown surface catalog")
+                .into_any_element();
+        };
+        &catalog.functions
+    } else {
+        walk.functions
+    };
+    let mut ctx = ComponentContext::new(
         component_id.to_string(),
         walk.surface_id.to_string(),
         walk.data_model,
         walk.components,
-        walk.functions,
+        functions,
         base_path,
         walk.focused_id.map(str::to_string),
     );
+
+    if walk.current_protocol {
+        ctx.data_context = ctx
+            .data_context
+            .with_catalog_id(walk.catalog_id)
+            .with_current_protocol();
+    }
 
     match comp_model.component_type.as_str() {
         // Containers.
@@ -91,4 +113,31 @@ pub(super) fn render_node(
 
         _ => render_unknown(walk, &ctx, comp_model, window, cx),
     }
+}
+
+/// Built-in widget semantics are only valid for the catalogs that define them.
+/// A custom catalog's same-named component must not acquire basic behavior.
+pub(crate) fn check_native_catalog(
+    processor: &a2ui_base::message_processor::MessageProcessor,
+    surface_catalog: &str,
+    component: &a2ui_base::model::component_model::ComponentModel,
+) -> Result<(), String> {
+    let id = component.catalog_id().unwrap_or(surface_catalog);
+    let catalog = processor
+        .catalog(id)
+        .ok_or_else(|| format!("Unknown catalog: {id}"))?;
+    if !matches!(
+        id,
+        "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json"
+            | "https://a2ui.org/specification/v1_0/catalogs/minimal/catalog.json"
+    ) {
+        return Err(format!("No GPUI Kit renderer registered for catalog: {id}"));
+    }
+    if catalog.get_component(&component.component_type).is_none() {
+        return Err(format!(
+            "Component {} is not in catalog {id}",
+            component.component_type
+        ));
+    }
+    Ok(())
 }

@@ -91,6 +91,9 @@ fn is_obscured(model: &ComponentModel) -> bool {
 /// [`image_pending`]: Walk::image_pending
 pub(super) struct Walk<'a> {
     pub surface_id: &'a str,
+    pub catalog_id: &'a str,
+    pub current_protocol: bool,
+    pub processor: &'a a2ui_base::message_processor::MessageProcessor,
     pub data_model: &'a DataModel,
     pub components: &'a SurfaceComponentsModel,
     pub functions: &'a HashMap<String, Box<dyn FunctionImplementation>>,

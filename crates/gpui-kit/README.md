@@ -18,7 +18,7 @@ The gallery reuses the existing TUI catalogs and embedded samples. Its TUI depen
 
 Enable the `backend` feature, initialize with `gpui_kit::init`, construct `GpuiApp::new(catalogs, functions)`, and mount it in a Kit `Root` (or use `gpui_kit::open_window`). No separate GPUI or asset dependency is needed.
 
-Apply incoming messages with `GpuiApp::process_message` inside an entity update and call `cx.notify()` after success. Drain `drain_outgoing_messages()` to send the existing draft catalog’s button event actions back through your own transport. Released A2UI 1.0 agent-function actions are a separate protocol migration item; the event queue uses the legacy `v1.0` action envelope. The adapter does not open network connections for agent traffic or execute generated code.
+Apply incoming messages with `GpuiApp::process_message` inside an entity update and call `cx.notify()` after success. Drain `drain_outgoing_messages()` through your own transport. Draft surfaces retain legacy `v1.0` button events. Current `1.0` surfaces emit current events (including resolved `userMessage`) and route direct function actions through the exact selected catalog: native functions run locally and undeclared non-system functions emit `callAgentFunction`. Each imperative call gets a fresh ID. Drain `drain_agent_function_responses()` to handle returned values/errors in your host. The adapter does not open network connections for agent traffic or execute generated code.
 
 The initial view retains the existing gallery chrome and displays one surface. Use a view per independent surface. Incoming updates invalidate local widget state so native inputs are seeded from the authoritative data model; focus-preserving incremental reconciliation is a future improvement.
 
@@ -28,9 +28,11 @@ The initial view retains the existing gallery chrome and displays one surface. U
 - Shared core interaction/data binding and image loading. GPUI Kit's current `Separator` replaces the old `Divider` API.
 - Video and audio remain placeholders, and Markdown uses the existing plain-text presentation.
 - Stateful template instances use surface, component and data scope keys. Nested relative templates and button action bindings preserve their item scope. Choice labels remain separate from wire values. Template-repeated modal overlays still need scoped lifecycle work.
-- Protocol conformance follows the shared core. This adapter does not claim to complete released A2UI 1.0 mixed-catalog rendering, automatic agent-function actions, or all accessibility semantics.
+- Current component dispatch supports mixed registered basic/minimal catalogs using `@catalogId` then the surface default. Unknown/custom catalogs are visibly rejected, never silently rendered as a same-named basic widget. Passive functions use the surface catalog, not a merged name map.
+- Direct action failures emit `EXPRESSION_ERROR` to the host. Schema-only function declarations are deliberately rejected until their full schemas/policies can be enforced. Nested asynchronous function expressions, asynchronous bindings/checks, cross-catalog passive function overrides, custom component renderers and full accessibility semantics remain unsupported. A resumable evaluator is required for these async cases; missing results are not treated as successful action values.
+- This branch depends on the current-protocol core update; the original GPUI adapter remains unchanged.
 - The renderer is ported from `crates/gpui` under the repository's MIT license. Separate source permits Kit API evolution without changing the legacy adapter; common protocol/model code remains in `a2ui-base`.
 
 ## Verification
 
-On Apple Silicon/macOS: library, example build, 17 unit tests and Clippy passed. Native smoke testing covered initial rendering, switching to a login form, typing into both fields, activating its button, switching away and back, and confirming form state reset. Other operating systems and complete visual/component conformance have not been tested.
+On Apple Silicon/macOS: library, example build, 20 unit tests and Clippy passed. Native smoke testing covered initial rendering, switching to a login form, typing into both fields, activating its button, switching away and back, and confirming form state reset. Other operating systems and complete visual/component conformance have not been tested.

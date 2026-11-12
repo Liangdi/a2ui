@@ -148,6 +148,13 @@ impl GpuiApp {
         self.load_sample(initial);
     }
 
+    /// Return agent RPC responses for the embedding host to correlate by call ID.
+    pub fn drain_agent_function_responses(
+        &mut self,
+    ) -> Vec<a2ui_base::protocol::rpc::FunctionResponse> {
+        self.processor.drain_agent_function_responses()
+    }
+
     /// Load sample `idx`: reset the processor (keeping catalogs), replay its
     /// messages, refresh focus, clear modals + caches. No-op if out of range.
     fn load_sample(&mut self, idx: usize) {
@@ -377,6 +384,9 @@ impl GpuiApp {
         let focused_id = self.focus.focused_id().map(str::to_string);
         let walk = Walk {
             surface_id: &surface.id,
+            catalog_id: &surface.catalog_id,
+            current_protocol: surface.current_protocol,
+            processor: &self.processor,
             data_model: &data_model,
             components: &components,
             functions: &self.functions,
@@ -425,6 +435,9 @@ impl GpuiApp {
             let focused_id = self.focus.focused_id().map(str::to_string);
             let walk = Walk {
                 surface_id: &surface.id,
+                catalog_id: &surface.catalog_id,
+                current_protocol: surface.current_protocol,
+                processor: &self.processor,
                 data_model: &data_model,
                 components: &components,
                 functions: &self.functions,
@@ -513,6 +526,54 @@ impl GpuiApp {
     /// logic, apply the result, then resolve any local Modal state change.
     /// Ported from `crates/iced/src/app.rs::handle_activate`.
     pub(crate) fn handle_activate(&mut self, node_id: &str, base_path: &str) {
+        let current_action = self
+            .processor
+            .model
+            .surfaces()
+            .next()
+            .filter(|surface| surface.current_protocol)
+            .map(|surface| {
+                let surface_id = surface.id.clone();
+                let result = {
+                    let components = surface.components.borrow();
+                    components
+                        .get(node_id)
+                        .ok_or_else(|| "Action component not found".to_string())
+                        .and_then(|component| {
+                            crate::walker::check_native_catalog(
+                                &self.processor,
+                                &surface.catalog_id,
+                                component,
+                            )
+                        })
+                };
+                (surface_id, result)
+            });
+        if let Some((surface_id, result)) = current_action {
+            let result = result.and_then(|()| {
+                self.processor
+                    .activate_component(&surface_id, node_id, base_path)
+                    .map_err(|e| e.to_string())
+            });
+            if let Err(message) = result {
+                self.pending_actions.push(ClientMessage {
+                    version: "1.0".into(),
+                    payload: ClientPayload::Error(
+                        a2ui_base::protocol::client_to_server::ErrorPayload {
+                            error: a2ui_base::protocol::client_to_server::ErrorData {
+                                code: "EXPRESSION_ERROR".into(),
+                                message,
+                                surface_id: Some(surface_id),
+                                function_call_id: None,
+                            },
+                        },
+                    ),
+                });
+            }
+            self.apply_modal_interaction(node_id);
+            return;
+        }
+
         let result = {
             let surface = match self.processor.model.surfaces().next() {
                 Some(s) => s,
@@ -706,6 +767,86 @@ mod tests {
         assert_eq!(payload.action.name, "pick");
         assert_eq!(payload.action.context.get("name"), Some(&json!("second")));
         assert!(app.drain_outgoing_messages().is_empty());
+    }
+
+    fn current_app(action: Value) -> GpuiApp {
+        let mut app = GpuiApp::new(
+            vec![a2ui_tui::catalogs::basic::build_basic_catalog()],
+            HashMap::new(),
+        );
+        app.process_message(message(json!({"version":"1.0","createSurface":{
+            "surfaceId":"test","catalogId":"https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json",
+            "dataModel":{"name":"Max"},
+            "components":[{"id":"button","component":"Button","action":action}]
+        }}))).unwrap();
+        app
+    }
+
+    #[test]
+    fn current_button_routes_remote_action_with_resolved_arguments() {
+        let mut app = current_app(
+            json!({"functionCall":{"@call":"submit","args":{"name":{"@path":"/name"}}}}),
+        );
+        app.handle_activate("button", "");
+        let messages = app.drain_outgoing_messages();
+        assert_eq!(messages.len(), 1);
+        let value = serde_json::to_value(&messages[0]).unwrap();
+        assert_eq!(value["version"], "1.0");
+        assert_eq!(
+            value["callAgentFunction"]["callFunction"]["args"]["name"],
+            "Max"
+        );
+    }
+
+    #[test]
+    fn current_action_rejection_is_reported_to_host() {
+        let mut app = current_app(json!({"functionCall":{"@call":"submit","catalogId":"unknown"}}));
+        app.handle_activate("button", "");
+        let messages = app.drain_outgoing_messages();
+        assert_eq!(messages.len(), 1);
+        assert!(matches!(&messages[0].payload, ClientPayload::Error(_)));
+    }
+
+    #[test]
+    fn native_catalog_resolution_honors_explicit_override_without_name_fallback() {
+        let mut app = GpuiApp::new(
+            vec![
+                a2ui_tui::catalogs::basic::build_basic_catalog(),
+                a2ui_tui::catalogs::minimal::build_minimal_catalog(),
+                a2ui_base::catalog::Catalog::new("custom"),
+            ],
+            HashMap::new(),
+        );
+        let basic = "https://a2ui.org/specification/v1_0/catalogs/basic/catalog.json";
+        let minimal = "https://a2ui.org/specification/v1_0/catalogs/minimal/catalog.json";
+        app.process_message(message(json!({"version":"1.0","createSurface":{
+            "surfaceId":"test","catalogId":basic,"components":[
+                {"id":"supported","component":"Text","text":"ok","@catalogId":minimal},
+                {"id":"collision","component":"Text","text":"no","@catalogId":"custom"},
+                {"id":"unknown","component":"Text","text":"no","@catalogId":"unknown"}
+            ]
+        }})))
+        .unwrap();
+        let surface = app.processor.model.get_surface("test").unwrap();
+        let components = surface.components.borrow();
+        assert!(
+            crate::walker::check_native_catalog(
+                &app.processor,
+                basic,
+                components.get("supported").unwrap()
+            )
+            .is_ok()
+        );
+        for id in ["collision", "unknown"] {
+            assert!(
+                crate::walker::check_native_catalog(
+                    &app.processor,
+                    basic,
+                    components.get(id).unwrap()
+                )
+                .is_err()
+            );
+        }
     }
 
     #[test]
