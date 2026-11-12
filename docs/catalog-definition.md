@@ -8,6 +8,10 @@ reference destinations, selects entries named by `anyComponent`/`anyFunction`, a
 bundles pinned common types locally without fetching external resources.
 
 `components()` and `functions()` expose selected authored schemas and metadata.
+`function_args_schema(name)` supplies a standalone local bundle for runtime
+argument defaults/validation, preserving common-types and authored local refs.
+Schema compilation is explicitly offline; unknown external resources are denied.
+Released `1.0` and earlier draft `v1.0` remain distinct.
 `derive(args)` keeps named entries, accepts replacements/additions and preserves
 reusable definitions/theme while dropping source-specific descriptive fields.
 `validate_component(value)` validates the component and nested function calls;

@@ -56,9 +56,9 @@ impl SchemaOnlyFunction {
         callers: AllowedCallers,
         user_activation: bool,
     ) -> Result<Self, A2uiError> {
-        self.args_validator = Some(jsonschema::validator_for(&args).map_err(|error| {
-            A2uiError::Validation(format!("invalid function args schema: {error}"))
-        })?);
+        self.args_validator = Some(jsonschema::options().offline().build(&args).map_err(
+            |error| A2uiError::Validation(format!("invalid function args schema: {error}")),
+        )?);
         self.args_schema = Some(args);
         self.callers = callers;
         self.user_activation = user_activation;

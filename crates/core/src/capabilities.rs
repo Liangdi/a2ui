@@ -153,7 +153,7 @@ pub fn parse_inline_catalog(json: &serde_json::Value) -> Result<InlineCatalog> {
     let current_definition = if obj
         .get("protocolVersion")
         .and_then(serde_json::Value::as_str)
-        .is_some_and(|v| v.trim_start_matches('v') == "1.0")
+        .is_some_and(|v| v == "1.0")
     {
         Some(crate::catalog::CatalogDefinition::from_json(
             json.clone(),

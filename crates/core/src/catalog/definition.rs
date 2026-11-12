@@ -34,7 +34,7 @@ impl CatalogDefinition {
         {
             object.insert("catalogId".into(), json!(id));
         }
-        if version.trim_start_matches('v') != "1.0" {
+        if version != "1.0" {
             return Err(invalid(
                 "CatalogDefinition currently supports released 1.0 only",
             ));
@@ -152,6 +152,38 @@ impl CatalogDefinition {
     pub fn resolved_schema(&self) -> &Value {
         &self.resolved
     }
+    /// Return a standalone, local-only schema for one selected function's arguments.
+    /// The bundled resource paths preserve common types and authored local refs.
+    pub fn function_args_schema(&self, name: &str) -> Result<Value> {
+        if !self.functions.contains_key(name) {
+            return Err(invalid(&format!(
+                "function absent from catalog union: {name}"
+            )));
+        }
+        let declaration = &self.resolved["functions"][name];
+        let suffix = if declaration.pointer("/properties/args").is_some() {
+            "properties/args"
+        } else if declaration.get("args").is_some() {
+            "args"
+        } else {
+            return Ok(json!({"type":"object"}));
+        };
+        let mut schema = json!({
+            "$schema":"https://json-schema.org/draft/2020-12/schema",
+            "$ref":format!("#/functions/{}/{suffix}",escape(name)),
+            "$defs":self.resolved["$defs"].clone(),
+            "functions":self.resolved.get("functions").cloned().unwrap_or(json!({})),
+            "components":self.resolved.get("components").cloned().unwrap_or(json!({}))
+        });
+        // An authored local resource may refer to other top-level definitions.
+        // Preserve them without turning catalog metadata into validation keywords.
+        if let Some(definitions) = self.resolved.get("definitions") {
+            schema["definitions"] = definitions.clone();
+        }
+        ensure_local_refs(&schema, &schema)?;
+        Ok(schema)
+    }
+
     pub fn validate_component(&self, value: &Value) -> Result<()> {
         let name = value
             .get("component")
@@ -426,6 +458,35 @@ fn ensure_local_refs(root: &Value, value: &Value) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn draft_version_is_not_treated_as_released_current_catalog() {
+        let raw = json!({"catalogId":"draft","protocolVersion":"v1.0","components":{"A_ℓ":{"type":"object"}}});
+        assert!(CatalogDefinition::from_json(raw.clone(), None, None).is_err());
+        assert!(crate::capabilities::parse_inline_catalog(&raw).is_err());
+    }
+
+    #[test]
+    fn function_arguments_bundle_common_types_and_local_defaults() {
+        use crate::catalog::function_api::{AllowedCallers, FunctionImplementation, ReturnType};
+        let raw = json!({"catalogId":"custom","protocolVersion":"1.0","functions":{"quote":{
+            "returnType":"string","properties":{"args":{"type":"object","properties":{
+                "label":{"$ref":"common_types.json#/$defs/DynamicString"},
+                "options":{"$ref":"#/$defs/Options"}
+            },"required":["label"],"additionalProperties":false}}
+        }},"$defs":{"Options":{"type":"object","default":{},"properties":{"count":{"type":"integer","default":2}}}}});
+        let definition = CatalogDefinition::from_json(raw, None, None).unwrap();
+        let schema = definition.function_args_schema("quote").unwrap();
+        let function = crate::catalog::SchemaOnlyFunction::new("quote".into(), ReturnType::String)
+            .with_policy(schema, AllowedCallers::RendererOnly, false)
+            .unwrap();
+        let mut args = std::collections::HashMap::from([("label".into(), json!("Hello"))]);
+        function.prepare_args(&mut args).unwrap();
+        assert_eq!(args["options"]["count"], 2);
+        args.insert("label".into(), json!(42));
+        assert!(function.prepare_args(&mut args).is_err());
+        assert!(definition.function_args_schema("hidden").is_err());
+    }
+
     #[test]
     fn literal_annotation_refs_are_not_schema_references() {
         let raw = json!({"catalogId":"custom","protocolVersion":"1.0","components":{"Text":{
