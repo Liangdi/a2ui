@@ -32,6 +32,7 @@ pub struct DataContext<'a> {
     catalog_id: Option<&'a str>,
     agent_caller: bool,
     current_protocol: bool,
+    user_activated: bool,
 }
 
 impl<'a> DataContext<'a> {
@@ -51,6 +52,7 @@ impl<'a> DataContext<'a> {
             catalog_id: None,
             agent_caller: false,
             current_protocol: false,
+            user_activated: false,
         }
     }
 
@@ -73,12 +75,20 @@ impl<'a> DataContext<'a> {
             catalog_id: self.catalog_id,
             agent_caller: self.agent_caller,
             current_protocol: self.current_protocol,
+            user_activated: self.user_activated,
         }
     }
 
     /// Evaluate functions using released A2UI 1.0 semantics rather than draft behavior.
     pub fn with_current_protocol(mut self) -> Self {
         self.current_protocol = true;
+        self
+    }
+
+    /// Mark evaluation as originating from an actual host user gesture.
+    /// Never use this for incoming messages or passive rendering/checks.
+    pub fn with_user_activation(mut self) -> Self {
+        self.user_activated = true;
         self
     }
 
@@ -105,9 +115,9 @@ impl<'a> DataContext<'a> {
         function: &dyn crate::catalog::function_api::FunctionImplementation,
     ) -> Result<(), crate::error::A2uiError> {
         use crate::catalog::function_api::AllowedCallers;
-        // No trusted user-gesture context is currently propagated by renderers.
-        // Passive property/check evaluation must never grant activation.
-        let forbidden = function.requires_user_activation()
+        // Incoming agent messages cannot acquire trusted user activation.
+        let forbidden = (function.requires_user_activation()
+            && (!self.user_activated || self.agent_caller))
             || if self.agent_caller {
                 function.allowed_callers() == AllowedCallers::RendererOnly
             } else {
@@ -343,7 +353,10 @@ impl<'a> DataContext<'a> {
         self.try_execute_function(fc).unwrap_or(Value::Null)
     }
 
-    fn try_execute_function(&self, fc: &FunctionCall) -> Result<Value, crate::error::A2uiError> {
+    pub fn try_execute_function(
+        &self,
+        fc: &FunctionCall,
+    ) -> Result<Value, crate::error::A2uiError> {
         use crate::error::A2uiError;
         if let Some(catalog) = fc.catalog_id.as_deref()
             && self.catalog_id != Some(catalog)
