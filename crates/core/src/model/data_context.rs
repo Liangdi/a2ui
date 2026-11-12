@@ -440,6 +440,9 @@ impl<'a> DataContext<'a> {
             resolved_args.insert(key.clone(), resolved);
         }
         func.prepare_args(&mut resolved_args).ok()?;
+        if !func.data_effects(&resolved_args, self).ok()?.is_empty() {
+            return None;
+        }
         func.execute(&resolved_args, self).ok()
     }
 
@@ -462,6 +465,11 @@ impl<'a> DataContext<'a> {
         self.check_caller(function.as_ref())?;
         let mut args = args.clone();
         function.prepare_args(&mut args)?;
+        if !function.data_effects(&args, self)?.is_empty() {
+            return Err(A2uiError::InvalidFunctionCall(
+                "data effects require the trusted action processor".into(),
+            ));
+        }
         function.execute(&args, self)
     }
 
@@ -523,6 +531,11 @@ impl<'a> DataContext<'a> {
             args.insert(key.clone(), self.resolve_dynamic_json(value)?);
         }
         func.prepare_args(&mut args)?;
+        if !func.data_effects(&args, &execution_context)?.is_empty() {
+            return Err(A2uiError::InvalidFunctionCall(
+                "data effects require the trusted action processor".into(),
+            ));
+        }
         func.execute(&args, &execution_context)
     }
 

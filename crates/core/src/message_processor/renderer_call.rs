@@ -138,6 +138,37 @@ impl MessageProcessor {
             }
             function.prepare_args(&mut call.args)?;
             if function.is_native() {
+                let effects = function.data_effects(&call.args, &context)?;
+                if !effects.is_empty() && !user_activated {
+                    return Err(A2uiError::InvalidFunctionCall(
+                        "data effects require a trusted action".into(),
+                    ));
+                }
+                if effects.len() > 1024 {
+                    return Err(A2uiError::Validation(
+                        "native data effect batch exceeds 1024 commands".into(),
+                    ));
+                }
+                let mut staged = if effects.is_empty() {
+                    None
+                } else {
+                    Some(crate::model::data_model::DataModel::from_value(
+                        data.as_value().clone(),
+                    ))
+                };
+                if let Some(staged) = &mut staged {
+                    for effect in &effects {
+                        match effect {
+                            crate::catalog::function_api::DataEffect::Set { path, value } => {
+                                let pointer = context.resolve_pointer(path);
+                                Self::validate_absolute_pointer(&pointer)?;
+                                staged
+                                    .try_set(&pointer, value.clone())
+                                    .map_err(A2uiError::InvalidPointer)?;
+                            }
+                        }
+                    }
+                }
                 let value = function.execute(&call.args, &context)?;
                 let valid = return_matches(
                     function.return_type_for_protocol(surface.current_protocol),
@@ -147,6 +178,19 @@ impl MessageProcessor {
                     return Err(A2uiError::TypeMismatch(
                         "function result does not match declared return type".into(),
                     ));
+                }
+                let next = staged
+                    .filter(|staged| staged.as_value() != data.as_value())
+                    .map(|staged| staged.as_value().clone());
+                drop(context);
+                drop(data);
+                if let Some(next) = next {
+                    surface
+                        .data_model
+                        .borrow_mut()
+                        .try_set("", next)
+                        .map_err(A2uiError::InvalidPointer)?;
+                    self.native_effects_changed.set(true);
                 }
                 return Ok(RendererCall::Local(value));
             }
