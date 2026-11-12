@@ -73,8 +73,11 @@ impl ReactiveState {
                 needed.insert(sub_key.clone());
                 match self.ensure(processor, &sub_key, &surface, &base, expression, false) {
                     Ok(id) => match processor.evaluation_status(&id) {
-                        Some(EvaluationStatus::Ready(value)) if safe_literal(&value) => {
-                            view.resolved.insert(name.into(), value);
+                        Some(EvaluationStatus::Ready(value))
+                            if safe_literal(&value) || string_property(&model, name) =>
+                        {
+                            view.resolved
+                                .insert(name.into(), coerce_output(&model, name, value));
                         }
                         Some(EvaluationStatus::Ready(_)) => view
                             .errors
@@ -196,6 +199,25 @@ fn contains_call(value: &Value) -> bool {
         _ => false,
     }
 }
+fn string_property(model: &ComponentModel, name: &str) -> bool {
+    matches!(name, "text" | "label" | "url" | "name" | "description")
+        || (name == "value"
+            && matches!(model.component_type.as_str(), "TextField" | "DateTimeInput"))
+}
+fn coerce_output(model: &ComponentModel, name: &str, value: Value) -> Value {
+    if string_property(model, name) {
+        Value::String(a2ui_base::model::data_context::value_to_string(&value))
+    } else if name == "value" && model.component_type == "CheckBox" {
+        Value::Bool(a2ui_base::model::data_context::value_to_boolean(&value))
+    } else if matches!(name, "min" | "max" | "steps" | "activeTab")
+        || (name == "value" && model.component_type == "Slider")
+    {
+        json!(value.as_f64().unwrap_or(0.0))
+    } else {
+        value
+    }
+}
+
 fn safe_literal(value: &Value) -> bool {
     match value {
         Value::Object(_) => false,
@@ -429,6 +451,15 @@ mod tests {
                 .unwrap()
                 .properties["text"],
             expression
+        );
+    }
+    #[test]
+    fn resolved_text_keeps_dynamic_string_coercion_without_reevaluation() {
+        let model = ComponentModel::from_json(&json!({"id":"x","component":"Text"})).unwrap();
+        assert_eq!(coerce_output(&model, "text", json!(42)), json!("42"));
+        assert_eq!(
+            coerce_output(&model, "text", json!({"@path":"/secret"})),
+            json!("{\"@path\":\"/secret\"}")
         );
     }
 }

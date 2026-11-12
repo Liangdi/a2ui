@@ -37,7 +37,7 @@ The initial view retains the existing gallery chrome and displays one surface. U
 
 ## Verification
 
-On Apple Silicon/macOS: library, example build, 30 unit tests and Clippy passed. Native smoke testing covered initial rendering, switching to a login form, typing into both fields, activating its button, switching away and back, and confirming form state reset. Other operating systems and complete visual/component conformance have not been tested.
+On Apple Silicon/macOS: library, example build, 31 unit tests and Clippy passed. Native smoke testing covered initial rendering, switching to a login form, typing into both fields, activating its button, switching away and back, and confirming form state reset. Other operating systems and complete visual/component conformance have not been tested.
 
 
 The `accessibility` example exercises current reactive text, validation and native metadata without a network transport:
