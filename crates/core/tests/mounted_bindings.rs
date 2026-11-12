@@ -52,7 +52,7 @@ fn failed_remote_binding_emits_one_correlated_error_and_unmount_rejects_late_rep
     assert_eq!(messages.len(), 1);
     let error = serde_json::to_value(&messages[0]).unwrap();
     assert_eq!(error["error"]["functionCallId"], call_id);
-    assert_eq!(error["error"]["surfaceId"], "s");
+    assert!(error["error"].get("surfaceId").is_none());
     assert_eq!(p.mounted_value(&id), Some(Value::Null));
     send(&mut p, response);
     assert!(p.drain_outgoing().is_empty());

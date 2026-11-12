@@ -477,14 +477,14 @@ impl MessageProcessor {
                 let mut evaluator = std::mem::take(&mut self.evaluator);
                 let error = evaluator.response(self, &payload.agent_function_response);
                 self.evaluator = evaluator;
-                if let Some((surface_id, code, message)) = error {
+                if let Some((_surface_id, code, message)) = error {
                     self.queue_outgoing(ClientMessage {
                         version: "1.0".into(),
                         payload: ClientPayload::Error(ErrorPayload {
                             error: ErrorData {
                                 code,
                                 message,
-                                surface_id: Some(surface_id),
+                                surface_id: None,
                                 function_call_id: Some(
                                     payload.agent_function_response.function_call_id.clone(),
                                 ),

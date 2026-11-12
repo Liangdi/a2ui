@@ -292,7 +292,7 @@ fn failed_binding_retries_only_when_args_change_but_new_binding_gets_fresh_call(
     let error = serde_json::to_value(&errors[0]).unwrap();
     assert_eq!(error["error"]["functionCallId"], call["functionCallId"]);
     assert_eq!(error["error"]["code"], "EXPRESSION_ERROR");
-    assert_eq!(error["error"]["surfaceId"], "s");
+    assert!(error["error"].get("surfaceId").is_none());
     send(
         &mut p,
         json!({"version":"1.0","updateDataModel":{"surfaceId":"s","path":"/unrelated","value":true}}),

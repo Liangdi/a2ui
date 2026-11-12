@@ -86,6 +86,7 @@ pub(crate) struct Evaluator {
     outgoing: Vec<CallAgentFunction>,
     cancelled_calls: Vec<String>,
     diagnostics: Vec<EvaluationDiagnostic>,
+    action_error_calls: HashMap<EvaluationId, String>,
 }
 
 impl Evaluator {
@@ -151,13 +152,19 @@ impl Evaluator {
             })
     }
 
+    pub(crate) fn error_call_id(&self, id: &str) -> Option<&str> {
+        self.action_error_calls.get(id).map(String::as_str)
+    }
+
     pub(crate) fn forget(&mut self, id: &str) {
+        self.action_error_calls.remove(id);
         self.jobs.remove(id);
         self.updates.retain(|update| update.id != id);
         self.collect_calls();
     }
 
     pub(crate) fn cancel(&mut self, id: &str) {
+        self.action_error_calls.remove(id);
         if self.jobs.remove(id).is_some() {
             self.push_update(EvaluationUpdate {
                 id: id.into(),
@@ -225,6 +232,9 @@ impl Evaluator {
                 }
             };
             if let EvaluationStatus::Error { code, message } = &call.status {
+                if let Some((id, _)) = &key.imperative {
+                    self.action_error_calls.insert(id.clone(), call.id.clone());
+                }
                 return Some((key.surface.clone(), code.clone(), message.clone()));
             }
         }
@@ -293,7 +303,13 @@ impl Evaluator {
     }
 
     pub(crate) fn drain(&mut self) -> Vec<EvaluationUpdate> {
-        std::mem::take(&mut self.updates)
+        let updates = std::mem::take(&mut self.updates);
+        for update in &updates {
+            if !self.jobs.contains_key(&update.id) {
+                self.action_error_calls.remove(&update.id);
+            }
+        }
+        updates
     }
 
     fn evaluate(
