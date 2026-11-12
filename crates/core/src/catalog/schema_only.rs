@@ -137,6 +137,11 @@ fn apply_defaults(
             }
         }
     }
+    if let Some(parts) = schema.get("allOf").and_then(serde_json::Value::as_array) {
+        for part in parts {
+            apply_defaults(root, part, value, depth + 1)?;
+        }
+    }
     if let (Some(properties), Some(object)) = (
         schema
             .get("properties")
@@ -145,9 +150,9 @@ fn apply_defaults(
     ) {
         for (name, property) in properties {
             if !object.contains_key(name)
-                && let Some(default) = property.get("default")
+                && let Some(default) = declared_default(root, property, depth + 1)?
             {
-                object.insert(name.clone(), default.clone());
+                object.insert(name.clone(), default);
             }
             if let Some(child) = object.get_mut(name) {
                 apply_defaults(root, property, child, depth + 1)?;
@@ -160,6 +165,45 @@ fn apply_defaults(
         }
     }
     Ok(())
+}
+
+fn declared_default(
+    root: &serde_json::Value,
+    schema: &serde_json::Value,
+    depth: usize,
+) -> Result<Option<serde_json::Value>, A2uiError> {
+    if depth > 128 {
+        return Err(A2uiError::Validation(
+            "argument defaults exceed depth limit".into(),
+        ));
+    }
+    if let Some(default) = schema.get("default") {
+        return Ok(Some(default.clone()));
+    }
+    if let Some(reference) = schema
+        .get("$ref")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|reference| reference.strip_prefix('#'))
+    {
+        if let Some(target) = root.pointer(reference) {
+            return declared_default(root, target, depth + 1);
+        }
+    }
+    if let Some(parts) = schema.get("allOf").and_then(serde_json::Value::as_array) {
+        let mut found = None;
+        for part in parts {
+            if let Some(default) = declared_default(root, part, depth + 1)? {
+                if found.as_ref().is_some_and(|prior| prior != &default) {
+                    return Err(A2uiError::Validation(
+                        "conflicting allOf argument defaults".into(),
+                    ));
+                }
+                found = Some(default);
+            }
+        }
+        return Ok(found);
+    }
+    Ok(None)
 }
 
 /// Parse a return-type string (as found in a catalog's `returnType` field)
@@ -179,6 +223,25 @@ pub fn parse_return_type(s: &str) -> ReturnType {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn defaults_resolve_local_refs_and_all_of() {
+        let f = SchemaOnlyFunction::new("quote".into(), ReturnType::Any)
+            .with_policy(
+                serde_json::json!({
+                    "type":"object", "$defs":{"Limit":{"type":"integer","default":10}},
+                    "properties":{"limit":{"$ref":"#/$defs/Limit"}},"required":["limit"],
+                    "allOf":[{"properties":{"currency":{"type":"string","default":"USD"}}}]
+                }),
+                AllowedCallers::RendererOnly,
+                false,
+            )
+            .unwrap();
+        let mut args = HashMap::new();
+        f.prepare_args(&mut args).unwrap();
+        assert_eq!(args["limit"], 10);
+        assert_eq!(args["currency"], "USD");
+    }
 
     #[test]
     fn name_and_return_type_round_trip() {
