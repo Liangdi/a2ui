@@ -702,13 +702,13 @@ fn test_register_inline_catalog_adds_schema_only_functions() {
 #[test]
 fn test_inline_schema_only_function_rejects_execution() {
     // An inline function has a schema but no native impl: calling it must
-    // produce an error, not a panic or a "function not found".
+    // produce an error after caller authorization, not a panic or a "function not found".
     let mut proc = make_basic_processor();
 
     let inline = serde_json::json!({
         "catalogId": "https://example.com/inline.json",
         "functions": {
-            "shout": {"returnType": "string", "args": {"properties": {"value": {}}}}
+            "shout": {"returnType": "string", "allowedCallers": "rendererOrAgent", "args": {"properties": {"value": {}}}}
         }
     });
     proc.register_inline_catalog(inline).unwrap();
@@ -716,7 +716,7 @@ fn test_inline_schema_only_function_rejects_execution() {
     // Create a surface so callFunction has a DataModel to borrow.
     let create = serde_json::json!({
         "version": "v1.0",
-        "createSurface": {"surfaceId": "s1", "catalogId": "inline"}
+        "createSurface": {"surfaceId": "s1", "catalogId": "https://example.com/inline.json"}
     });
     proc.process_message(MessageProcessor::parse_message(&create.to_string()).unwrap())
         .unwrap();
@@ -725,7 +725,7 @@ fn test_inline_schema_only_function_rejects_execution() {
         "version": "v1.0",
         "functionCallId": "c1",
         "wantResponse": true,
-        "callFunction": {"call": "shout", "args": {"value": "hi"}}
+        "callFunction": {"call": "shout", "catalogId": "https://example.com/inline.json", "args": {"value": "hi"}}
     });
     proc.process_message(MessageProcessor::parse_message(&msg.to_string()).unwrap())
         .unwrap();
@@ -736,7 +736,7 @@ fn test_inline_schema_only_function_rejects_execution() {
         ClientPayload::Error(err) => {
             assert_eq!(err.error.code, "INVALID_FUNCTION_CALL");
             assert!(
-                err.error.message.contains("not callable by an agent"),
+                err.error.message.contains("no native implementation"),
                 "unexpected error message: {}",
                 err.error.message
             );
