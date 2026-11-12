@@ -123,6 +123,13 @@ impl GpuiApp {
         &self.processor
     }
 
+    /// Access opt-in evaluation/check subscriptions and their diagnostics.
+    /// After directly mutating model data, invalidate the affected surface's
+    /// evaluations and notify the GPUI entity. Prefer `process_message` for wire updates.
+    pub fn processor_mut(&mut self) -> &mut MessageProcessor {
+        &mut self.processor
+    }
+
     /// Drain events to send back to the agent after user interactions.
     pub fn drain_outgoing_messages(
         &mut self,
