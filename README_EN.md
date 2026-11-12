@@ -1,5 +1,7 @@
 # A2UI — Rust impl of the A2UI protocol (ratatui terminal + Slint / egui / Bevy / Iced / Dioxus / GPUI desktop)
 
+> Protocol status: the July 2026 implementation used an earlier draft named v1.0. Released A2UI 1.0 compatibility is being updated; see [verified coverage and remaining gaps](docs/protocol-1.0-compatibility.md). Do not assume full renderer conformance.
+
 [![crates.io](https://img.shields.io/crates/v/a2ui.svg)](https://crates.io/crates/a2ui)
 [![docs.rs](https://docs.rs/a2ui/badge.svg)](https://docs.rs/a2ui)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -14,7 +16,7 @@ The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic c
 
 ## Features
 
-- ✅ Full A2UI v1.0 protocol support
+- ✅ A2UI protocol parsing and runtime (see compatibility status above)
 - ✅ **18 TUI components**: Text, Row, Column, Button, TextField, Card, Divider, List, CheckBox, Icon, Tabs, Modal, Slider, ChoicePicker, DateTimeInput, Image, Video, AudioPlayer
   - Interactive: Text, Row, Column, Button, TextField, Slider, CheckBox, ChoicePicker, DateTimeInput (arrow keys adjust the value)
   - Placeholders (default): Image / Video / AudioPlayer render only text placeholders (`[🖼 description]`, `[▶ url]`, `[♫ url]`) — the terminal cannot decode pixels/audio/video. Enable real image/audio rendering via the Optional Features below.
@@ -26,7 +28,7 @@ The project is organized as a Cargo workspace: `a2ui-base` (framework-agnostic c
 - ✅ **Modular Cargo workspace architecture** (`a2ui-base` framework-agnostic / `a2ui-tui` ratatui backend / `a2ui-gallery` demo app / `a2ui` umbrella)
 - ✅ JSON Pointer data binding with reactive state management
 - ✅ Gallery App sample browser with progressive message rendering
-- ✅ **235 unit/integration tests** (core 127 + tui 61 + gallery e2e 21 + slint 14 + iced 12), including end-to-end tests with A2UI specification examples
+- ✅ **Unit/integration and pinned conformance tests**, including end-to-end A2UI examples. See the compatibility document above for verified suites and explicit exclusions.
 
 ## Screenshots
 

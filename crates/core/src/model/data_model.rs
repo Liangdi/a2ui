@@ -12,11 +12,12 @@ use crate::observable::event_stream::{EventStream, EventSubscription};
 
 /// A reactive JSON document store with JSON Pointer support.
 ///
-/// The data model is always a JSON object at the root.
+/// The data model starts as a JSON object; root replacement accepts any JSON value.
 /// Subscribers are notified when values change at specific paths.
 pub struct DataModel {
     data: Value,
     subscribers: EventStream<DataModelEvent>,
+    snapshots: EventStream<Value>,
 }
 
 /// Event emitted when data changes.
@@ -40,19 +41,17 @@ impl DataModel {
         Self {
             data: Value::Object(serde_json::Map::new()),
             subscribers: EventStream::new(),
+            snapshots: EventStream::new(),
         }
     }
 
     /// Create from an existing JSON value.
-    /// If the value is not an object, wraps it.
+    /// Preserves the supplied JSON value.
     pub fn from_value(value: Value) -> Self {
         Self {
-            data: if value.is_object() {
-                value
-            } else {
-                Value::Object(serde_json::Map::new())
-            },
+            data: value,
             subscribers: EventStream::new(),
+            snapshots: EventStream::new(),
         }
     }
 
@@ -64,44 +63,74 @@ impl DataModel {
     /// Get a value at an absolute JSON Pointer path.
     /// Returns `None` if the path doesn't exist.
     pub fn get(&self, pointer: &str) -> Option<&Value> {
-        if pointer == "/" || pointer.is_empty() {
-            return Some(&self.data);
-        }
-        let tokens = parse_pointer(pointer);
-        resolve_value(&self.data, &tokens)
+        self.try_get(pointer).ok().flatten()
     }
 
-    /// Set a value at a JSON Pointer path with auto-vivification.
-    ///
-    /// - Creates intermediate objects/arrays as needed.
-    /// - Setting `Value::Null` removes the key.
-    /// - Notifies subscribers with bubble & cascade strategy.
-    pub fn set(&mut self, pointer: &str, value: Value) {
-        if pointer == "/" || pointer.is_empty() {
-            // Replace root
-            if value.is_null() {
-                self.data = Value::Object(serde_json::Map::new());
-            } else {
-                self.data = value.clone();
-            }
-            self.notify("/", &value);
-            return;
+    /// Read with explicit path-validation errors.
+    pub fn try_get(&self, pointer: &str) -> Result<Option<&Value>, String> {
+        let tokens = checked_tokens(pointer)?;
+        if tokens.is_empty() {
+            return Ok(Some(&self.data));
         }
+        Ok(resolve_value(&self.data, &tokens).filter(|v| !v.is_null()))
+    }
 
-        let tokens = parse_pointer(pointer);
-        set_value(&mut self.data, &tokens, value.clone());
-        self.notify(pointer, &value);
+    /// Compatibility wrapper. Use `try_set` to handle invalid writes explicitly.
+    pub fn set(&mut self, pointer: &str, value: Value) {
+        let _ = self.try_set(pointer, value);
+    }
+
+    /// Atomically update a path, rejecting invalid traversal and excessive indices.
+    pub fn try_set(&mut self, pointer: &str, value: Value) -> Result<(), String> {
+        let tokens = checked_tokens(pointer)?;
+        let mut next = self.data.clone();
+        if tokens.is_empty() {
+            next = if value.is_null() {
+                Value::Object(Default::default())
+            } else {
+                value.clone()
+            };
+        } else {
+            write_value(&mut next, &tokens, value.clone())?;
+        }
+        if next != self.data {
+            self.data = next;
+            self.snapshots.emit(&self.data);
+            self.notify(pointer, &value);
+        }
+        Ok(())
+    }
+
+    /// Watch a path, firing only when its resolved value changes. Drop to dispose.
+    pub fn subscribe_path<F>(&self, pointer: &str, callback: F) -> Result<EventSubscription, String>
+    where
+        F: Fn(&DataModelEvent) + Send + Sync + 'static,
+    {
+        let tokens = checked_tokens(pointer)?;
+        let path = pointer.to_string();
+        let previous = std::sync::Mutex::new(self.try_get(pointer)?.cloned());
+        Ok(self.snapshots.on(move |root| {
+            let next = if tokens.is_empty() {
+                Some(root.clone())
+            } else {
+                resolve_value(root, &tokens)
+                    .filter(|v| !v.is_null())
+                    .cloned()
+            };
+            let mut old = previous.lock().unwrap();
+            if *old != next {
+                *old = next.clone();
+                callback(&DataModelEvent {
+                    path: path.clone(),
+                    new_value: next,
+                });
+            }
+        }))
     }
 
     /// Replace the entire data model.
     pub fn replace_all(&mut self, value: Value) {
-        let new_data = if value.is_object() {
-            value
-        } else {
-            Value::Object(serde_json::Map::new())
-        };
-        self.data = new_data.clone();
-        self.notify("/", &new_data);
+        self.set("/", value);
     }
 
     /// Subscribe to data changes.
@@ -154,6 +183,7 @@ fn parse_pointer(pointer: &str) -> Vec<String> {
     }
     trimmed
         .split('/')
+        .filter(|token| !token.is_empty())
         .map(|token| token.replace("~1", "/").replace("~0", "~"))
         .collect()
 }
@@ -167,7 +197,7 @@ fn resolve_value<'a>(value: &'a Value, tokens: &[String]) -> Option<&'a Value> {
                 current = map.get(token)?;
             }
             Value::Array(arr) => {
-                let idx: usize = token.parse().ok()?;
+                let idx = array_index(token).ok()?;
                 current = arr.get(idx)?;
             }
             _ => return None,
@@ -176,84 +206,75 @@ fn resolve_value<'a>(value: &'a Value, tokens: &[String]) -> Option<&'a Value> {
     Some(current)
 }
 
-/// Set a value at a token path with auto-vivification.
-fn set_value(root: &mut Value, tokens: &[String], value: Value) {
-    if tokens.is_empty() {
-        *root = value;
-        return;
+fn checked_tokens(pointer: &str) -> Result<Vec<String>, String> {
+    let tokens = parse_pointer(pointer);
+    if tokens
+        .iter()
+        .any(|t| matches!(t.as_str(), "__proto__" | "constructor" | "prototype"))
+    {
+        return Err("Forbidden path segment".into());
     }
+    Ok(tokens)
+}
 
-    // Remove if null
-    if value.is_null() && tokens.len() == 1 {
-        remove_value(root, tokens);
-        return;
+fn array_index(token: &str) -> Result<usize, String> {
+    if token.is_empty()
+        || !token.bytes().all(|c| c.is_ascii_digit())
+        || (token.len() > 1 && token.starts_with('0'))
+    {
+        return Err("non-numeric segment".into());
     }
+    let index = token
+        .parse::<usize>()
+        .map_err(|_| "List index exceeds 10000")?;
+    if index > 10000 {
+        return Err("List index exceeds 10000".into());
+    }
+    Ok(index)
+}
 
-    let mut current = root;
-    for (i, token) in tokens.iter().enumerate() {
-        if i == tokens.len() - 1 {
-            // Last token — set the value
-            set_at(current, token, value);
-            return;
+fn write_value(root: &mut Value, tokens: &[String], value: Value) -> Result<(), String> {
+    let token = &tokens[0];
+    if root.is_null() {
+        if value.is_null() {
+            return Ok(());
         }
-        // Intermediate token — auto-vivify
-        current = vivify(current, token);
+        *root = if token.bytes().all(|c| c.is_ascii_digit()) {
+            Value::Array(vec![])
+        } else {
+            Value::Object(Default::default())
+        };
     }
-}
-
-/// Ensure `parent` is an object, converting if needed, then get-or-create the child.
-fn vivify<'a>(parent: &'a mut Value, token: &str) -> &'a mut Value {
-    // First, ensure parent is an object (overwrite scalars, ignore arrays with string keys)
-    if !parent.is_object() {
-        *parent = Value::Object(serde_json::Map::new());
-    }
-    // Now parent is guaranteed to be an Object.
-    let map = parent.as_object_mut().unwrap();
-    if !map.contains_key(token) {
-        map.insert(token.to_string(), Value::Object(serde_json::Map::new()));
-    }
-    map.get_mut(token).unwrap()
-}
-
-/// Set a value at a specific key/index on a parent container.
-fn set_at(parent: &mut Value, token: &str, value: Value) {
-    match parent {
+    let child = match root {
         Value::Object(map) => {
-            if value.is_null() {
-                map.remove(token);
-            } else {
-                map.insert(token.to_string(), value);
-            }
-        }
-        Value::Array(arr) => {
-            if let Ok(idx) = token.parse::<usize>() {
-                while arr.len() <= idx {
-                    arr.push(Value::Null);
+            if tokens.len() == 1 {
+                if value.is_null() {
+                    map.remove(token);
+                } else {
+                    map.insert(token.clone(), value);
                 }
-                arr[idx] = value;
+                return Ok(());
             }
+            if value.is_null() && !map.contains_key(token) {
+                return Ok(());
+            }
+            map.entry(token.clone()).or_insert(Value::Null)
         }
-        _ => {}
-    }
-}
-
-/// Remove a value at a specific key/index.
-fn remove_value(root: &mut Value, tokens: &[String]) {
-    if tokens.len() == 1 {
-        match root {
-            Value::Object(map) => {
-                map.remove(&tokens[0]);
+        Value::Array(array) => {
+            let index = array_index(token)?;
+            if value.is_null() && index >= array.len() {
+                return Ok(());
             }
-            Value::Array(arr) => {
-                if let Ok(idx) = tokens[0].parse::<usize>()
-                    && idx < arr.len()
-                {
-                    arr[idx] = Value::Null; // sparse: preserve length
-                }
+            array.resize(array.len().max(index + 1), Value::Null);
+            if tokens.len() == 1 {
+                array[index] = value;
+                return Ok(());
             }
-            _ => {}
+            &mut array[index]
         }
-    }
+        _ => return Err("Cannot set path through a primitive".into()),
+    };
+    write_value(child, &tokens[1..], value)
 }
 
 #[cfg(test)]
@@ -330,7 +351,7 @@ mod tests {
         dm.set("/a/b/0/c", json!(42));
         assert_eq!(dm.get("/a/b/0/c"), Some(&json!(42)));
         assert!(dm.get("/a").unwrap().is_object());
-        assert!(dm.get("/a/b").unwrap().is_object());
+        assert!(dm.get("/a/b").unwrap().is_array());
     }
 
     #[test]

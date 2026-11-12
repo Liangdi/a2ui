@@ -19,17 +19,23 @@ pub type ComponentId = String;
 // ---------------------------------------------------------------------------
 
 /// A JSON Pointer path into the data model.
-/// Serialized as `{ "path": "/some/pointer" }`.
+/// Serialized as `{ "@path": "/some/pointer" }` (legacy typed input also accepts `path`).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 pub struct DataBinding {
+    #[serde(rename = "@path", alias = "path")]
     pub path: String,
 }
 
 /// A named function call with arguments.
 /// Each argument value can itself be any JSON value (including nested Dynamic values).
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 pub struct FunctionCall {
+    #[serde(rename = "@call", alias = "call")]
     pub call: String,
+    #[serde(default, rename = "catalogId", skip_serializing_if = "Option::is_none")]
+    pub catalog_id: Option<String>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub args: HashMap<String, serde_json::Value>,
 }
@@ -42,8 +48,8 @@ pub struct FunctionCall {
 ///
 /// JSON representations:
 /// - Literal: `"Hello"`
-/// - Binding: `{ "path": "/user/name" }`
-/// - Function: `{ "call": "capitalize", "args": { ... } }`
+/// - Binding: `{ "@path": "/user/name" }`
+/// - Function: `{ "@call": "capitalize", "args": { ... } }`
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(untagged)]
 pub enum DynamicString {
@@ -116,8 +122,10 @@ pub enum DynamicBooleanCondition {
     Function(FunctionCall),
 }
 
-/// A general-purpose dynamic value — can be any JSON primitive, binding, or function call.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+/// A v1.0 dynamic value. Only `@path` and `@call` objects are directives.
+/// Plain `path` / `call` keys are ordinary data; literal leading `@` keys
+/// must be doubled on the wire and are unescaped when evaluated.
+#[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(untagged)]
 pub enum DynamicValue {
     String(String),
@@ -126,6 +134,58 @@ pub enum DynamicValue {
     Array(Vec<serde_json::Value>),
     Binding(DataBinding),
     Function(FunctionCall),
+    Object(serde_json::Map<String, serde_json::Value>),
+    Null,
+}
+
+impl<'de> Deserialize<'de> for DynamicValue {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        Self::from_json(value).map_err(serde::de::Error::custom)
+    }
+}
+
+impl DynamicValue {
+    fn from_json(value: serde_json::Value) -> Result<Self, String> {
+        use serde_json::Value;
+        match value {
+            Value::Null => Ok(Self::Null),
+            Value::Bool(value) => Ok(Self::Boolean(value)),
+            Value::Number(value) => value
+                .as_f64()
+                .map(Self::Number)
+                .ok_or_else(|| "number cannot be represented as f64".into()),
+            Value::String(value) => Ok(Self::String(value)),
+            Value::Array(values) => {
+                for value in &values {
+                    Self::from_json(value.clone())?;
+                }
+                Ok(Self::Array(values))
+            }
+            Value::Object(values) => {
+                if values.contains_key("@path") {
+                    return serde_json::from_value(Value::Object(values))
+                        .map(Self::Binding)
+                        .map_err(|error| error.to_string());
+                }
+                if values.contains_key("@call") {
+                    let call: FunctionCall = serde_json::from_value(Value::Object(values))
+                        .map_err(|error| error.to_string())?;
+                    for value in call.args.values() {
+                        Self::from_json(value.clone())?;
+                    }
+                    return Ok(Self::Function(call));
+                }
+                for (key, value) in &values {
+                    if key.starts_with('@') && !key.starts_with("@@") {
+                        return Err(format!("unknown reserved dynamic key: {key}"));
+                    }
+                    Self::from_json(value.clone())?;
+                }
+                Ok(Self::Object(values))
+            }
+        }
+    }
 }
 
 /// A dynamic value that resolves to a list of strings.
@@ -178,18 +238,28 @@ pub enum Action {
     /// Send an event to the server.
     Event { event: ActionEvent },
     /// Execute a local client-side function.
-    FunctionCall { function_call: FunctionCall },
+    FunctionCall {
+        #[serde(rename = "functionCall", alias = "function_call")]
+        function_call: FunctionCall,
+    },
 }
 
 /// A server-bound event with optional context.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct ActionEvent {
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user_message: Option<DynamicString>,
     #[serde(default)]
     pub context: HashMap<String, DynamicValue>,
-    #[serde(default, skip_serializing_if = "is_false")]
+    #[serde(default, alias = "want_response", skip_serializing_if = "is_false")]
     pub want_response: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        alias = "response_path",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub response_path: Option<String>,
 }
 
@@ -205,7 +275,28 @@ fn is_false(v: &bool) -> bool {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct CheckRule {
     pub condition: DynamicBooleanCondition,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub message: String,
+}
+
+/// Structured result produced by a v1.0 check function or data binding.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ValidationResult {
+    pub valid: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub severity: Option<ValidationSeverity>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ValidationSeverity {
+    Error,
+    Warning,
+    Info,
 }
 
 // ---------------------------------------------------------------------------
@@ -219,6 +310,18 @@ pub struct AccessibilityAttributes {
     pub label: Option<DynamicString>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<DynamicString>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub live: Option<LiveRegion>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hidden: Option<DynamicBoolean>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum LiveRegion {
+    Off,
+    Polite,
+    Assertive,
 }
 
 // ---------------------------------------------------------------------------
@@ -276,5 +379,74 @@ mod tests {
             }
             other => panic!("expected Template, got {other:?}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod v1_wire_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn directives_emit_current_keys_and_keep_legacy_typed_input_aliases() {
+        let binding: DataBinding = serde_json::from_value(json!({"path": "/name"})).unwrap();
+        assert_eq!(
+            serde_json::to_value(binding).unwrap(),
+            json!({"@path": "/name"})
+        );
+        let call: FunctionCall =
+            serde_json::from_value(json!({"call": "f", "catalogId": "c"})).unwrap();
+        assert_eq!(
+            serde_json::to_value(call).unwrap(),
+            json!({"@call": "f", "catalogId": "c"})
+        );
+    }
+
+    #[test]
+    fn plain_path_and_call_dictionaries_are_literals() {
+        for value in [json!({"path": "/x"}), json!({"call": "f", "args": {}})] {
+            let dynamic: DynamicValue = serde_json::from_value(value.clone()).unwrap();
+            assert!(matches!(dynamic, DynamicValue::Object(_)));
+            assert_eq!(serde_json::to_value(dynamic).unwrap(), value);
+        }
+    }
+
+    #[test]
+    fn check_message_is_optional() {
+        let check: CheckRule = serde_json::from_value(json!({"condition": true})).unwrap();
+        assert!(check.message.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod action_accessibility_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn actions_use_current_camel_case_wire_keys() {
+        let action: Action =
+            serde_json::from_value(json!({"functionCall": {"@call": "f"}})).unwrap();
+        assert_eq!(
+            serde_json::to_value(action).unwrap(),
+            json!({"functionCall": {"@call": "f"}})
+        );
+        let event: ActionEvent = serde_json::from_value(json!({"name": "send", "userMessage": {"@path": "/label"}, "wantResponse": true, "responsePath": "/reply"})).unwrap();
+        let wire = serde_json::to_value(event).unwrap();
+        assert_eq!(wire["userMessage"], json!({"@path": "/label"}));
+        assert_eq!(wire["wantResponse"], true);
+        assert_eq!(wire["responsePath"], "/reply");
+        assert!(wire.get("response_path").is_none());
+    }
+
+    #[test]
+    fn accessibility_retains_live_and_hidden() {
+        let value = json!({"live": "polite", "hidden": {"@path": "/hide"}});
+        let attributes: AccessibilityAttributes = serde_json::from_value(value.clone()).unwrap();
+        assert_eq!(attributes.live, Some(LiveRegion::Polite));
+        assert_eq!(serde_json::to_value(attributes).unwrap(), value);
+        assert!(
+            serde_json::from_value::<AccessibilityAttributes>(json!({"live": "loud"})).is_err()
+        );
     }
 }

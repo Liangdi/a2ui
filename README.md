@@ -1,5 +1,7 @@
 # A2UI — A2UI 协议的 Rust 实现(ratatui 终端 + Slint / egui / Bevy / Iced / Dioxus / GPUI 桌面后端)
 
+> Protocol status: the July 2026 implementation used an earlier draft named v1.0. Released A2UI 1.0 compatibility is being updated; see [verified coverage and remaining gaps](docs/protocol-1.0-compatibility.md). Do not assume full renderer conformance.
+
 [![crates.io](https://img.shields.io/crates/v/a2ui.svg)](https://crates.io/crates/a2ui)
 [![docs.rs](https://docs.rs/a2ui/badge.svg)](https://docs.rs/a2ui)
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -14,7 +16,7 @@
 
 ## 特性
 
-- ✅ 完整的 A2UI v1.0 协议支持
+- ✅ A2UI 协议解析与运行时（兼容性范围见上文）
 - ✅ **18 个 TUI 组件**：Text, Row, Column, Button, TextField, Card, Divider, List, CheckBox, Icon, Tabs, Modal, Slider, ChoicePicker, DateTimeInput, Image, Video, AudioPlayer
   - 交互式：Text、Row、Column、Button、TextField、Slider、CheckBox、ChoicePicker、DateTimeInput（箭头键调节值）
   - 占位符（默认）：Image / Video / AudioPlayer 仅渲染文本占位符（`[🖼 description]`、`[▶ url]`、`[♫ url]`），终端无法解码像素/音频/视频。可通过下方「可选特性」开启真实图片/音频渲染。
