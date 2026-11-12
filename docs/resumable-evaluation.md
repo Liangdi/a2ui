@@ -53,13 +53,16 @@ and 128 nested expression levels. Capacity errors are explicit.
   Event context entries resolve sequentially in source order, then userMessage;
   failures stop the action. `start_check` offers passive subscriptions with pending
   checks non-failing until settled. Hosts drain `drain_check_updates()` and choose
-  how to present validation. Automatic renderer property/check subscriptions and
-  their visual states are not wired yet.
+  how to present validation. The dependent GPUI Kit adapter wires reachable scalar
+  properties and checks automatically, with loading/error and validation states;
+  other backends must integrate these APIs themselves.
 - Action errors appear both as outgoing protocol errors and in
   `drain_action_errors()` for local presentation; hosts should not double-report
   the two views of the same error.
-- No timeout, transport retry, remote cancellation protocol, or persistence across
-  processor reset. Host transport owns those decisions.
+- Reactive evaluator calls have no automatic timeout. The separate explicit
+  outgoing-RPC lifecycle supports host-driven deadline expiry, cancellation and
+  disposal; it does not add deadlines to shared reactive calls. Transport retry,
+  remote cancellation protocol and persistence across reset remain host decisions.
 - Declared remote return types are enforced before results settle. Full return-schema
   constraints and component-level error boundaries remain to be integrated.
 - `formatString` template expansion remains in the synchronous native function;
