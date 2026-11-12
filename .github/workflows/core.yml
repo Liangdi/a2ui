@@ -1,0 +1,35 @@
+name: A2UI core
+
+on:
+  pull_request:
+    paths:
+      - "crates/core/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/core.yml"
+  push:
+    branches: [main, master, feat/a2ui-current-protocol]
+    paths:
+      - "crates/core/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/core.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install stable Rust and Clippy
+        run: rustup toolchain install stable --profile minimal --component clippy
+      - name: Test core and pinned conformance fixtures
+        run: cargo +stable test --locked -p a2ui-base
+      - name: Lint core
+        run: cargo +stable clippy --locked -p a2ui-base --all-targets -- -D warnings
