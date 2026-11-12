@@ -25,13 +25,21 @@ validation. No native implementation or custom UI renderer is created by loading
 a document. Existing native `Catalog` structs and legacy inline parsing remain
 unchanged. Current inline parsing reuses the definition validator and selection.
 
+`validation_schema()` produces the canonical flattened current representation,
+with selected unions, a component ID/type envelope, referenced common types and
+authored leaf definitions. As in the reference SDK, mixin property precedence is
+standard, local, then inline; this is catalog normalization, not a general-purpose
+JSON Schema `allOf` equivalence transformation. Conditional constraints remain
+in `allOf`. Closed nested mixins and non-object mixins are rejected explicitly
+because flattening their closure/type constraints would change acceptance.
+Cyclic/unknown mixin references fail, and authored document depth is capped at 128.
+
 ## Verification and remaining coverage
 
-The unmodified pinned official `core/catalog.yaml` corpus executes 43 cases with
+The unmodified pinned official `core/catalog.yaml` corpus executes 45 cases with
 zero failures: current loading, published-catalog self-containment/component
-validation, round-trips and derivation. `catalog-coverage.json` names all 30
+validation, round-trips, derivation and both current canonical schema goldens. `catalog-coverage.json` names all 28
 exclusions and the harness rejects an unexpected change in that manifest. Excluded
-coverage includes legacy versions, native SDK built-in equivalence/serialization,
-and canonical flattened validation-schema goldens. This is not full catalog SDK
+coverage includes legacy versions and native SDK built-in equivalence/serialization. This is not full catalog SDK
 conformance. Source schemas/fixtures are Apache-2.0; the original license is in
 `crates/core/tests/conformance/LICENSE`.

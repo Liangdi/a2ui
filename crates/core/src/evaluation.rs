@@ -199,7 +199,11 @@ impl Evaluator {
         self.collect_calls();
     }
 
-    pub(crate) fn response(&mut self, processor: &MessageProcessor, response: &FunctionResponse) {
+    pub(crate) fn response(
+        &mut self,
+        processor: &MessageProcessor,
+        response: &FunctionResponse,
+    ) -> Option<(String, String, String)> {
         // Unknown, cancelled, duplicate and stale generation responses are inert.
         if let Some((key, call)) = self
             .calls
@@ -220,7 +224,11 @@ impl Evaluator {
                     error("EXPRESSION_ERROR", &failure.error.message)
                 }
             };
+            if let EvaluationStatus::Error { code, message } = &call.status {
+                return Some((key.surface.clone(), code.clone(), message.clone()));
+            }
         }
+        None
     }
 
     pub(crate) fn advance(&mut self, processor: &MessageProcessor) -> Vec<CallAgentFunction> {

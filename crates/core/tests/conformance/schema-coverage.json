@@ -1,0 +1,237 @@
+{
+  "source": "a2ui-project/a2ui",
+  "revision": "eb1fd7f0f8e9ff78d29ab6da7e3169bc1edb0f41",
+  "validator_cases": [
+    "test_v10_multiple_action_envelope_error",
+    "test_v10_validate_at_prefixed_component_envelope_mixins",
+    "test_v10_validate_component_metadata_invalid_extension_key_error",
+    "test_v10_validate_component_envelope_conflict_at_and_bare_error",
+    "test_v10_validate_at_checks_on_non_checkable_component_error"
+  ],
+  "validator_excluded": [
+    {
+      "name": "test_validator_1_0",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_custom_catalog_1_0",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_topology_circular_reference_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_topology_dangling_child_reference_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_topology_self_reference_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_topology_orphaned_component_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_topology_missing_root_component_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_unknown_component_type",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_unknown_component_property",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_unknown_nested_function",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_uax31_invalid_identifier_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_topology_template_child_reachable",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_topology_template_dangling_reference_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_invalid_binding_path_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_component_nesting_depth_limit_exceeded_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_component_nesting_depth_within_limit",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_multi_surface_independent_roots",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_multi_surface_missing_root_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_incremental_update_without_root",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_incremental_update_self_reference_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_incremental_update_circular_reference_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_incremental_update_duplicate_component_id_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_recursion_limit_function_call_depth_exceeded_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_data_model_nesting_depth_limit_exceeded_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_topology_structured_array_item_dangling_child_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_topology_plain_string_property_not_treated_as_child_ref",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_topology_component_id_array_dangling_reference_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_topology_component_id_array_child_reachable",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_topology_component_id_array_partial_dangling_reference_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_topology_component_id_array_circular_reference_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_child_list_template_missing_path_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_update_data_model_invalid_path_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_function_argument_schema_mismatch_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_incremental_update_same_component_id_across_messages",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_component_nesting_depth_at_limit",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_component_nesting_depth_one_past_limit_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_recursion_limit_function_call_depth_at_limit",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_recursion_limit_function_call_depth_one_past_limit_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_uax31_astral_plane_identifier_accepted",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_uax31_astral_non_identifier_component_type_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_agent_only_function_in_binding_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_agent_only_function_in_action_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_agent_only_function_cross_catalog_and_nested_error",
+      "reason": "requires stateful topology, custom catalog dispatch, or structured diagnostic assertions beyond the wire schema API"
+    },
+    {
+      "name": "test_v10_invalid_json_pointer_path_error",
+      "reason": "JSON Pointer semantics are not constrained by the published wire schema"
+    }
+  ],
+  "common_type_boundary_cases": 11,
+  "common_type_native_model_cases": 2,
+  "common_type_excluded": [
+    {
+      "name": "test_v09_common_types_schema_matches_specification",
+      "reason": "legacy version not implemented"
+    },
+    {
+      "name": "test_v091_common_types_schema_matches_specification",
+      "reason": "legacy version not implemented"
+    },
+    {
+      "name": "test_v10_common_types_schema_matches_specification",
+      "reason": "SDK model schema generation not implemented; a bundled schema comparison would be tautological"
+    },
+    {
+      "name": "test_v09_function_call_rejects_unknown_keys",
+      "reason": "legacy version not implemented"
+    },
+    {
+      "name": "test_v09_dynamic_value_branches_are_exclusive",
+      "reason": "legacy version not implemented"
+    },
+    {
+      "name": "test_v09_child_list_is_ids_or_template",
+      "reason": "legacy version not implemented"
+    },
+    {
+      "name": "test_v09_action_is_event_or_function_call",
+      "reason": "legacy version not implemented"
+    },
+    {
+      "name": "test_v091_function_call_rejects_unknown_keys",
+      "reason": "legacy version not implemented"
+    },
+    {
+      "name": "test_v091_dynamic_value_branches_are_exclusive",
+      "reason": "legacy version not implemented"
+    },
+    {
+      "name": "test_v091_child_list_is_ids_or_template",
+      "reason": "legacy version not implemented"
+    },
+    {
+      "name": "test_v091_action_is_event_or_function_call",
+      "reason": "legacy version not implemented"
+    }
+  ]
+}

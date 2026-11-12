@@ -2,7 +2,7 @@
   "source": "a2ui-project/a2ui",
   "revision": "eb1fd7f0f8e9ff78d29ab6da7e3169bc1edb0f41",
   "suite": "conformance/core/catalog.yaml",
-  "passed": 43,
+  "passed": 45,
   "excluded": [
     {
       "name": "test_v08_basic_catalog_from_json",
@@ -78,7 +78,7 @@
     },
     {
       "name": "test_v10_basic_catalog_to_json",
-      "reason": "SDK serialization/canonical flattened schema not implemented"
+      "reason": "native SDK serialization not implemented"
     },
     {
       "name": "test_v08_basic_catalog_round_trip",
@@ -109,16 +109,8 @@
       "reason": "non-current catalog source"
     },
     {
-      "name": "test_v10_basic_validation_schema",
-      "reason": "SDK serialization/canonical flattened schema not implemented"
-    },
-    {
       "name": "test_v09_custom_validation_schema_flattening",
       "reason": "legacy catalog API outside current definition scope"
-    },
-    {
-      "name": "test_v10_custom_validation_schema_leaf_defs",
-      "reason": "SDK serialization/canonical flattened schema not implemented"
     },
     {
       "name": "test_v09_catalog_derive_keeps_protocol_version",

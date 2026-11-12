@@ -33,6 +33,8 @@ struct Check {
 }
 
 struct PendingAction {
+    completion_id: Option<String>,
+    return_value: Value,
     surface: String,
     component: String,
     base_path: String,
@@ -57,6 +59,7 @@ pub(super) struct AsyncActions {
     checks: HashMap<String, Check>,
     check_updates: Vec<CheckUpdate>,
     errors: Vec<ActionError>,
+    completed: HashMap<String, std::result::Result<Value, ActionError>>,
 }
 
 impl MessageProcessor {
@@ -69,6 +72,80 @@ impl MessageProcessor {
         component: &str,
         base_path: &str,
         action: Value,
+    ) -> Result<()> {
+        self.start_current_action_inner(surface, component, base_path, action, None)
+    }
+
+    /// Start a trusted host action and retain its terminal result under an opaque
+    /// handle. At most 1024 pending/completed tracked actions are retained. Drain
+    /// completed handles with `take_current_action_result` to release capacity.
+    /// Event actions complete with null after dispatch; function actions retain
+    /// the actual function result. This does not grant activation to wire input.
+    pub fn start_current_action_with_result(
+        &mut self,
+        surface: &str,
+        component: &str,
+        base_path: &str,
+        action: Value,
+    ) -> Result<String> {
+        if self.model.get_surface(surface).is_none() {
+            return Err(A2uiError::SurfaceNotFound(surface.into()));
+        }
+        let tracked = self
+            .async_actions
+            .actions
+            .iter()
+            .filter(|action| action.completion_id.is_some())
+            .count()
+            + self.async_actions.completed.len();
+        if tracked >= 1024 {
+            return Err(A2uiError::Validation(
+                "action result capacity reached; take completed results".into(),
+            ));
+        }
+        let id = uuid::Uuid::new_v4().to_string();
+        self.start_current_action_inner(surface, component, base_path, action, Some(id.clone()))?;
+        Ok(id)
+    }
+
+    /// Take a terminal result once. None means pending, unknown, or already taken.
+    /// Cancelled actions return a local CANCELLED result without a wire error.
+    pub fn take_current_action_result(
+        &mut self,
+        id: &str,
+    ) -> Option<std::result::Result<Value, ActionError>> {
+        self.async_actions.completed.remove(id)
+    }
+
+    fn complete_current_action(
+        &mut self,
+        action: &PendingAction,
+        result: std::result::Result<Value, ActionError>,
+    ) {
+        if let Some(id) = &action.completion_id {
+            self.async_actions.completed.insert(id.clone(), result);
+        }
+    }
+
+    fn cancel_current_action_result(&mut self, action: &PendingAction) {
+        self.complete_current_action(
+            action,
+            Err(ActionError {
+                surface_id: action.surface.clone(),
+                component_id: action.component.clone(),
+                code: "CANCELLED".into(),
+                message: "Action was cancelled".into(),
+            }),
+        );
+    }
+
+    fn start_current_action_inner(
+        &mut self,
+        surface: &str,
+        component: &str,
+        base_path: &str,
+        action: Value,
+        completion_id: Option<String>,
     ) -> Result<()> {
         if self.model.get_surface(surface).is_none() {
             return Ok(());
@@ -116,6 +193,8 @@ impl MessageProcessor {
             ));
         }
         self.async_actions.actions.push(PendingAction {
+            completion_id,
+            return_value: Value::Null,
             surface: surface.into(),
             component: component.into(),
             base_path: base_path.into(),
@@ -186,7 +265,25 @@ impl MessageProcessor {
             code: code.clone(),
             message: message.clone(),
         };
+        self.complete_current_action(action, Err(error.clone()));
         self.async_actions.errors.push(error);
+        // The processor already emits a correlated wire error for failed remote
+        // calls. Keep the action-specific diagnostic without emitting it twice.
+        if let Some(existing) = self.outgoing_messages.iter_mut().find_map(|outgoing| {
+            if let ClientPayload::Error(payload) = &mut outgoing.payload
+                && payload.error.surface_id.as_deref() == Some(action.surface.as_str())
+                && payload.error.code == code
+                && payload.error.function_call_id.is_some()
+                && message.ends_with(&payload.error.message)
+            {
+                Some(&mut payload.error)
+            } else {
+                None
+            }
+        }) {
+            existing.message = message;
+            return;
+        }
         self.queue_outgoing(ClientMessage {
             version: "1.0".into(),
             payload: ClientPayload::Error(ErrorPayload {
@@ -207,6 +304,7 @@ impl MessageProcessor {
         let mut pending = Vec::new();
         for mut action in std::mem::take(&mut self.async_actions.actions) {
             if self.model.get_surface(&action.surface).is_none() {
+                self.cancel_current_action_result(&action);
                 if let Some((_, id)) = action.current {
                     self.evaluator.forget(&id);
                 }
@@ -242,7 +340,7 @@ impl MessageProcessor {
                                 failed = true;
                             }
                         },
-                        Entry::Function => {}
+                        Entry::Function => action.return_value = value,
                     },
                     Some(EvaluationStatus::Error { code, message }) => {
                         let message = match entry {
@@ -254,7 +352,10 @@ impl MessageProcessor {
                         self.report_action_error(&action, code, message);
                         failed = true;
                     }
-                    Some(EvaluationStatus::Cancelled) => failed = true,
+                    Some(EvaluationStatus::Cancelled) => {
+                        self.cancel_current_action_result(&action);
+                        failed = true;
+                    }
                     _ => {
                         action.current = Some((entry, id));
                         pending.push(action);
@@ -283,23 +384,26 @@ impl MessageProcessor {
                         error.to_string(),
                     ),
                 }
-            } else if let Some(name) = action.name {
-                self.queue_outgoing(ClientMessage {
-                    version: "1.0".into(),
-                    payload: ClientPayload::Action(ActionPayload {
-                        action: ActionData {
-                            name,
-                            surface_id: action.surface,
-                            source_component_id: action.component,
-                            timestamp: action.timestamp,
-                            context: action.context,
-                            user_message: action.user_message,
-                            metadata: None,
-                            want_response: None,
-                            action_id: None,
-                        },
-                    }),
-                });
+            } else {
+                self.complete_current_action(&action, Ok(action.return_value.clone()));
+                if let Some(name) = action.name {
+                    self.queue_outgoing(ClientMessage {
+                        version: "1.0".into(),
+                        payload: ClientPayload::Action(ActionPayload {
+                            action: ActionData {
+                                name,
+                                surface_id: action.surface,
+                                source_component_id: action.component,
+                                timestamp: action.timestamp,
+                                context: action.context,
+                                user_message: action.user_message,
+                                metadata: None,
+                                want_response: None,
+                                action_id: None,
+                            },
+                        }),
+                    });
+                }
             }
         }
         self.async_actions.actions = pending;

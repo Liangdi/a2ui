@@ -519,6 +519,145 @@ fn run(case: &Value) -> TestResult {
     }
 }
 
+fn ui(case: &Value) -> TestResult {
+    let scenario = case["args"]
+        .get("uiBindingScenario")
+        .or_else(|| case["args"].get("uiActionFallbackScenario"))
+        .ok_or("missing UI scenario")?;
+    keys(
+        scenario,
+        &[
+            "surfaceId",
+            "catalogId",
+            "component",
+            "components",
+            "observe",
+            "actionPayload",
+            "inboundResponseValue",
+            "inboundResponseError",
+        ],
+        "UI scenario",
+    )?;
+    let sid = field(scenario, "surfaceId")?;
+    let cid = field(scenario, "catalogId")?;
+    let mut p = MessageProcessor::new(vec![Catalog::new(cid)]);
+    let components = scenario.get("components").cloned().unwrap_or_else(|| {
+        scenario
+            .get("component")
+            .map(|c| json!([c]))
+            .unwrap_or(json!([]))
+    });
+    let mut create = json!({"surfaceId":sid,"catalogId":cid});
+    if components.as_array().is_some_and(|items| !items.is_empty()) {
+        create["components"] = components;
+    }
+    p.process_json_message(&json!({"version":"1.0","createSurface":create}).to_string())
+        .map_err(|e| e.to_string())?;
+    let expect = &case["expect"];
+    let mut observed = None;
+    let mut action = None;
+    let mut siblings = HashMap::new();
+    if let Some(payload) = scenario.get("actionPayload") {
+        action = Some(
+            p.start_current_action_with_result(sid, "root", "", payload.clone())
+                .map_err(|e| e.to_string())?,
+        );
+    } else {
+        let component = scenario
+            .pointer("/observe/componentId")
+            .and_then(Value::as_str)
+            .unwrap_or("root");
+        let id = if expect.get("validationResult").is_some() {
+            p.mount_check_rule(sid, component, 0, "")
+        } else {
+            p.mount_property(
+                sid,
+                component,
+                scenario
+                    .pointer("/observe/property")
+                    .and_then(Value::as_str)
+                    .unwrap_or("text"),
+                "",
+            )
+        }
+        .map_err(|e| e.to_string())?;
+        if let Some(initial) = expect.get("initialValue") {
+            subset(
+                initial,
+                &p.mounted_value(&id).ok_or("missing mounted value")?,
+            )?;
+        }
+        observed = Some(id);
+        if let Some(expected) = expect["siblings"].as_object() {
+            for (component, properties) in expected {
+                for property in properties.as_object().ok_or("sibling properties")?.keys() {
+                    let id = p
+                        .mount_property(sid, component, property, "")
+                        .map_err(|e| e.to_string())?;
+                    siblings.insert((component.clone(), property.clone()), id);
+                }
+            }
+        }
+    }
+    let outgoing = p.drain_outgoing();
+    if outgoing.len() != 1 {
+        return Err(format!("expected one outbound call, got {outgoing:?}"));
+    }
+    let call = serde_json::to_value(&outgoing[0]).map_err(|e| e.to_string())?;
+    subset(&expect["outboundCall"], &call)?;
+    let call_id = call["callAgentFunction"]["functionCallId"]
+        .as_str()
+        .ok_or("missing call id")?;
+    let mut response = json!({"functionCallId":call_id});
+    if let Some(error) = scenario.get("inboundResponseError") {
+        response["error"] = error.clone();
+    } else {
+        response["value"] = scenario
+            .get("inboundResponseValue")
+            .cloned()
+            .ok_or("missing inbound value")?;
+    }
+    p.process_json_message(&json!({"version":"1.0","agentFunctionResponse":response}).to_string())
+        .map_err(|e| e.to_string())?;
+    if let Some(id) = observed {
+        let value = p.mounted_value(&id).ok_or("mounted value disappeared")?;
+        subset(
+            expect
+                .get("resolvedValue")
+                .or_else(|| expect.get("validationResult"))
+                .ok_or("missing expected value")?,
+            &value,
+        )?;
+    }
+    if let Some(id) = action {
+        let value = p
+            .take_current_action_result(&id)
+            .ok_or("action still pending")?
+            .map_err(|e| e.message)?;
+        subset(&expect["result"], &value)?;
+    }
+    for ((component, property), id) in siblings {
+        subset(
+            &expect["siblings"][&component][&property],
+            &p.mounted_value(&id).ok_or("sibling disappeared")?,
+        )?;
+    }
+    if let Some(error) = expect.get("surfaceError") {
+        let errors = p.drain_outgoing();
+        let actual = errors
+            .iter()
+            .map(|e| serde_json::to_value(e).unwrap())
+            .find(|e| e.get("error").is_some())
+            .ok_or("missing surface error")?;
+        let mut expected = error.clone();
+        if expected["functionCallId"] == "$outboundCallId" {
+            expected["functionCallId"] = json!(call_id);
+        }
+        subset(&expected, &actual["error"])?;
+    }
+    Ok(())
+}
+
 #[test]
 fn official_rpc_corpus() {
     let cases: Vec<Value> =
@@ -532,18 +671,18 @@ fn official_rpc_corpus() {
     let mut failures = Vec::new();
     for case in cases {
         let name = case["name"].as_str().unwrap();
-        if case["args"].get("uiBindingScenario").is_some()
-            || case["args"].get("uiActionFallbackScenario").is_some()
-        {
-            let reason = if case["args"].get("uiBindingScenario").is_some() {
-                "mounted component resolver, structured rule results, and correlated surface errors are not exposed by the core host API"
-            } else {
-                "action completion values and correlated surface errors are not exposed by the core host API"
-            };
-            actual_unsupported.push(json!({"name":name,"reason":reason}));
+        if name == "test_rpc_ui_action_agent_error_halts_pipeline" {
+            actual_unsupported.push(json!({"name":name,"reason":"native execute receives immutable DataContext; mutable surface effects require a host effect API"}));
             continue;
         }
-        match run(&case) {
+        let result = if case["args"].get("uiBindingScenario").is_some()
+            || case["args"].get("uiActionFallbackScenario").is_some()
+        {
+            ui(&case)
+        } else {
+            run(&case)
+        };
+        match result {
             Ok(()) => passed += 1,
             Err(error) => failures.push(format!("{name}: {error}")),
         }

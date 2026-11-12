@@ -2,27 +2,11 @@
   "source": "a2ui-project/a2ui",
   "revision": "eb1fd7f0f8e9ff78d29ab6da7e3169bc1edb0f41",
   "suite": "conformance/core/rpc_functions.yaml",
-  "passed": 28,
+  "passed": 32,
   "unsupported": [
     {
-      "name": "test_rpc_ui_binding_triggers_call_agent_function_async_resolution",
-      "reason": "mounted component resolver, structured rule results, and correlated surface errors are not exposed by the core host API"
-    },
-    {
-      "name": "test_rpc_ui_action_missing_local_function_fallback_to_agent",
-      "reason": "action completion values and correlated surface errors are not exposed by the core host API"
-    },
-    {
-      "name": "test_rpc_ui_binding_agent_error_resolves_null",
-      "reason": "mounted component resolver, structured rule results, and correlated surface errors are not exposed by the core host API"
-    },
-    {
-      "name": "test_rpc_ui_check_agent_error_invalidates_rule",
-      "reason": "mounted component resolver, structured rule results, and correlated surface errors are not exposed by the core host API"
-    },
-    {
       "name": "test_rpc_ui_action_agent_error_halts_pipeline",
-      "reason": "action completion values and correlated surface errors are not exposed by the core host API"
+      "reason": "native execute receives immutable DataContext; mutable surface effects require a host effect API"
     }
   ]
 }
