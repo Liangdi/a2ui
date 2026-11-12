@@ -585,3 +585,30 @@ fn inline_draft_catalog_keeps_exact_version_identity() {
         "{message}"
     );
 }
+
+#[test]
+fn registered_current_catalog_resolves_common_argument_schema_refs() {
+    use a2ui_base::message_processor::RendererCall;
+    let mut catalog: Value = serde_json::from_str(include_str!(
+        "conformance/catalog-definitions/function_metadata_catalog_v1_0.json"
+    ))
+    .unwrap();
+    catalog["functions"]["launch"]["requiresUserActivation"] = json!(false);
+    let id = catalog["catalogId"].as_str().unwrap().to_owned();
+    let mut proc = MessageProcessor::new(vec![]);
+    proc.register_inline_catalog(catalog).unwrap();
+    apply(
+        &mut proc,
+        json!({"version":"1.0","createSurface":{"surfaceId":"schema","catalogId":id}}),
+    );
+    let call = |url| serde_json::from_value(json!({"@call":"launch","args":{"url":url}})).unwrap();
+    assert!(matches!(
+        proc.prepare_renderer_call("schema", "", call(json!("https://example.com")), false)
+            .unwrap(),
+        RendererCall::Remote(_)
+    ));
+    assert!(
+        proc.prepare_renderer_call("schema", "", call(json!(123)), false)
+            .is_err()
+    );
+}

@@ -522,6 +522,15 @@ impl MessageProcessor {
     /// back to the generic renderer.
     pub fn register_inline_catalog(&mut self, json: serde_json::Value) -> Result<()> {
         let parsed = crate::capabilities::parse_inline_catalog(&json)?;
+        let current_definition = if json["protocolVersion"] == "1.0" {
+            Some(crate::catalog::definition::CatalogDefinition::from_json(
+                json.clone(),
+                None,
+                None,
+            )?)
+        } else {
+            None
+        };
 
         let mut catalog = Catalog::new(parsed.catalog_id.clone());
         for func in &parsed.functions {
@@ -548,11 +557,15 @@ impl MessageProcessor {
                     A2uiError::Validation("requiresUserActivation must be boolean".into())
                 })?,
             };
-            let mut args_schema = declaration
-                .pointer("/properties/args")
-                .or_else(|| declaration.get("args"))
-                .cloned()
-                .unwrap_or(serde_json::json!({"type":"object"}));
+            let mut args_schema = if let Some(definition) = &current_definition {
+                definition.function_args_schema(&func.name)?
+            } else {
+                declaration
+                    .pointer("/properties/args")
+                    .or_else(|| declaration.get("args"))
+                    .cloned()
+                    .unwrap_or(serde_json::json!({"type":"object"}))
+            };
             if let (Some(defs), Some(args)) = (json.get("$defs"), args_schema.as_object_mut()) {
                 args.entry("$defs").or_insert_with(|| defs.clone());
             }
@@ -831,7 +844,12 @@ impl MessageProcessor {
             })
             .collect::<Result<_>>()
             .map_err(InvocationFailure::execution)?;
-        function.prepare_args(&mut args)?;
+        function.prepare_args(&mut args).map_err(|error| {
+            A2uiError::Validation(format!(
+                "Invalid arguments for function '{}': {error}",
+                function.name()
+            ))
+        })?;
         let value = function
             .execute(&args, &context)
             .map_err(InvocationFailure::execution)?;
