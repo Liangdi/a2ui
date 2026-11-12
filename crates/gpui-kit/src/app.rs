@@ -806,6 +806,29 @@ mod tests {
     }
 
     #[test]
+    fn current_event_waits_for_agent_then_emits_resolved_context() {
+        let mut app = current_app(json!({"event":{"name":"selected","context":{
+            "label":{"@call":"lookup","args":{"name":{"@path":"/name"}}}
+        }}}));
+        app.handle_activate("button", "");
+        let requests = app.drain_outgoing_messages();
+        assert_eq!(requests.len(), 1);
+        let request = serde_json::to_value(&requests[0]).unwrap();
+        let id = request["callAgentFunction"]["functionCallId"]
+            .as_str()
+            .unwrap();
+        app.process_message(message(json!({"version":"1.0","agentFunctionResponse":{
+            "functionCallId":id,"value":"Resolved label"
+        }})))
+        .unwrap();
+        let output = app.drain_outgoing_messages();
+        assert_eq!(output.len(), 1);
+        let event = serde_json::to_value(&output[0]).unwrap();
+        assert_eq!(event["action"]["context"]["label"], "Resolved label");
+        assert_eq!(event["action"]["name"], "selected");
+    }
+
+    #[test]
     fn current_action_rejection_is_reported_to_host() {
         let mut app = current_app(json!({"functionCall":{"@call":"submit","catalogId":"unknown"}}));
         app.handle_activate("button", "");
